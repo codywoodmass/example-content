@@ -8,6 +8,9 @@ export default function StudioPortal() {
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [activeView, setActiveView] = useState('dashboard')
+  const [briefData, setBriefData] = useState<Record<number, any>>({})
+  const [briefLoading, setBriefLoading] = useState<Record<number, boolean>>({})
+
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -21,6 +24,23 @@ export default function StudioPortal() {
     await supabase.auth.signOut()
     router.push('/login')
   }
+
+  async function generateBriefForBooking(index: number, address: string, propertyType: string, shootDate: string) {
+    setBriefLoading(prev => ({ ...prev, [index]: true }))
+    try {
+      const res = await fetch('/api/property-brief', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address, propertyType, shootDate }),
+      })
+      const data = await res.json()
+      setBriefData(prev => ({ ...prev, [index]: data }))
+    } catch (e) {
+      setBriefData(prev => ({ ...prev, [index]: { error: 'Failed to generate brief' } }))
+    }
+    setBriefLoading(prev => ({ ...prev, [index]: false }))
+  }
+
 
   const s = { panel: { background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7 } as React.CSSProperties }
 
@@ -40,6 +60,7 @@ export default function StudioPortal() {
       { id: 'projects', label: 'Projects' },
       { id: 'schedule', label: 'Shoot Schedule' },
       { id: 'bookings', label: 'Booking Requests', badge: '3' },
+      { id: 'brief', label: 'Property Brief' },
     ]},
     { label: 'Team', items: [
       { id: 'team', label: 'Team & Time' },
@@ -75,7 +96,7 @@ export default function StudioPortal() {
             <div key={group.label}>
               <div style={{ fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.22)', padding: '0 8px', margin: '14px 0 5px' }}>{group.label}</div>
               {group.items.map(item => (
-                <button key={item.id} onClick={() => setActiveView(item.id)} style={{ display: 'flex', alignItems: 'center', width: '100%', padding: '8px 10px', borderRadius: 5, fontSize: 12, color: activeView === item.id ? '#C8C2BB' : 'rgba(200,194,187,0.38)', background: activeView === item.id ? 'rgba(61,71,86,0.4)' : 'transparent', border: activeView === item.id ? '0.5px solid rgba(200,194,187,0.09)' : '0.5px solid transparent', cursor: 'pointer', marginBottom: 1, textAlign: 'left', fontFamily: 'inherit' }}>
+                <button key={item.id} onClick={() => item.id === 'brief' ? router.push('/portal/studio/brief') : setActiveView(item.id)} style={{ display: 'flex', alignItems: 'center', width: '100%', padding: '8px 10px', borderRadius: 5, fontSize: 12, color: activeView === item.id ? '#C8C2BB' : 'rgba(200,194,187,0.38)', background: activeView === item.id ? 'rgba(61,71,86,0.4)' : 'transparent', border: activeView === item.id ? '0.5px solid rgba(200,194,187,0.09)' : '0.5px solid transparent', cursor: 'pointer', marginBottom: 1, textAlign: 'left', fontFamily: 'inherit' }}>
                   {item.label}
                   {item.badge && <span style={{ marginLeft: 'auto', fontSize: 10, background: 'rgba(210,90,90,0.2)', color: 'rgba(210,90,90,0.9)', padding: '2px 7px', borderRadius: 10 }}>{item.badge}</span>}
                 </button>
@@ -266,9 +287,9 @@ export default function StudioPortal() {
             </div>
             <div style={{ padding: 28, display: 'flex', flexDirection: 'column', gap: 12 }}>
               {[
-                { title: 'Ray White Napier — 88 Marine Parade', cat: 'Property', shoot: 'Full Property Highlights', del: 'Social Reels Pack (4x)', addons: 'Twilight Shoot', date: '24 Jun (morning)', total: '$1,630 + GST' },
-                { title: 'Harcourts — 14 Te Mata Rd, Havelock North', cat: 'Property', shoot: 'Social Content Highlights', del: 'Single Social Reel', addons: 'None', date: '27 Jun (golden hour)', total: '$730 + GST' },
-                { title: 'Napier City Brewers — Brand Film', cat: 'Commercial', shoot: 'Brand Film', del: 'Hero Film + Social Cut', addons: 'Additional Talent', date: 'TBC — flexible', total: '$2,000 + GST' },
+                { title: '20A Emerson Street — St Heliers Auckland', address: '20A Emerson Street, St Heliers, Auckland', propertyType: 'Luxury residential', cat: 'Property', shoot: 'Full Property Highlights', del: 'Social Reels Pack (4x)', addons: 'Twilight Shoot', date: '2026-06-24', dateLabel: '24 Jun (morning)', total: '$1,630 + GST' },
+                { title: 'Harcourts — 14 Te Mata Rd, Havelock North', address: '14 Te Mata Rd, Havelock North', propertyType: 'Standard residential', cat: 'Property', shoot: 'Social Content Highlights', del: 'Single Social Reel', addons: 'None', date: '2026-06-27', dateLabel: '27 Jun (golden hour)', total: '$730 + GST' },
+                { title: 'Napier City Brewers — Brand Film', address: 'Napier City Brewers, Napier', propertyType: 'Commercial property', cat: 'Commercial', shoot: 'Brand Film', del: 'Hero Film + Social Cut', addons: 'Additional Talent', date: '', dateLabel: 'TBC — flexible', total: '$2,000 + GST' },
               ].map((req, i) => (
                 <div key={i} style={{ ...s.panel, padding: '18px 20px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
@@ -277,14 +298,79 @@ export default function StudioPortal() {
                         <span style={{ fontSize: 13, fontWeight: 500, color: '#C8C2BB' }}>{req.title}</span>
                         <span style={{ fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '3px 9px', borderRadius: 2, background: 'rgba(200,194,187,0.1)', color: '#C8C2BB', border: '0.5px solid rgba(200,194,187,0.2)' }}>{req.cat}</span>
                       </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10 }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: req.cat === 'Property' ? 14 : 0 }}>
                         <div><div style={{ fontSize: 10, color: 'rgba(200,194,187,0.4)', marginBottom: 2 }}>Shoot package</div><div style={{ fontSize: 12 }}>{req.shoot}</div></div>
                         <div><div style={{ fontSize: 10, color: 'rgba(200,194,187,0.4)', marginBottom: 2 }}>Deliverables</div><div style={{ fontSize: 12 }}>{req.del}</div></div>
                         <div><div style={{ fontSize: 10, color: 'rgba(200,194,187,0.4)', marginBottom: 2 }}>Add-ons</div><div style={{ fontSize: 12 }}>{req.addons}</div></div>
-                        <div><div style={{ fontSize: 10, color: 'rgba(200,194,187,0.4)', marginBottom: 2 }}>Preferred date</div><div style={{ fontSize: 12 }}>{req.date}</div></div>
+                        <div><div style={{ fontSize: 10, color: 'rgba(200,194,187,0.4)', marginBottom: 2 }}>Preferred date</div><div style={{ fontSize: 12 }}>{req.dateLabel}</div></div>
                         <div><div style={{ fontSize: 10, color: 'rgba(200,194,187,0.4)', marginBottom: 2 }}>Total</div><div style={{ fontSize: 12, color: 'rgba(100,200,130,0.85)' }}>{req.total}</div></div>
                         <div><div style={{ fontSize: 10, color: 'rgba(200,194,187,0.4)', marginBottom: 2 }}>T&Cs accepted</div>{pill('Yes', 'rgba(100,200,130,0.85)', 'rgba(30,70,45,0.5)')}</div>
                       </div>
+
+                      {req.cat === 'Property' && (
+                        <div style={{ borderTop: '0.5px solid rgba(200,194,187,0.08)', paddingTop: 14 }}>
+                          {!briefData[i] && (
+                            <button
+                              onClick={() => generateBriefForBooking(i, req.address, req.propertyType, req.date)}
+                              disabled={briefLoading[i]}
+                              style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, border: '0.5px solid rgba(100,150,220,0.4)', color: 'rgba(100,150,220,0.9)', background: 'rgba(100,150,220,0.08)', cursor: briefLoading[i] ? 'not-allowed' : 'pointer', fontFamily: 'inherit', opacity: briefLoading[i] ? 0.6 : 1 }}
+                            >
+                              {briefLoading[i] ? 'Researching property...' : '✦ Generate Property Brief'}
+                            </button>
+                          )}
+
+                          {briefData[i] && !briefData[i].error && (
+                            <div style={{ background: 'rgba(61,71,86,0.2)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 6, padding: '14px 16px' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                                <span style={{ fontSize: 11, fontWeight: 500, color: '#C8C2BB', letterSpacing: '0.04em' }}>PROPERTY BRIEF</span>
+                                <button onClick={() => generateBriefForBooking(i, req.address, req.propertyType, req.date)} style={{ fontSize: 10, color: 'rgba(200,194,187,0.35)', background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>↻ Regenerate</button>
+                              </div>
+                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 10, marginBottom: 12 }}>
+                                <div><div style={{ fontSize: 9, color: 'rgba(200,194,187,0.35)', marginBottom: 2 }}>Bedrooms</div><div style={{ fontSize: 13, fontWeight: 500, color: '#fff' }}>{briefData[i].property?.bedrooms || '—'}</div></div>
+                                <div><div style={{ fontSize: 9, color: 'rgba(200,194,187,0.35)', marginBottom: 2 }}>Bathrooms</div><div style={{ fontSize: 13, fontWeight: 500, color: '#fff' }}>{briefData[i].property?.bathrooms || '—'}</div></div>
+                                <div><div style={{ fontSize: 9, color: 'rgba(200,194,187,0.35)', marginBottom: 2 }}>Garage</div><div style={{ fontSize: 13, fontWeight: 500, color: '#fff' }}>{briefData[i].property?.garageSpaces || '—'}</div></div>
+                                <div><div style={{ fontSize: 9, color: 'rgba(200,194,187,0.35)', marginBottom: 2 }}>Floor size</div><div style={{ fontSize: 13, fontWeight: 500, color: '#fff' }}>{briefData[i].property?.floorSize || '—'}</div></div>
+                                <div><div style={{ fontSize: 9, color: 'rgba(200,194,187,0.35)', marginBottom: 2 }}>Land size</div><div style={{ fontSize: 13, fontWeight: 500, color: '#fff' }}>{briefData[i].property?.landSize || '—'}</div></div>
+                              </div>
+                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 12 }}>
+                                <div><div style={{ fontSize: 9, color: 'rgba(200,194,187,0.35)', marginBottom: 2 }}>Rateable value</div><div style={{ fontSize: 12, fontWeight: 500, color: 'rgba(100,200,130,0.85)' }}>{briefData[i].property?.rateableValue || '—'}</div></div>
+                                <div><div style={{ fontSize: 9, color: 'rgba(200,194,187,0.35)', marginBottom: 2 }}>Last sale price</div><div style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>{briefData[i].property?.lastSalePrice || '—'}</div></div>
+                                <div><div style={{ fontSize: 9, color: 'rgba(200,194,187,0.35)', marginBottom: 2 }}>Last sale year</div><div style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>{briefData[i].property?.lastSaleDate || '—'}</div></div>
+                              </div>
+                              {briefData[i].property?.suburbCharacter && (
+                                <div style={{ marginBottom: 10 }}>
+                                  <div style={{ fontSize: 9, color: 'rgba(200,194,187,0.35)', marginBottom: 4 }}>SUBURB — {briefData[i].property?.suburb}</div>
+                                  <div style={{ fontSize: 12, color: 'rgba(200,194,187,0.5)', lineHeight: 1.6 }}>{briefData[i].property?.suburbCharacter}</div>
+                                </div>
+                              )}
+                              <div style={{ fontSize: 12, color: 'rgba(200,194,187,0.7)', lineHeight: 1.6, borderTop: '0.5px solid rgba(200,194,187,0.08)', paddingTop: 10, marginBottom: 12 }}>{briefData[i].property?.description || 'No description available.'}</div>
+                              {briefData[i].mapboxImageUrl && (
+                                <div style={{ marginBottom: 12, borderRadius: 5, overflow: 'hidden', border: '0.5px solid rgba(200,194,187,0.09)' }}>
+                                  <img src={briefData[i].mapboxImageUrl} alt="Property satellite view" style={{ width: '100%', display: 'block' }} />
+                                </div>
+                              )}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: briefData[i].weather ? 12 : 0 }}>
+                                {briefData[i].property?.listingUrl && briefData[i].property.listingUrl !== 'null' && (
+                                  <a href={briefData[i].property.listingUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '6px 14px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.6)', textDecoration: 'none', background: 'transparent' }}>View listing →</a>
+                                )}
+                                <a href={`https://www.homes.co.nz/search?q=${encodeURIComponent(briefData[i].property?.suburb || '')}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '6px 14px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.6)', textDecoration: 'none' }}>homes.co.nz →</a>
+                              </div>
+                              {briefData[i].weather && (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 14, paddingTop: 12, borderTop: '0.5px solid rgba(200,194,187,0.08)' }}>
+                                  <span style={{ fontSize: 10, color: 'rgba(200,194,187,0.35)' }}>WEATHER ON SHOOT DAY</span>
+                                  <span style={{ fontSize: 12, color: '#C8C2BB' }}>{briefData[i].weather.condition}</span>
+                                  <span style={{ fontSize: 12, color: '#C8C2BB' }}>{briefData[i].weather.minTemp}° – {briefData[i].weather.maxTemp}°C</span>
+                                  <span style={{ fontSize: 12, color: 'rgba(100,150,220,0.85)' }}>{briefData[i].weather.rainChance}% rain chance</span>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {briefData[i]?.error && (
+                            <div style={{ fontSize: 12, color: 'rgba(210,90,90,0.85)' }}>Could not generate brief. Try again.</div>
+                          )}
+                        </div>
+                      )}
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 }}>
                       <button style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>Confirm & schedule</button>
