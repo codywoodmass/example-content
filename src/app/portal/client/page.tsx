@@ -273,10 +273,10 @@ export default function ClientPortal() {
               </div>
               <button onClick={() => setActiveView('dashboard')} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>← Dashboard</button>
             </div>
-            <div style={{ padding: 28, maxWidth: 780 }}>
+            <div style={{ padding: bookingStep === 1 ? 0 : 28 }}>
 
               {/* STEP INDICATOR */}
-              <div style={{ display: 'flex', alignItems: 'center', marginBottom: 28 }}>
+              {bookingStep > 1 && <div style={{ display: 'flex', alignItems: 'center', marginBottom: 28, padding: '0 28px' }}>
                 {['Category','Packages','Add-ons','Details','Confirm'].map((step, i) => (
                   <div key={step} style={{ display: 'flex', alignItems: 'center', flex: i < 4 ? 1 : 'none' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -286,36 +286,71 @@ export default function ClientPortal() {
                     {i < 4 && <div style={{ flex: 1, height: 0.5, background: 'rgba(200,194,187,0.09)', margin: '0 10px' }} />}
                   </div>
                 ))}
-              </div>
+              </div>}
 
               {/* STEP 1: CATEGORY */}
               {bookingStep === 1 && (
-                <div>
-                  <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 16 }}>What type of shoot are you booking?</div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 24 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 115px)' }}>
+                  {/* SPLIT PANELS */}
+                  <div style={{ display: 'flex', flex: 1, height: 'calc(100vh - 115px)' }}>
                     {[
-                      { id: 'property', icon: '🏠', title: 'Property & Architecture', desc: 'Real estate listings, luxury residential, architectural documentation, development campaigns and rural land.', tags: ['Residential','Development','Architecture','Aerial included'] },
-                      { id: 'commercial', icon: '🎬', title: 'Commercial & Events', desc: 'Brand films, social content, product shoots, events, hospitality, tourism and corporate work.', tags: ['Brand Film','Social Content','Events','Hospitality'] },
-                    ].map(cat => (
-                      <div key={cat.id} onClick={() => setSelectedCat(cat.id)} style={{ border: `0.5px solid ${selectedCat === cat.id ? '#C8C2BB' : 'rgba(200,194,187,0.09)'}`, borderRadius: 8, padding: 22, cursor: 'pointer', background: selectedCat === cat.id ? 'rgba(200,194,187,0.06)' : '#1A1F28', position: 'relative', transition: 'all 0.15s' }}>
-                        {selectedCat === cat.id && <span style={{ position: 'absolute', top: 14, right: 16, color: '#C8C2BB' }}>✓</span>}
-                        <div style={{ fontSize: 24, marginBottom: 12 }}>{cat.icon}</div>
-                        <div style={{ fontSize: 14, fontWeight: 500, color: '#C8C2BB', marginBottom: 8 }}>{cat.title}</div>
-                        <div style={{ fontSize: 12, color: 'rgba(200,194,187,0.4)', lineHeight: 1.65, marginBottom: 14 }}>{cat.desc}</div>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                          {cat.tags.map(tag => <span key={tag} style={{ fontSize: 10, letterSpacing: '0.08em', background: 'rgba(61,71,86,0.4)', color: 'rgba(200,194,187,0.4)', padding: '3px 9px', borderRadius: 2 }}>{tag}</span>)}
+                      {
+                        id: 'property',
+                        title: 'Property &\nArchitecture',
+                        desc: 'Luxury, High End, Bold & Characteristic Residential, Lifestyle and Architectural Video.',
+                        video: '/videos/property.mp4',
+                        gradient: 'linear-gradient(160deg, #1a2535 0%, #0a0e14 100%)',
+                      },
+                      {
+                        id: 'commercial',
+                        title: 'Commercial\n& Events',
+                        desc: 'Photo & Video Branding, Event Coverage, Commercial/Corporate Work, Other..',
+                        video: '/videos/commercial.mp4',
+                        gradient: 'linear-gradient(160deg, #1a1a1a 0%, #0a0a0a 100%)',
+                      },
+                    ].map((cat, i) => (
+                      <div
+                        key={cat.id}
+                        onClick={() => { setSelectedCat(cat.id); setBookingStep(2) }}
+                        style={{ flex: 1, position: 'relative', overflow: 'hidden', cursor: 'pointer', borderRight: i === 0 ? '0.5px solid rgba(200,194,187,0.12)' : 'none', background: cat.gradient }}
+                        onMouseEnter={e => { const ov = e.currentTarget.querySelector('.overlay') as HTMLElement; if(ov) ov.style.background = 'rgba(0,0,0,0.2)' }}
+                        onMouseLeave={e => { const ov = e.currentTarget.querySelector('.overlay') as HTMLElement; if(ov) ov.style.background = 'rgba(0,0,0,0.55)' }}
+                      >
+                        {/* VIDEO BG */}
+                        <video
+                          src={cat.video}
+                          autoPlay
+                          loop
+                          muted
+                          playsInline
+                          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+                        />
+                        {/* GRADIENT OVERLAY */}
+                        <div className="overlay" style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.55)', transition: 'background 0.4s ease' }} />
+                        {/* GRADIENT BOTTOM FADE */}
+                        <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '70%', background: 'linear-gradient(to top, rgba(0,0,0,0.92) 0%, transparent 100%)' }} />
+
+                        {/* CONTENT */}
+                        <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', padding: '48px' }}>
+                          <div style={{ fontSize: 10, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.5)', marginBottom: 16 }}>0{i + 1}</div>
+                          <h2 style={{ fontSize: 'clamp(28px, 4vw, 52px)', fontWeight: 700, color: '#fff', lineHeight: 1.05, letterSpacing: '-0.02em', whiteSpace: 'pre-line', margin: '0 0 20px 0' }}>{cat.title}</h2>
+                          <p style={{ fontSize: 13, color: 'rgba(200,194,187,0.65)', lineHeight: 1.7, maxWidth: 340, marginBottom: 36 }}>{cat.desc}</p>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                            <span style={{ fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#C8C2BB', fontWeight: 500 }}>Select & continue</span>
+                            <div style={{ width: 32, height: 1, background: '#C8C2BB' }} />
+                            <span style={{ fontSize: 14, color: '#C8C2BB' }}>→</span>
+                          </div>
                         </div>
+
+                        {/* SELECTED INDICATOR */}
+                        {selectedCat === cat.id && (
+                          <div style={{ position: 'absolute', top: 24, right: 24, width: 28, height: 28, borderRadius: '50%', background: '#C8C2BB', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, color: '#111', fontWeight: 700 }}>✓</div>
+                        )}
                       </div>
                     ))}
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 16, borderTop: '0.5px solid rgba(200,194,187,0.09)' }}>
-                    <span style={{ fontSize: 11, color: 'rgba(200,194,187,0.25)' }}>Aerial is included in all property packages</span>
-                    <button onClick={() => selectedCat && setBookingStep(2)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, background: selectedCat ? '#C8C2BB' : 'rgba(200,194,187,0.1)', color: selectedCat ? '#111' : 'rgba(200,194,187,0.2)', border: 'none', cursor: selectedCat ? 'pointer' : 'not-allowed', fontWeight: 500, fontFamily: 'inherit' }}>Continue →</button>
-                  </div>
                 </div>
               )}
-
-              {/* STEP 2: PACKAGES */}
               {bookingStep === 2 && (
                 <div>
                   <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 12 }}>Shoot package — select one</div>
