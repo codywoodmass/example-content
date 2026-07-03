@@ -1,4 +1,5 @@
 'use client'
+import { supabase } from '@/lib/supabase'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 
@@ -43,6 +44,7 @@ const DEFAULT_SLIDES: SlideItem[] = [
   { id: 'brief', type: 'brief', label: 'The Scope' },
   { id: 'deliverables', type: 'deliverables', label: 'Deliverables' },
   { id: 'team', type: 'team', label: 'The Team' },
+  { id: 'moodboard', type: 'moodboard', label: 'Moodboard' },
   { id: 'investment', type: 'investment', label: 'Investment' },
   { id: 'terms', type: 'terms', label: 'Terms' },
 ]
@@ -86,6 +88,15 @@ export default function PitchDeckPage() {
   const [pricingNotes, setPricingNotes] = useState('')
   const [showDeposit, setShowDeposit] = useState(true)
   const [tcNotes, setTcNotes] = useState('')
+  const [shootHours, setShootHours] = useState(2)
+  const [editHours, setEditHours] = useState(0)
+  const [preProdFee, setPreProdFee] = useState(0)
+  const [travelFee, setTravelFee] = useState(0)
+  const [showPreProd, setShowPreProd] = useState(false)
+  const [showTravel, setShowTravel] = useState(false)
+
+  const [moodboardImages, setMoodboardImages] = useState<string[]>([])
+  const [moodboardUploading, setMoodboardUploading] = useState(false)
 
   const t = TEMPLATES[template]
   const inp: React.CSSProperties = { background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }
@@ -93,6 +104,37 @@ export default function PitchDeckPage() {
   const panelS: React.CSSProperties = { background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, marginBottom: 14, overflow: 'hidden' }
   const btnP: React.CSSProperties = { fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }
   const btnG: React.CSSProperties = { fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }
+
+
+  async function uploadMoodboardImage(file: File) {
+    setMoodboardUploading(true)
+    try {
+      const ext = file.name.split('.').pop()
+      const filename = `moodboard/${Date.now()}.${ext}`
+      const { data, error } = await supabase.storage.from('pitch-assets').upload(filename, file, { upsert: true })
+      if (error) throw error
+      const { data: { publicUrl } } = supabase.storage.from('pitch-assets').getPublicUrl(filename)
+      setMoodboardImages(p => [...p, publicUrl])
+    } catch (e) {
+      console.error('Upload error:', e)
+    }
+    setMoodboardUploading(false)
+  }
+
+  function getVideoThumbnail(url: string): string | null {
+    const ytMatch = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/)
+    if (ytMatch) return `https://img.youtube.com/vi/${ytMatch[1]}/maxresdefault.jpg`
+    const vimeoMatch = url.match(/vimeo\.com\/(\d+)/)
+    if (vimeoMatch) return `https://vumbnail.com/${vimeoMatch[1]}.jpg`
+    return null
+  }
+
+  async function addVideoLink(url: string) {
+    const thumb = getVideoThumbnail(url)
+    if (thumb) {
+      setMoodboardImages(p => [...p, `video:${url}:${thumb}`])
+    }
+  }
 
   function addDel() { setDeliverables(p => [...p, { id: Date.now().toString(), name: '', quantity: 1, duration: '', formats: [], notes: '' }]) }
   function updateDel(id: string, field: keyof DeliverableItem, value: any) { setDeliverables(p => p.map(d => d.id === id ? { ...d, [field]: value } : d)) }
@@ -110,6 +152,15 @@ export default function PitchDeckPage() {
   const selCrew = crew.filter(c => c.selected)
   const selEq = equipment.filter(e => e.selected)
   const hireEq = selEq.filter(e => e.hire)
+
+  const SHOOT_RATES: Record<string, number> = { hourly: 175, halfday: 700, fullday: 1400, multiday: 1400 }
+  const shootFee = shootDuration === 'hourly' ? shootHours * 175 : shootDuration === 'halfday' ? 700 : shootDuration === 'fullday' ? 1400 : shootDays * 1400
+  const editFee = editHours * 100
+  const hireTotal = hireEq.reduce((s: number, e: any) => s + e.hireRate * e.days, 0)
+  const subtotal = shootFee + editFee + (showPreProd ? preProdFee : 0) + (showTravel ? travelFee : 0) + hireTotal
+  const gst = Math.round(subtotal * 0.15)
+  const total = subtotal + gst
+
   const currentSlide = slides[activeSlide]
 
   function copyLink() {
@@ -149,7 +200,7 @@ export default function PitchDeckPage() {
         </div>
         <div>
           <div style={{ fontSize: scale * 6, letterSpacing: '0.18em', textTransform: 'uppercase', color: t.accentDim, marginBottom: scale * 6 }}>Prepared for</div>
-          <div style={{ fontSize: scale * HS * 0.52, fontWeight: HW, color: t.accent, lineHeight: 1.0, letterSpacing: '-0.02em', marginBottom: scale * 5 }}>{clientName}</div>
+          <div style={{ fontSize: scale * HS * 0.52, fontWeight: HW, color: t.accent, lineHeight: 1.0, letterSpacing: '-0.02em', marginBottom: scale * 5 }}>{clientName.toUpperCase()}</div>
           <div style={{ fontSize: scale * 13, color: t.accentDim, fontWeight: 400, marginBottom: scale * 10 }}>{projectName}</div>
           <div style={{ height: 0.5, background: t.border, marginBottom: scale * 8 }} />
           <div style={{ display: 'flex', gap: scale * 6, flexWrap: 'wrap' }}>
@@ -165,7 +216,7 @@ export default function PitchDeckPage() {
     if (slideItem.type === 'brief') return (
       <div style={{ width: '100%', height: '100%', background: bg, position: 'relative', overflow: 'hidden', padding: `${scale*18}px ${scale*24}px ${scale*16}px`, boxSizing: 'border-box' }}>
         <div style={{ fontSize: scale * 6, letterSpacing: '0.2em', textTransform: 'uppercase', color: t.muted, fontWeight: 600, marginBottom: scale * 6 }}>The Scope</div>
-        <div style={{ fontSize: scale * HS * 0.35, fontWeight: HW, color: t.accent, lineHeight: 1.0, letterSpacing: '-0.02em', marginBottom: scale * 8 }}>{jobType || 'Job Type'}</div>
+        <div style={{ fontSize: scale * HS * 0.35, fontWeight: HW, color: t.accent, lineHeight: 1.0, letterSpacing: '-0.02em', marginBottom: scale * 8 }}>{(jobType || 'Job Type').toUpperCase()}</div>
         <div style={{ height: 0.5, background: t.border, marginBottom: scale * 8 }} />
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: scale * 10, marginBottom: scale * 8 }}>
           <div>
@@ -241,30 +292,86 @@ export default function PitchDeckPage() {
         {footer}
       </div>
     )
+    if (slideItem.type === 'moodboard') return (
+      <div style={{ width: '100%', height: '100%', background: bg, position: 'relative', overflow: 'hidden', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', padding: `${scale*14}px ${scale*20}px ${scale*20}px` }}>
+        <div style={{ fontSize: scale * 6, letterSpacing: '0.2em', textTransform: 'uppercase', color: t.muted, fontWeight: 600, marginBottom: scale * 10 }}>Moodboard</div>
+        {moodboardImages.length > 0 ? (
+          <div style={{ display: 'grid', gridTemplateColumns: moodboardImages.length === 1 ? '1fr' : moodboardImages.length === 2 ? '1fr 1fr' : 'repeat(3, 1fr)', gap: scale * 4, flex: 1, minHeight: 0 }}>
+            {moodboardImages.slice(0, 6).map((entry: string, i: number) => {
+              const isVideo = entry.startsWith('video:')
+              const parts = isVideo ? entry.split(':') : []
+              const videoUrl = isVideo ? parts.slice(1, -1).join(':') : ''
+              const thumb = isVideo ? parts[parts.length - 1] : entry
+              return (
+                <div key={i} style={{ borderRadius: scale * 2, overflow: 'hidden', position: 'relative', cursor: isVideo ? 'pointer' : 'default' }} onClick={() => isVideo && window.open(videoUrl, '_blank')}>
+                  <img src={thumb} alt={`moodboard-${i}`} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                  {isVideo && (
+                    <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.3)' }}>
+                      <div style={{ width: scale * 16, height: scale * 16, borderRadius: '50%', background: 'rgba(255,255,255,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <span style={{ fontSize: scale * 8, marginLeft: scale * 1.5 }}>▶</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        ) : (
+          <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: scale * 4 }}>
+            {[0,1,2,3,4,5].map(i => (
+              <div key={i} style={{ background: t.surfaceAlt, borderRadius: scale * 2, border: `0.5px solid ${t.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <span style={{ fontSize: scale * 6, color: t.muted }}>+ Add image</span>
+              </div>
+            ))}
+          </div>
+        )}
+        {footer}
+      </div>
+    )
     if (slideItem.type === 'investment') return (
       <div style={{ width: '100%', height: '100%', background: bg, position: 'relative', overflow: 'hidden', padding: `${scale*18}px ${scale*24}px ${scale*16}px`, boxSizing: 'border-box' }}>
         <div style={{ fontSize: scale * 6, letterSpacing: '0.2em', textTransform: 'uppercase', color: t.muted, fontWeight: 600, marginBottom: scale * 6 }}>Investment</div>
-        <div style={{ fontSize: scale * HS * 0.35, fontWeight: HW, color: t.accent, lineHeight: 1.0, letterSpacing: '-0.02em', marginBottom: scale * 10 }}>PRICING</div>
-        <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', padding: `${scale*4}px 0`, borderBottom: `0.5px solid ${t.border}` }}>
+        <div style={{ fontSize: scale * HS * 0.35, fontWeight: HW, color: t.accent, lineHeight: 1.0, letterSpacing: '-0.02em', marginBottom: scale * 8 }}>PRICING</div>
+        <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: `${scale*3}px 0`, borderBottom: `0.5px solid ${t.border}` }}>
             <span style={{ fontSize: scale * 7, color: t.accentDim }}>{DURATION_LABELS[shootDuration]}{shootDuration === 'multiday' ? ` ×${shootDays}` : ''}{extraHours > 0 ? ` + ${extraHours}hrs` : ''}</span>
-            <span style={{ fontSize: scale * 7, color: t.accent, fontWeight: 600 }}>TBC</span>
+            <span style={{ fontSize: scale * 7, color: t.accent, fontWeight: 600 }}>${shootFee.toLocaleString()}</span>
           </div>
-          {deliverables.map(d => (
-            <div key={d.id} style={{ display: 'flex', justifyContent: 'space-between', padding: `${scale*4}px 0`, borderBottom: `0.5px solid ${t.border}` }}>
-              <span style={{ fontSize: scale * 7, color: t.accentDim }}>{d.name}{d.quantity > 1 ? ` ×${d.quantity}` : ''}</span>
-              <span style={{ fontSize: scale * 7, color: t.accent, fontWeight: 600 }}>Included</span>
+          {editHours > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: `${scale*3}px 0`, borderBottom: `0.5px solid ${t.border}` }}>
+              <span style={{ fontSize: scale * 7, color: t.accentDim }}>Editing — {editHours}hrs</span>
+              <span style={{ fontSize: scale * 7, color: t.accent, fontWeight: 600 }}>${editFee.toLocaleString()}</span>
             </div>
-          ))}
+          )}
+          {showPreProd && preProdFee > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: `${scale*3}px 0`, borderBottom: `0.5px solid ${t.border}` }}>
+              <span style={{ fontSize: scale * 7, color: t.accentDim }}>Pre-production</span>
+              <span style={{ fontSize: scale * 7, color: t.accent, fontWeight: 600 }}>${preProdFee.toLocaleString()}</span>
+            </div>
+          )}
+          {showTravel && travelFee > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: `${scale*3}px 0`, borderBottom: `0.5px solid ${t.border}` }}>
+              <span style={{ fontSize: scale * 7, color: t.accentDim }}>Travel & expenses</span>
+              <span style={{ fontSize: scale * 7, color: t.accent, fontWeight: 600 }}>${travelFee.toLocaleString()}</span>
+            </div>
+          )}
           {hireEq.map(e => (
-            <div key={e.id} style={{ display: 'flex', justifyContent: 'space-between', padding: `${scale*4}px 0`, borderBottom: `0.5px solid ${t.border}` }}>
+            <div key={e.id} style={{ display: 'flex', justifyContent: 'space-between', padding: `${scale*3}px 0`, borderBottom: `0.5px solid ${t.border}` }}>
               <span style={{ fontSize: scale * 7, color: t.accentDim }}>{e.name} hire ×{e.days}</span>
               <span style={{ fontSize: scale * 7, color: t.accent, fontWeight: 600 }}>${(e.hireRate*e.days).toLocaleString()}</span>
             </div>
           ))}
-          {pricingNotes && <div style={{ fontSize: scale * 6, color: t.muted, marginTop: scale * 4 }}>{pricingNotes}</div>}
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: `${scale*3}px 0`, borderBottom: `0.5px solid ${t.border}` }}>
+            <span style={{ fontSize: scale * 6.5, color: t.muted }}>GST (15%)</span>
+            <span style={{ fontSize: scale * 6.5, color: t.muted }}>${gst.toLocaleString()}</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: `${scale*4}px 0` }}>
+            <span style={{ fontSize: scale * 9, fontWeight: 700, color: t.accent }}>Total inc. GST</span>
+            <span style={{ fontSize: scale * 9, fontWeight: 700, color: t.accent }}>${total.toLocaleString()}</span>
+          </div>
+          {pricingNotes && <div style={{ fontSize: scale * 6, color: t.muted, marginTop: scale * 2 }}>{pricingNotes}</div>}
         </div>
-        {showDeposit && <div style={{ marginTop: scale * 6, padding: `${scale*4}px ${scale*6}px`, background: t.surfaceAlt, borderRadius: scale * 2, fontSize: scale * 6, color: t.muted }}>50% deposit required to confirm. Balance due on delivery.</div>}
+        {showDeposit && <div style={{ padding: `${scale*4}px ${scale*6}px`, background: t.surfaceAlt, borderRadius: scale * 2, fontSize: scale * 6, color: t.muted }}>50% deposit required to confirm. Balance due on delivery.</div>}
         {footer}
       </div>
     )
@@ -272,8 +379,8 @@ export default function PitchDeckPage() {
     if (slideItem.type === 'terms') return (
       <div style={{ width: '100%', height: '100%', background: bg, position: 'relative', overflow: 'hidden', padding: `${scale*18}px ${scale*24}px ${scale*16}px`, boxSizing: 'border-box' }}>
         <div style={{ fontSize: scale * 6, letterSpacing: '0.2em', textTransform: 'uppercase', color: t.muted, fontWeight: 600, marginBottom: scale * 6 }}>Terms & Conditions</div>
-        <div style={{ fontSize: scale * HS * 0.42, fontWeight: HW, color: t.accent, lineHeight: 1.0, letterSpacing: '-0.02em', marginBottom: scale * 4 }}>LET'S GET THIS</div>
-        <div style={{ fontSize: scale * HS * 0.42, fontWeight: HW, color: t.accent, lineHeight: 1.0, letterSpacing: '-0.02em', marginBottom: scale * 10 }}>STARTED.</div>
+        <div style={{ fontSize: scale * HS * 0.75, fontWeight: HW, color: t.accent, lineHeight: 1.0, letterSpacing: '-0.02em', marginBottom: scale * 4 }}>LET'S GET THIS</div>
+        <div style={{ fontSize: scale * HS * 0.75, fontWeight: HW, color: t.accent, lineHeight: 1.0, letterSpacing: '-0.02em', marginBottom: scale * 10 }}>STARTED.</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: scale * 4 }}>
           {['Proposal valid 14 days from issue', '50% deposit to confirm, balance due on delivery', 'Cancellations within 48hrs incur a 25% fee', 'Example Content retains portfolio rights unless waiver requested in writing', 'All prices exclude GST', 'Files delivered via Google Drive, retained 60 days', tcNotes].filter(Boolean).map((tc, i) => (
             <div key={i} style={{ display: 'flex', gap: scale * 5, fontSize: scale * 6.5, color: t.text, lineHeight: 1.55 }}>
@@ -299,7 +406,11 @@ export default function PitchDeckPage() {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {view === 'deck' && <>
-            <button style={{ ...btnG, display: 'flex', alignItems: 'center', gap: 6 }} onClick={() => window.print()}>↓ PDF</button>
+            <button style={{ ...btnG, display: 'flex', alignItems: 'center', gap: 6 }} onClick={() => {
+              const printData = { slides, template, clientName, contactName, clientEmail, logoUrl, projectName, category, jobType, jobDescription, jobDeliverables, projectGoals, tone, references, shootDuration, shootDays, shootDates, locations, deliveryEstimate, extraHours, deliverables, crew, equipment, pricingNotes, showDeposit, tcNotes, moodboardImages }
+              localStorage.setItem('pitch_print_data', JSON.stringify(printData))
+              window.open('/portal/studio/pitches/print', '_blank')
+            }}>↓ PDF</button>
             <button style={btnP} onClick={() => setSendModal(true)}>Send to client</button>
           </>}
           {view === 'brief' && <button style={btnP} onClick={() => { setView('deck'); setActiveSlide(0) }}>Preview deck →</button>}
@@ -359,7 +470,7 @@ export default function PitchDeckPage() {
             <div style={{ padding: '13px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>Client & project</div>
             <div style={{ padding: 18 }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
-                <div><label style={lbl}>Client / brand</label><input style={inp} value={clientName} onChange={e => setClientName(e.target.value)} /></div>
+                <div><label style={lbl}>Client / brand</label><input style={inp} value={clientName.toUpperCase()} onChange={e => setClientName(e.target.value)} /></div>
                 <div><label style={lbl}>Contact person</label><input style={inp} value={contactName} onChange={e => setContactName(e.target.value)} /></div>
                 <div><label style={lbl}>Client email</label><input style={inp} type="email" value={clientEmail} onChange={e => setClientEmail(e.target.value)} /></div>
                 <div><label style={lbl}>Project name</label><input style={inp} value={projectName} onChange={e => setProjectName(e.target.value)} /></div>
@@ -578,7 +689,7 @@ export default function PitchDeckPage() {
               {currentSlide?.type === 'cover' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                   <div><label style={lbl}>Deck title</label><input style={inp} value={projectName} onChange={e => setProjectName(e.target.value)} /></div>
-                  <div><label style={lbl}>Client</label><input style={inp} value={clientName} onChange={e => setClientName(e.target.value)} /></div>
+                  <div><label style={lbl}>Client</label><input style={inp} value={clientName.toUpperCase()} onChange={e => setClientName(e.target.value)} /></div>
                   <div><label style={lbl}>Logo URL</label><input style={inp} value={logoUrl} onChange={e => setLogoUrl(e.target.value)} placeholder="https://..." /></div>
                   <div><label style={lbl}>Shoot dates</label><input style={inp} value={shootDates} onChange={e => setShootDates(e.target.value)} /></div>
                 </div>
@@ -603,9 +714,84 @@ export default function PitchDeckPage() {
               {currentSlide?.type === 'team' && (
                 <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', lineHeight: 1.6 }}>Crew selection and photos are set in the brief. Click "← Edit brief" to update.</div>
               )}
-              {currentSlide?.type === 'investment' && (
+              {currentSlide?.type === 'moodboard' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  <div><label style={lbl}>Pricing notes</label><textarea style={{ ...inp, resize: 'vertical' as const, lineHeight: 1.6 }} rows={3} value={pricingNotes} onChange={e => setPricingNotes(e.target.value)} /></div>
+                  <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', lineHeight: 1.6 }}>Upload images or add YouTube/Vimeo links. Up to 6 items.</div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <label style={{ ...btnG, fontSize: 10, padding: '7px 12px', cursor: 'pointer', textAlign: 'center', flex: 1, opacity: moodboardUploading ? 0.5 : 1 }}>
+                      {moodboardUploading ? 'Uploading...' : '↑ Upload image'}
+                      <input type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={async e => { const files = Array.from(e.target.files || []); for (const f of files) { await uploadMoodboardImage(f) } }} disabled={moodboardUploading} />
+                    </label>
+                  </div>
+                  <div>
+                    <label style={lbl}>Add YouTube or Vimeo URL</label>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <input style={{ ...inp, flex: 1 }} placeholder="https://youtube.com/watch?v=..." onKeyDown={async e => { if (e.key === 'Enter') { await addVideoLink((e.target as HTMLInputElement).value); (e.target as HTMLInputElement).value = '' } }} />
+                      <button style={{ ...btnG, fontSize: 10, padding: '7px 10px', flexShrink: 0 }} onClick={async e => { const input = (e.currentTarget.previousSibling as HTMLInputElement); await addVideoLink(input.value); input.value = '' }}>Add</button>
+                    </div>
+                    <div style={{ fontSize: 10, color: 'rgba(200,194,187,0.25)', marginTop: 4 }}>Press Enter or click Add</div>
+                  </div>
+                  {moodboardImages.length > 0 && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <label style={lbl}>Current items ({moodboardImages.length}/6)</label>
+                      {moodboardImages.map((entry, i) => {
+                        const isVideo = entry.startsWith('video:')
+                        const label = isVideo ? '▶ Video' : `Image ${i + 1}`
+                        return (
+                          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', background: 'rgba(200,194,187,0.04)', borderRadius: 4, border: '0.5px solid rgba(200,194,187,0.08)' }}>
+                            <span style={{ fontSize: 11, color: 'rgba(200,194,187,0.5)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
+                            <button onClick={() => setMoodboardImages(p => p.filter((_, j) => j !== i))} style={{ fontSize: 12, color: 'rgba(210,90,90,0.6)', background: 'transparent', border: 'none', cursor: 'pointer', flexShrink: 0 }}>✕</button>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+              {currentSlide?.type === 'investment' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 4 }}>Shoot fee</div>
+                  {shootDuration === 'hourly' && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <input style={{ ...inp, width: 55, padding: '5px 8px' }} type="number" min="2" value={shootHours} onChange={e => setShootHours(parseInt(e.target.value)||2)} />
+                      <span style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>hrs × $175 = <strong style={{ color: '#C8C2BB' }}>${(shootHours*175).toLocaleString()}</strong></span>
+                    </div>
+                  )}
+                  {shootDuration !== 'hourly' && <div style={{ fontSize: 12, color: '#C8C2BB' }}>${shootFee.toLocaleString()}</div>}
+                  <div style={{ borderTop: '0.5px solid rgba(200,194,187,0.09)', paddingTop: 8 }}>
+                    <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 6 }}>Editing hours</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <input style={{ ...inp, width: 55, padding: '5px 8px' }} type="number" min="0" value={editHours} onChange={e => setEditHours(parseInt(e.target.value)||0)} />
+                      <span style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>hrs × $100 = <strong style={{ color: '#C8C2BB' }}>${(editHours*100).toLocaleString()}</strong></span>
+                    </div>
+                  </div>
+                  <div style={{ borderTop: '0.5px solid rgba(200,194,187,0.09)', paddingTop: 8 }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 11, color: 'rgba(200,194,187,0.55)', marginBottom: showPreProd ? 6 : 0 }}>
+                      <input type="checkbox" checked={showPreProd} onChange={e => setShowPreProd(e.target.checked)} style={{ accentColor: '#C8C2BB' }} />Pre-production
+                    </label>
+                    {showPreProd && <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>$</span><input style={{ ...inp, flex: 1, padding: '5px 8px' }} type="number" min="0" value={preProdFee} onChange={e => setPreProdFee(parseFloat(e.target.value)||0)} placeholder="0" /></div>}
+                  </div>
+                  <div style={{ borderTop: '0.5px solid rgba(200,194,187,0.09)', paddingTop: 8 }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 11, color: 'rgba(200,194,187,0.55)', marginBottom: showTravel ? 6 : 0 }}>
+                      <input type="checkbox" checked={showTravel} onChange={e => setShowTravel(e.target.checked)} style={{ accentColor: '#C8C2BB' }} />Travel & expenses
+                    </label>
+                    {showTravel && <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>$</span><input style={{ ...inp, flex: 1, padding: '5px 8px' }} type="number" min="0" value={travelFee} onChange={e => setTravelFee(parseFloat(e.target.value)||0)} placeholder="0" /></div>}
+                  </div>
+                  {hireEq.length > 0 && (
+                    <div style={{ borderTop: '0.5px solid rgba(200,194,187,0.09)', paddingTop: 8 }}>
+                      <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 6 }}>Equipment hire</div>
+                      {hireEq.map((e: any) => <div key={e.id} style={{ fontSize: 11, color: 'rgba(200,194,187,0.45)', marginBottom: 2 }}>{e.name} ×{e.days} — ${(e.hireRate*e.days).toLocaleString()}</div>)}
+                    </div>
+                  )}
+                  <div style={{ borderTop: '0.5px solid rgba(200,194,187,0.15)', paddingTop: 10, marginTop: 2 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}><span style={{ fontSize: 11, color: 'rgba(200,194,187,0.35)' }}>Subtotal</span><span style={{ fontSize: 11, color: '#C8C2BB' }}>${subtotal.toLocaleString()}</span></div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}><span style={{ fontSize: 11, color: 'rgba(200,194,187,0.35)' }}>GST (15%)</span><span style={{ fontSize: 11, color: '#C8C2BB' }}>${gst.toLocaleString()}</span></div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>Total inc. GST</span><span style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>${total.toLocaleString()}</span></div>
+                  </div>
+                  <div style={{ borderTop: '0.5px solid rgba(200,194,187,0.09)', paddingTop: 8 }}>
+                    <label style={lbl}>Pricing notes</label>
+                    <textarea style={{ ...inp, resize: 'vertical' as const, lineHeight: 1.6 }} rows={2} value={pricingNotes} onChange={e => setPricingNotes(e.target.value)} placeholder="Additional notes..." />
+                  </div>
                   <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 11, color: 'rgba(200,194,187,0.55)' }}>
                     <input type="checkbox" checked={showDeposit} onChange={e => setShowDeposit(e.target.checked)} style={{ accentColor: '#C8C2BB' }} />Show deposit note
                   </label>
@@ -649,7 +835,11 @@ export default function PitchDeckPage() {
             </div>
             <div style={{ marginBottom: 18 }}><label style={lbl}>Personal note (optional)</label><textarea style={{ ...inp, resize: 'none' as const, lineHeight: 1.6 }} rows={3} placeholder={`Hi ${contactName||'there'}, please find our proposal for ${projectName} attached.`} /></div>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
-              <button onClick={() => window.print()} style={{ ...btnG, display: 'flex', alignItems: 'center', gap: 6 }}>↓ Save as PDF</button>
+              <button onClick={() => {
+                    const printData = { slides, template, clientName, contactName, clientEmail, logoUrl, projectName, category, jobType, jobDescription, jobDeliverables, projectGoals, tone, references, shootDuration, shootDays, shootDates, locations, deliveryEstimate, extraHours, deliverables, crew, equipment, pricingNotes, showDeposit, tcNotes, moodboardImages }
+                    localStorage.setItem('pitch_print_data', JSON.stringify(printData))
+                    window.open('/portal/studio/pitches/print', '_blank')
+                  }} style={{ ...btnG, display: 'flex', alignItems: 'center', gap: 6 }}>↓ Save as PDF</button>
               <div style={{ display: 'flex', gap: 10 }}>
                 <button onClick={() => setSendModal(false)} style={btnG}>Cancel</button>
                 <button onClick={() => { setSendModal(false); setView('list') }} style={btnP}>Send to portal</button>
