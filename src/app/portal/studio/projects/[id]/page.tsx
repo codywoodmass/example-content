@@ -56,7 +56,7 @@ export default function ProjectDetailPage() {
 
   async function loadProject() {
     setLoading(true)
-    const { data, error } = await supabase.from('project1').select('*').eq('id', id).single()
+    const { data, error } = await supabase.from('projects1').select('*').eq('id', id).single()
     if (!error && data) {
       setProject(data)
       try {
@@ -74,7 +74,7 @@ export default function ProjectDetailPage() {
   async function saveProject() {
     if (!project) return
     setSaving(true)
-    const { error } = await supabase.from('project1').update({
+    const { error } = await supabase.from('projects1').update({
       title: project.title,
       client: project.client,
       contact: project.contact,
@@ -219,7 +219,7 @@ export default function ProjectDetailPage() {
                   <div><label style={lbl}>Email</label><input style={inp} value={project.email} onChange={e => updateField('email', e.target.value)} /></div>
                   <div><label style={lbl}>Category</label>
                     <select style={inp} value={project.category} onChange={e => updateField('category', e.target.value)}>
-                      <option>Property</option><option>Commercial</option><option>Architectural</option><option>Events</option><option>Social Content</option>
+                      <option>Property</option><option>Commercial</option><option>Events</option><option>Socials</option>
                     </select>
                   </div>
                   {project.category === 'Property' && (

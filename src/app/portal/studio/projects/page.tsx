@@ -53,26 +53,30 @@ export default function ProjectsPage() {
 
   async function loadProjects() {
     setLoading(true)
-    const { data, error } = await supabase.from('project1').select('*').order('created_at', { ascending: false })
+    const { data, error } = await supabase.from('projects1').select('*').order('created_at', { ascending: false })
     if (!error && data) setProjects(data)
     setLoading(false)
   }
 
   async function moveProject(id: string, stage: string) {
     setProjects(p => p.map(proj => proj.id === id ? { ...proj, stage } : proj))
-    await supabase.from('project1').update({ stage }).eq('id', id)
+    await supabase.from('projects1').update({ stage }).eq('id', id)
   }
 
   async function addProject() {
     if (!newForm.title || !newForm.client) return
     setSaving(true)
-    const { data, error } = await supabase.from('project1').insert([{
+    const { data, error } = await supabase.from('projects1').insert([{
       ...newForm,
       progress: 0,
       from_booking: false,
       general_notes: '',
       editor_notes: '',
     }]).select().single()
+    if (error) {
+      console.error('Insert error:', error)
+      alert('Error saving: ' + error.message)
+    }
     if (!error && data) {
       setProjects(p => [data, ...p])
       setShowNewModal(false)
@@ -134,7 +138,7 @@ export default function ProjectsPage() {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{ display: 'flex', gap: 6 }}>
-            {['All', 'Property', 'Commercial', 'Architectural'].map(cat => (
+            {['All', 'Property', 'Commercial', 'Events', 'Socials'].map(cat => (
               <button key={cat} onClick={() => setFilterCat(cat)} style={{ fontSize: 11, padding: '5px 12px', borderRadius: 3, border: `0.5px solid ${filterCat === cat ? '#C8C2BB' : 'rgba(200,194,187,0.15)'}`, background: filterCat === cat ? 'rgba(200,194,187,0.08)' : 'transparent', color: filterCat === cat ? '#C8C2BB' : 'rgba(200,194,187,0.35)', cursor: 'pointer', fontFamily: 'inherit' }}>{cat}</button>
             ))}
           </div>
@@ -224,25 +228,38 @@ export default function ProjectsPage() {
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 10, padding: 28, width: 500, maxWidth: '95vw' }}>
             <div style={{ fontSize: 14, fontWeight: 500, color: '#fff', marginBottom: 20 }}>New project</div>
+            {/* Category toggle */}
+            <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+              {['Property', 'Commercial', 'Events', 'Socials'].map(cat => (
+                <button key={cat} onClick={() => setNewForm(f => ({ ...f, category: cat, title: cat === 'Property' ? f.address || '' : f.title }))} style={{ fontSize: 11, padding: '7px 14px', borderRadius: 3, border: `0.5px solid ${newForm.category === cat ? '#C8C2BB' : 'rgba(200,194,187,0.15)'}`, background: newForm.category === cat ? 'rgba(200,194,187,0.08)' : 'transparent', color: newForm.category === cat ? '#C8C2BB' : 'rgba(200,194,187,0.35)', cursor: 'pointer', fontFamily: 'inherit' }}>{cat}</button>
+              ))}
+            </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 20 }}>
-              <div style={{ gridColumn: 'span 2' }}><label style={lbl}>Project / property name</label><input style={inp} value={newForm.title} onChange={e => setNewForm(f => ({ ...f, title: e.target.value }))} placeholder="e.g. 14 Clifton Rd" /></div>
+              {newForm.category === 'Property' ? (
+                <div style={{ gridColumn: 'span 2' }}>
+                  <label style={lbl}>Property address (used as project name)</label>
+                  <input style={inp} value={newForm.address} onChange={e => setNewForm(f => ({ ...f, address: e.target.value, title: e.target.value }))} placeholder="e.g. 14 Clifton Rd, Havelock North" />
+                </div>
+              ) : (
+                <div style={{ gridColumn: 'span 2' }}>
+                  <label style={lbl}>Project name</label>
+                  <input style={inp} value={newForm.title} onChange={e => setNewForm(f => ({ ...f, title: e.target.value }))} placeholder="e.g. Black Barn Brand Film 2026" />
+                </div>
+              )}
               <div><label style={lbl}>Client</label><input style={inp} value={newForm.client} onChange={e => setNewForm(f => ({ ...f, client: e.target.value }))} placeholder="e.g. Blackwell Properties" /></div>
               <div><label style={lbl}>Contact person</label><input style={inp} value={newForm.contact} onChange={e => setNewForm(f => ({ ...f, contact: e.target.value }))} placeholder="e.g. James Blackwell" /></div>
               <div style={{ gridColumn: 'span 2' }}><label style={lbl}>Email</label><input style={inp} type="email" value={newForm.email} onChange={e => setNewForm(f => ({ ...f, email: e.target.value }))} placeholder="client@email.com" /></div>
-              <div><label style={lbl}>Category</label>
-                <select style={inp} value={newForm.category} onChange={e => setNewForm(f => ({ ...f, category: e.target.value }))}>
-                  <option>Property</option><option>Commercial</option><option>Architectural</option><option>Events</option><option>Social Content</option>
-                </select>
-              </div>
+              {newForm.category !== 'Property' && (
+                <div style={{ gridColumn: 'span 2' }}><label style={lbl}>Shoot location</label><input style={inp} value={newForm.address} onChange={e => setNewForm(f => ({ ...f, address: e.target.value }))} placeholder="e.g. Auckland CBD, client studio, outdoor location..." /></div>
+              )}
               <div><label style={lbl}>Starting stage</label>
                 <select style={inp} value={newForm.stage} onChange={e => setNewForm(f => ({ ...f, stage: e.target.value }))}>
                   {STAGES.map(s => <option key={s}>{s}</option>)}
                 </select>
               </div>
-              {newForm.category === 'Property' && <div style={{ gridColumn: 'span 2' }}><label style={lbl}>Property address</label><input style={inp} value={newForm.address} onChange={e => setNewForm(f => ({ ...f, address: e.target.value }))} placeholder="e.g. 14 Clifton Rd, Havelock North" /></div>}
               <div><label style={lbl}>Shoot date</label><input style={inp} type="date" value={newForm.shoot_date} onChange={e => setNewForm(f => ({ ...f, shoot_date: e.target.value }))} /></div>
               <div><label style={lbl}>Draft due</label><input style={inp} type="date" value={newForm.draft_due} onChange={e => setNewForm(f => ({ ...f, draft_due: e.target.value }))} /></div>
-              <div style={{ gridColumn: 'span 2' }}><label style={lbl}>Delivery date</label><input style={inp} type="date" value={newForm.delivery_due} onChange={e => setNewForm(f => ({ ...f, delivery_due: e.target.value }))} /></div>
+              <div><label style={lbl}>Delivery date</label><input style={inp} type="date" value={newForm.delivery_due} onChange={e => setNewForm(f => ({ ...f, delivery_due: e.target.value }))} /></div>
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
               <button onClick={() => setShowNewModal(false)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
