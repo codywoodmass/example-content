@@ -8,6 +8,15 @@ export default function StudioPortal() {
   const [user, setUser] = useState<any>(null)
   const [bookings, setBookings] = useState<any[]>([])
   const [bookingCount, setBookingCount] = useState(0)
+  const [scheduleModal, setScheduleModal] = useState(false)
+  const [selectedBooking, setSelectedBooking] = useState<any>(null)
+  const [shootDate, setShootDate] = useState("")
+  const [startTime, setStartTime] = useState("07:30")
+  const [endTime, setEndTime] = useState("12:00")
+  const [calendarConnected, setCalendarConnected] = useState(false)
+  const [creatingEvent, setCreatingEvent] = useState(false)
+  const [eventLink, setEventLink] = useState("")
+
 
   const [loading, setLoading] = useState(true)
   const [activeView, setActiveView] = useState('dashboard')
@@ -23,13 +32,51 @@ export default function StudioPortal() {
       loadBookings()
     })
   }, [router])
-
   async function loadBookings() {
     const { data, error } = await supabase.from('bookings1').select('*').eq('status', 'pending').order('created_at', { ascending: false })
     if (!error && data) {
       setBookings(data)
       setBookingCount(data.length)
     }
+  }
+
+  async function connectGoogleCalendar() {
+    const res = await fetch('/api/calendar?action=auth_url')
+    const { url } = await res.json()
+    window.open(url, '_blank', 'width=500,height=600')
+    setTimeout(() => setCalendarConnected(true), 3000)
+  }
+
+  async function createCalendarEvent(booking: any) {
+    setCreatingEvent(true)
+    try {
+      const res = await fetch('/api/calendar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: `Example Content — ${booking.address || booking.shoot_package || 'Shoot'}`,
+          date: shootDate,
+          startTime,
+          endTime,
+          clientEmail: booking.client_email,
+          location: booking.address || '',
+          description: `Booking confirmed for ${booking.client_name || booking.client_email}\nPackage: ${booking.shoot_package}\nDeliverables: ${booking.deliverables}\nNotes: ${booking.notes || ''}`,
+        }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        setEventLink(data.eventLink)
+        await confirmBooking(booking)
+      } else if (data.error === 'Not authenticated') {
+        alert('Please connect your Google Calendar first')
+        connectGoogleCalendar()
+      } else {
+        alert('Calendar error: ' + data.error)
+      }
+    } catch (e) {
+      console.error(e)
+    }
+    setCreatingEvent(false)
   }
 
   async function confirmBooking(booking: any) {
@@ -363,7 +410,7 @@ export default function StudioPortal() {
                       </div>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 }}>
-                      <button onClick={() => confirmBooking(booking)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>Confirm & create project</button>
+                      <button onClick={() => { setSelectedBooking(booking); setShootDate(booking.preferred_date || ''); setScheduleModal(true) }} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>Confirm & create project</button>
                       <button style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Request changes</button>
                       <button onClick={() => declineBooking(booking.id)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 3, border: '0.5px solid rgba(210,90,90,0.4)', color: 'rgba(210,90,90,0.8)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Decline</button>
                     </div>
@@ -507,6 +554,81 @@ export default function StudioPortal() {
         )}
 
       </div>
+
+      {/* SCHEDULE MODAL */}
+      {scheduleModal && selectedBooking && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 10, padding: 28, width: 480, maxWidth: '95vw' }}>
+            <div style={{ fontSize: 14, fontWeight: 500, color: '#fff', marginBottom: 6 }}>Schedule shoot</div>
+            <div style={{ fontSize: 12, color: 'rgba(200,194,187,0.4)', marginBottom: 20, lineHeight: 1.6 }}>
+              {selectedBooking.address || selectedBooking.shoot_package} · {selectedBooking.client_name || selectedBooking.client_email}
+            </div>
+
+            {eventLink ? (
+              <div style={{ background: 'rgba(100,200,130,0.08)', border: '0.5px solid rgba(100,200,130,0.25)', borderRadius: 6, padding: '16px 18px', marginBottom: 20 }}>
+                <div style={{ fontSize: 12, fontWeight: 500, color: 'rgba(100,200,130,0.9)', marginBottom: 8 }}>✓ Calendar event created</div>
+                <a href={eventLink} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, color: 'rgba(100,150,220,0.8)', textDecoration: 'none' }}>Open in Google Calendar →</a>
+              </div>
+            ) : (
+              <>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, marginBottom: 16 }}>
+                  <div style={{ gridColumn: 'span 3' }}>
+                    <label style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)', marginBottom: 6, display: 'block' }}>Shoot date</label>
+                    <input type="date" value={shootDate} onChange={e => setShootDate(e.target.value)} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)', marginBottom: 6, display: 'block' }}>Start time</label>
+                    <select value={startTime} onChange={e => setStartTime(e.target.value)} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }}>
+                      {['06:00','06:30','07:00','07:30','08:00','08:30','09:00','09:30','10:00','10:30','11:00','11:30','12:00','12:30','13:00','13:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30','18:00'].map(t => <option key={t}>{t}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)', marginBottom: 6, display: 'block' }}>End time</label>
+                    <select value={endTime} onChange={e => setEndTime(e.target.value)} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }}>
+                      {['07:00','07:30','08:00','08:30','09:00','09:30','10:00','10:30','11:00','11:30','12:00','12:30','13:00','13:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30','18:00','18:30','19:00'].map(t => <option key={t}>{t}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)', marginBottom: 6, display: 'block' }}>Duration</label>
+                    <div style={{ fontSize: 12, color: '#C8C2BB', padding: '9px 0' }}>
+                      {(() => { const s = startTime.split(':').map(Number); const e = endTime.split(':').map(Number); const mins = (e[0]*60+e[1]) - (s[0]*60+s[1]); return mins > 0 ? `${Math.floor(mins/60)}h ${mins%60 > 0 ? mins%60+'m' : ''}`.trim() : '—' })()}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ background: 'rgba(61,71,86,0.2)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 5, padding: '12px 14px', marginBottom: 20, fontSize: 11, color: 'rgba(200,194,187,0.5)', lineHeight: 1.6 }}>
+                  <div style={{ fontWeight: 500, color: '#C8C2BB', marginBottom: 4 }}>Calendar invite will be sent to:</div>
+                  <div>• cody@examplecontent.co.nz (Example Content)</div>
+                  <div>• {selectedBooking.client_email} (Client)</div>
+                </div>
+
+                {!calendarConnected && (
+                  <div style={{ background: 'rgba(210,175,80,0.08)', border: '0.5px solid rgba(210,175,80,0.2)', borderRadius: 5, padding: '10px 14px', marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: 11, color: 'rgba(210,175,80,0.8)' }}>Connect Google Calendar to send invites</span>
+                    <button onClick={connectGoogleCalendar} style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '5px 12px', borderRadius: 3, background: 'rgba(210,175,80,0.15)', color: 'rgba(210,175,80,0.9)', border: '0.5px solid rgba(210,175,80,0.3)', cursor: 'pointer', fontFamily: 'inherit' }}>Connect →</button>
+                  </div>
+                )}
+              </>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
+              <button onClick={() => { setScheduleModal(false); setEventLink('') }} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>
+                {eventLink ? 'Close' : 'Cancel'}
+              </button>
+              {!eventLink && (
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={() => confirmBooking(selectedBooking)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>
+                    Confirm without calendar
+                  </button>
+                  <button onClick={() => createCalendarEvent(selectedBooking)} disabled={creatingEvent || !shootDate} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, background: creatingEvent || !shootDate ? 'rgba(200,194,187,0.1)' : '#C8C2BB', color: creatingEvent || !shootDate ? 'rgba(200,194,187,0.3)' : '#111', border: 'none', cursor: creatingEvent || !shootDate ? 'not-allowed' : 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>
+                    {creatingEvent ? 'Creating event...' : '📅 Confirm & add to calendar'}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   )
 }

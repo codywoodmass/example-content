@@ -1,4 +1,5 @@
 'use client'
+import StudioSidebar from '../StudioSidebar'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
@@ -127,7 +128,9 @@ export default function ProjectsPage() {
   )
 
   return (
-    <main style={{ background: '#0E1014', minHeight: '100vh', fontFamily: 'Inter, sans-serif', color: '#C8C2BB', fontSize: 13 }}>
+    <main style={{ background: '#0E1014', minHeight: '100vh', fontFamily: 'Inter, sans-serif', color: '#C8C2BB', fontSize: 13, display: 'flex' }}>
+      <StudioSidebar active="projects" />
+      <div style={{ flex: 1, overflowX: 'hidden' }}>
 
       {/* TOPBAR */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 28px', height: 57, borderBottom: '0.5px solid rgba(200,194,187,0.09)', background: '#14181F', position: 'sticky', top: 0, zIndex: 20 }}>
@@ -267,6 +270,7 @@ export default function ProjectsPage() {
           </div>
         </div>
       )}
+      </div>
     </main>
   )
 }
