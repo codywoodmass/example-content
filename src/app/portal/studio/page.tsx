@@ -6,6 +6,9 @@ import { useRouter } from 'next/navigation'
 export default function StudioPortal() {
   const router = useRouter()
   const [user, setUser] = useState<any>(null)
+  const [bookings, setBookings] = useState<any[]>([])
+  const [bookingCount, setBookingCount] = useState(0)
+
   const [loading, setLoading] = useState(true)
   const [activeView, setActiveView] = useState('dashboard')
   const [briefData, setBriefData] = useState<Record<number, any>>({})
@@ -17,8 +20,53 @@ export default function StudioPortal() {
       if (!session) { router.push('/login'); return }
       setUser(session.user)
       setLoading(false)
+      loadBookings()
     })
   }, [router])
+
+  async function loadBookings() {
+    const { data, error } = await supabase.from('bookings1').select('*').eq('status', 'pending').order('created_at', { ascending: false })
+    if (!error && data) {
+      setBookings(data)
+      setBookingCount(data.length)
+    }
+  }
+
+  async function confirmBooking(booking: any) {
+    await supabase.from('bookings1').update({ status: 'confirmed' }).eq('id', booking.id)
+    const { data, error: projectError } = await supabase.from('projects1').insert([{
+      title: booking.address || booking.shoot_package || 'New project',
+      client: booking.client_name || booking.client_email || '',
+      contact: booking.client_name || "",
+      contact: '',
+      email: booking.client_email || '',
+      category: booking.category === 'property' ? 'Property' : 'Commercial',
+      address: booking.address || '',
+      stage: 'Pre-Production',
+      shoot_date: booking.preferred_date || null,
+      draft_due: booking.draft_due || null,
+      delivery_due: booking.delivery_due || null,
+      progress: 0,
+      from_booking: true,
+      general_notes: booking.notes || '',
+      editor_notes: '',
+    }]).select().single()
+    if (projectError) {
+      alert('Project error: ' + projectError.message)
+    } else if (data) {
+      const deliverables = []
+      if (booking.shoot_package) deliverables.push({ id: '1', name: booking.shoot_package, done: false })
+      if (booking.deliverables) deliverables.push({ id: '2', name: booking.deliverables, done: false })
+      if (booking.addons) booking.addons.split(', ').filter(Boolean).forEach((a: string, i: number) => deliverables.push({ id: String(i + 3), name: a, done: false }))
+      if (deliverables.length > 0) localStorage.setItem(`deliverables_${data.id}`, JSON.stringify(deliverables))
+    }
+    loadBookings()
+  }
+
+  async function declineBooking(id: string) {
+    await supabase.from('bookings1').update({ status: 'declined' }).eq('id', id)
+    loadBookings()
+  }
 
   async function handleSignOut() {
     await supabase.auth.signOut()
@@ -59,7 +107,7 @@ export default function StudioPortal() {
     { label: 'Work', items: [
       { id: 'projects', label: 'Projects' },
       { id: 'schedule', label: 'Shoot Schedule' },
-      { id: 'bookings', label: 'Booking Requests', badge: '3' },
+      { id: 'bookings', label: 'Booking Requests', badge: bookingCount > 0 ? String(bookingCount) : undefined },
       { id: 'brief', label: 'Property Brief' },
     ]},
     { label: 'Team', items: [
@@ -118,7 +166,7 @@ export default function StudioPortal() {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 28px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', background: '#14181F', position: 'sticky', top: 0, zIndex: 10 }}>
               <div><div style={{ fontSize: 14, fontWeight: 500, color: '#fff' }}>Studio Dashboard</div><div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', marginTop: 2 }}>Monday 16 June 2026 · Week 25</div></div>
               <div style={{ display: 'flex', gap: 8 }}>
-                <button onClick={() => setActiveView('bookings')} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>3 new requests</button>
+                <button onClick={() => setActiveView('bookings')} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>${bookingCount} new request${bookingCount !== 1 ? 's' : ''}</button>
                 <button onClick={() => setActiveView('projects')} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>+ New project</button>
               </div>
             </div>
@@ -188,7 +236,7 @@ export default function StudioPortal() {
                     ))}
                   </div>
                   <div style={{ background: 'rgba(210,175,80,0.07)', border: '0.5px solid rgba(210,175,80,0.2)', borderRadius: 7, padding: 14 }}>
-                    <div style={{ fontSize: 12, fontWeight: 500, color: 'rgba(210,175,80,0.85)', marginBottom: 8 }}>3 booking requests pending</div>
+                    <div style={{ fontSize: 12, fontWeight: 500, color: 'rgba(210,175,80,0.85)', marginBottom: 8 }}>${bookingCount} booking request${bookingCount !== 1 ? 's' : ''} pending</div>
                     <button onClick={() => setActiveView('bookings')} style={{ width: '100%', fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Review requests</button>
                   </div>
                 </div>
@@ -282,100 +330,42 @@ export default function StudioPortal() {
         {activeView === 'bookings' && (
           <div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 28px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', background: '#14181F' }}>
-              <div><div style={{ fontSize: 14, fontWeight: 500, color: '#fff' }}>Booking Requests</div><div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>3 new requests awaiting review</div></div>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 500, color: '#fff' }}>Booking Requests</div>
+                <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>{bookingCount} pending request{bookingCount !== 1 ? 's' : ''} awaiting review</div>
+              </div>
               <button onClick={() => setActiveView('dashboard')} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>← Dashboard</button>
             </div>
             <div style={{ padding: 28, display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {[
-                { title: '20A Emerson Street — St Heliers Auckland', address: '20A Emerson Street, St Heliers, Auckland', propertyType: 'Luxury residential', cat: 'Property', shoot: 'Full Property Highlights', del: 'Social Reels Pack (4x)', addons: 'Twilight Shoot', date: '2026-06-24', dateLabel: '24 Jun (morning)', total: '$1,630 + GST' },
-                { title: 'Harcourts — 14 Te Mata Rd, Havelock North', address: '14 Te Mata Rd, Havelock North', propertyType: 'Standard residential', cat: 'Property', shoot: 'Social Content Highlights', del: 'Single Social Reel', addons: 'None', date: '2026-06-27', dateLabel: '27 Jun (golden hour)', total: '$730 + GST' },
-                { title: 'Napier City Brewers — Brand Film', address: 'Napier City Brewers, Napier', propertyType: 'Commercial property', cat: 'Commercial', shoot: 'Brand Film', del: 'Hero Film + Social Cut', addons: 'Additional Talent', date: '', dateLabel: 'TBC — flexible', total: '$2,000 + GST' },
-              ].map((req, i) => (
-                <div key={i} style={{ ...s.panel, padding: '18px 20px' }}>
+              {bookings.length === 0 && (
+                <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, padding: '40px 28px', textAlign: 'center', color: 'rgba(200,194,187,0.3)', fontSize: 13 }}>
+                  No pending booking requests
+                </div>
+              )}
+              {bookings.map((booking, i) => (
+                <div key={booking.id} style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, padding: '18px 20px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
                     <div style={{ flex: 1 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-                        <span style={{ fontSize: 13, fontWeight: 500, color: '#C8C2BB' }}>{req.title}</span>
-                        <span style={{ fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '3px 9px', borderRadius: 2, background: 'rgba(200,194,187,0.1)', color: '#C8C2BB', border: '0.5px solid rgba(200,194,187,0.2)' }}>{req.cat}</span>
+                        <span style={{ fontSize: 13, fontWeight: 500, color: '#C8C2BB' }}>{booking.address || booking.shoot_package || 'New booking'}</span>
+                        <span style={{ fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '3px 9px', borderRadius: 2, background: 'rgba(200,194,187,0.1)', color: '#C8C2BB', border: '0.5px solid rgba(200,194,187,0.2)' }}>{booking.category}</span>
+                        <span style={{ fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '3px 9px', borderRadius: 2, background: 'rgba(210,175,80,0.15)', color: 'rgba(210,175,80,0.9)', border: '0.5px solid rgba(210,175,80,0.25)' }}>Pending</span>
                       </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: req.cat === 'Property' ? 14 : 0 }}>
-                        <div><div style={{ fontSize: 10, color: 'rgba(200,194,187,0.4)', marginBottom: 2 }}>Shoot package</div><div style={{ fontSize: 12 }}>{req.shoot}</div></div>
-                        <div><div style={{ fontSize: 10, color: 'rgba(200,194,187,0.4)', marginBottom: 2 }}>Deliverables</div><div style={{ fontSize: 12 }}>{req.del}</div></div>
-                        <div><div style={{ fontSize: 10, color: 'rgba(200,194,187,0.4)', marginBottom: 2 }}>Add-ons</div><div style={{ fontSize: 12 }}>{req.addons}</div></div>
-                        <div><div style={{ fontSize: 10, color: 'rgba(200,194,187,0.4)', marginBottom: 2 }}>Preferred date</div><div style={{ fontSize: 12 }}>{req.dateLabel}</div></div>
-                        <div><div style={{ fontSize: 10, color: 'rgba(200,194,187,0.4)', marginBottom: 2 }}>Total</div><div style={{ fontSize: 12, color: 'rgba(100,200,130,0.85)' }}>{req.total}</div></div>
-                        <div><div style={{ fontSize: 10, color: 'rgba(200,194,187,0.4)', marginBottom: 2 }}>T&Cs accepted</div>{pill('Yes', 'rgba(100,200,130,0.85)', 'rgba(30,70,45,0.5)')}</div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10 }}>
+                        <div><div style={{ fontSize: 10, color: 'rgba(200,194,187,0.4)', marginBottom: 2 }}>Client</div><div style={{ fontSize: 12 }}>{booking.client_email}</div></div>
+                        <div><div style={{ fontSize: 10, color: 'rgba(200,194,187,0.4)', marginBottom: 2 }}>Shoot package</div><div style={{ fontSize: 12 }}>{booking.shoot_package || '—'}</div></div>
+                        <div><div style={{ fontSize: 10, color: 'rgba(200,194,187,0.4)', marginBottom: 2 }}>Deliverables</div><div style={{ fontSize: 12 }}>{booking.deliverables || '—'}</div></div>
+                        <div><div style={{ fontSize: 10, color: 'rgba(200,194,187,0.4)', marginBottom: 2 }}>Add-ons</div><div style={{ fontSize: 12 }}>{booking.addons || 'None'}</div></div>
+                        <div><div style={{ fontSize: 10, color: 'rgba(200,194,187,0.4)', marginBottom: 2 }}>Preferred date</div><div style={{ fontSize: 12 }}>{booking.preferred_date || 'TBC'}</div></div>
+                        <div><div style={{ fontSize: 10, color: 'rgba(200,194,187,0.4)', marginBottom: 2 }}>Total</div><div style={{ fontSize: 12, color: 'rgba(100,200,130,0.85)' }}>{booking.total || '—'}</div></div>
+                        {booking.address && <div style={{ gridColumn: 'span 3' }}><div style={{ fontSize: 10, color: 'rgba(200,194,187,0.4)', marginBottom: 2 }}>Address</div><div style={{ fontSize: 12 }}>{booking.address}</div></div>}
+                        {booking.notes && <div style={{ gridColumn: 'span 3' }}><div style={{ fontSize: 10, color: 'rgba(200,194,187,0.4)', marginBottom: 2 }}>Notes</div><div style={{ fontSize: 12 }}>{booking.notes}</div></div>}
                       </div>
-
-                      {req.cat === 'Property' && (
-                        <div style={{ borderTop: '0.5px solid rgba(200,194,187,0.08)', paddingTop: 14 }}>
-                          {!briefData[i] && (
-                            <button
-                              onClick={() => generateBriefForBooking(i, req.address, req.propertyType, req.date)}
-                              disabled={briefLoading[i]}
-                              style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, border: '0.5px solid rgba(100,150,220,0.4)', color: 'rgba(100,150,220,0.9)', background: 'rgba(100,150,220,0.08)', cursor: briefLoading[i] ? 'not-allowed' : 'pointer', fontFamily: 'inherit', opacity: briefLoading[i] ? 0.6 : 1 }}
-                            >
-                              {briefLoading[i] ? 'Researching property...' : '✦ Generate Property Brief'}
-                            </button>
-                          )}
-
-                          {briefData[i] && !briefData[i].error && (
-                            <div style={{ background: 'rgba(61,71,86,0.2)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 6, padding: '14px 16px' }}>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                                <span style={{ fontSize: 11, fontWeight: 500, color: '#C8C2BB', letterSpacing: '0.04em' }}>PROPERTY BRIEF</span>
-                                <button onClick={() => generateBriefForBooking(i, req.address, req.propertyType, req.date)} style={{ fontSize: 10, color: 'rgba(200,194,187,0.35)', background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>↻ Regenerate</button>
-                              </div>
-                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 10, marginBottom: 12 }}>
-                                <div><div style={{ fontSize: 9, color: 'rgba(200,194,187,0.35)', marginBottom: 2 }}>Bedrooms</div><div style={{ fontSize: 13, fontWeight: 500, color: '#fff' }}>{briefData[i].property?.bedrooms || '—'}</div></div>
-                                <div><div style={{ fontSize: 9, color: 'rgba(200,194,187,0.35)', marginBottom: 2 }}>Bathrooms</div><div style={{ fontSize: 13, fontWeight: 500, color: '#fff' }}>{briefData[i].property?.bathrooms || '—'}</div></div>
-                                <div><div style={{ fontSize: 9, color: 'rgba(200,194,187,0.35)', marginBottom: 2 }}>Garage</div><div style={{ fontSize: 13, fontWeight: 500, color: '#fff' }}>{briefData[i].property?.garageSpaces || '—'}</div></div>
-                                <div><div style={{ fontSize: 9, color: 'rgba(200,194,187,0.35)', marginBottom: 2 }}>Floor size</div><div style={{ fontSize: 13, fontWeight: 500, color: '#fff' }}>{briefData[i].property?.floorSize || '—'}</div></div>
-                                <div><div style={{ fontSize: 9, color: 'rgba(200,194,187,0.35)', marginBottom: 2 }}>Land size</div><div style={{ fontSize: 13, fontWeight: 500, color: '#fff' }}>{briefData[i].property?.landSize || '—'}</div></div>
-                              </div>
-                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 12 }}>
-                                <div><div style={{ fontSize: 9, color: 'rgba(200,194,187,0.35)', marginBottom: 2 }}>Rateable value</div><div style={{ fontSize: 12, fontWeight: 500, color: 'rgba(100,200,130,0.85)' }}>{briefData[i].property?.rateableValue || '—'}</div></div>
-                                <div><div style={{ fontSize: 9, color: 'rgba(200,194,187,0.35)', marginBottom: 2 }}>Last sale price</div><div style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>{briefData[i].property?.lastSalePrice || '—'}</div></div>
-                                <div><div style={{ fontSize: 9, color: 'rgba(200,194,187,0.35)', marginBottom: 2 }}>Last sale year</div><div style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>{briefData[i].property?.lastSaleDate || '—'}</div></div>
-                              </div>
-                              {briefData[i].property?.suburbCharacter && (
-                                <div style={{ marginBottom: 10 }}>
-                                  <div style={{ fontSize: 9, color: 'rgba(200,194,187,0.35)', marginBottom: 4 }}>SUBURB — {briefData[i].property?.suburb}</div>
-                                  <div style={{ fontSize: 12, color: 'rgba(200,194,187,0.5)', lineHeight: 1.6 }}>{briefData[i].property?.suburbCharacter}</div>
-                                </div>
-                              )}
-                              <div style={{ fontSize: 12, color: 'rgba(200,194,187,0.7)', lineHeight: 1.6, borderTop: '0.5px solid rgba(200,194,187,0.08)', paddingTop: 10, marginBottom: 12 }}>{briefData[i].property?.description || 'No description available.'}</div>
-                              {briefData[i].mapboxImageUrl && (
-                                <div style={{ marginBottom: 12, borderRadius: 5, overflow: 'hidden', border: '0.5px solid rgba(200,194,187,0.09)' }}>
-                                  <img src={briefData[i].mapboxImageUrl} alt="Property satellite view" style={{ width: '100%', display: 'block' }} />
-                                </div>
-                              )}
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: briefData[i].weather ? 12 : 0 }}>
-                                {briefData[i].property?.listingUrl && briefData[i].property.listingUrl !== 'null' && (
-                                  <a href={briefData[i].property.listingUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '6px 14px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.6)', textDecoration: 'none', background: 'transparent' }}>View listing →</a>
-                                )}
-                                <a href={`https://www.homes.co.nz/search?q=${encodeURIComponent(briefData[i].property?.suburb || '')}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '6px 14px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.6)', textDecoration: 'none' }}>homes.co.nz →</a>
-                              </div>
-                              {briefData[i].weather && (
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 14, paddingTop: 12, borderTop: '0.5px solid rgba(200,194,187,0.08)' }}>
-                                  <span style={{ fontSize: 10, color: 'rgba(200,194,187,0.35)' }}>WEATHER ON SHOOT DAY</span>
-                                  <span style={{ fontSize: 12, color: '#C8C2BB' }}>{briefData[i].weather.condition}</span>
-                                  <span style={{ fontSize: 12, color: '#C8C2BB' }}>{briefData[i].weather.minTemp}° – {briefData[i].weather.maxTemp}°C</span>
-                                  <span style={{ fontSize: 12, color: 'rgba(100,150,220,0.85)' }}>{briefData[i].weather.rainChance}% rain chance</span>
-                                </div>
-                              )}
-                            </div>
-                          )}
-
-                          {briefData[i]?.error && (
-                            <div style={{ fontSize: 12, color: 'rgba(210,90,90,0.85)' }}>Could not generate brief. Try again.</div>
-                          )}
-                        </div>
-                      )}
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 }}>
-                      <button style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>Confirm & schedule</button>
-                      <button style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Request changes</button>
-                      <button style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, border: '0.5px solid rgba(210,90,90,0.4)', color: 'rgba(210,90,90,0.8)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Decline</button>
+                      <button onClick={() => confirmBooking(booking)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>Confirm & create project</button>
+                      <button style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Request changes</button>
+                      <button onClick={() => declineBooking(booking.id)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 3, border: '0.5px solid rgba(210,90,90,0.4)', color: 'rgba(210,90,90,0.8)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Decline</button>
                     </div>
                   </div>
                 </div>
@@ -383,8 +373,6 @@ export default function StudioPortal() {
             </div>
           </div>
         )}
-
-        {/* ===== TEAM ===== */}
         {activeView === 'team' && (
           <div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 28px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', background: '#14181F' }}>
