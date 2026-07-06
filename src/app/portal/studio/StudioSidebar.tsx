@@ -10,6 +10,7 @@ const NAV = [
     { id: 'brief', label: 'Property Brief', href: '/portal/studio/brief' },
   ]},
   { label: 'Clients', items: [
+    { id: 'clients', label: 'Clients', href: '/portal/studio/clients' },
     { id: 'pitches', label: 'Pitch Decks', href: '/portal/studio/pitches' },
   ]},
 ]

@@ -16,6 +16,7 @@ export default function ClientPortal() {
   const [preferredDate, setPreferredDate] = useState("")
   const [propertyAddress, setPropertyAddress] = useState("")
   const [bookingNotes, setBookingNotes] = useState("")
+  const [accessNotes, setAccessNotes] = useState("")
   const [clientContactName, setClientContactName] = useState("")
   const [clientEmail2, setClientEmail2] = useState("")
   const [draftDue, setDraftDue] = useState("")
@@ -134,7 +135,7 @@ export default function ClientPortal() {
             { id: 'pitches', label: 'Pitch Decks' },
             { id: 'invoices', label: 'Invoices' },
           ].map(item => (
-            <button key={item.id} onClick={() => { setActiveView(item.id); setBookingStep(1); setSelectedCat(''); setSelectedShoot(null); setSelectedDel(null); setSelectedAddons([]); setTcAccepted(false) }} style={{ display: 'flex', alignItems: 'center', width: '100%', padding: '9px 10px', borderRadius: 5, fontSize: 12, color: activeView === item.id ? '#C8C2BB' : 'rgba(200,194,187,0.38)', background: activeView === item.id ? 'rgba(61,71,86,0.4)' : 'transparent', border: activeView === item.id ? '0.5px solid rgba(200,194,187,0.09)' : '0.5px solid transparent', cursor: 'pointer', marginBottom: 2, textAlign: 'left', fontFamily: 'inherit' }}>
+            <button key={item.id} onClick={() => { setActiveView(item.id); setBookingStep(1); setSelectedCat(''); setSelectedShoot(null); setSelectedDel(null); setSelectedAddons([]); setTcAccepted(false); setPreferredDate(''); setDraftDue(''); setDeliveryDue(''); setBookingNotes(''); setAccessNotes(''); setPropertyAddress('') }} style={{ display: 'flex', alignItems: 'center', width: '100%', padding: '9px 10px', borderRadius: 5, fontSize: 12, color: activeView === item.id ? '#C8C2BB' : 'rgba(200,194,187,0.38)', background: activeView === item.id ? 'rgba(61,71,86,0.4)' : 'transparent', border: activeView === item.id ? '0.5px solid rgba(200,194,187,0.09)' : '0.5px solid transparent', cursor: 'pointer', marginBottom: 2, textAlign: 'left', fontFamily: 'inherit' }}>
               {item.label}
             </button>
           ))}
@@ -458,7 +459,7 @@ export default function ClientPortal() {
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                         <label style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)' }}>Access / key notes</label>
-                        <input placeholder="e.g. Key in lockbox, call owner on arrival" style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }} />
+                        <input value={accessNotes} onChange={e => setAccessNotes(e.target.value)} placeholder="e.g. Key in lockbox, call owner on arrival" style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }} />
                       </div>
                     </div>
                   )}
@@ -560,12 +561,20 @@ export default function ClientPortal() {
                           draft_due: draftDue || null,
                           delivery_due: deliveryDue || null,
                           address: propertyAddress,
-                          notes: bookingNotes,
+                          notes: [bookingNotes, accessNotes ? 'Access notes: ' + accessNotes : ''].filter(Boolean).join('\n'),
                           total: `$${((selectedShoot?.price || 0) + (selectedDel?.price || 0) + selectedAddons.reduce((s: number, a: any) => s + a.price, 0)).toLocaleString()} + GST`,
                           tc_accepted: true,
                           status: 'pending',
                         }])
                       } catch (e) { console.error('Booking save error:', e) }
+                      try {
+                        await supabase.from('clients1').upsert([{
+                          email: clientEmail2 || user?.email,
+                          name: clientContactName || '',
+                          category: selectedCat === 'property' ? 'Property' : 'Commercial',
+                          total_bookings: 1,
+                        }], { onConflict: 'email', ignoreDuplicates: false })
+                      } catch (e) { console.error('Client upsert error:', e) }
                       setBookingStep(6)
                     }} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, background: tcAccepted ? '#C8C2BB' : 'rgba(200,194,187,0.1)', color: tcAccepted ? '#111' : 'rgba(200,194,187,0.2)', border: 'none', cursor: tcAccepted ? 'pointer' : 'not-allowed', fontWeight: 500, fontFamily: 'inherit' }}>Submit booking request →</button>
                   </div>
@@ -580,7 +589,7 @@ export default function ClientPortal() {
                   <div style={{ fontSize: 14, color: 'rgba(200,194,187,0.4)', lineHeight: 1.7, maxWidth: 400, margin: '0 auto 32px' }}>We've received your request and will confirm availability within 24 hours. You'll hear from the Example Content team shortly.</div>
                   <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
                     <button onClick={() => setActiveView('dashboard')} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Back to dashboard</button>
-                    <button onClick={() => { setBookingStep(1); setSelectedCat(''); setSelectedShoot(null); setSelectedDel(null); setSelectedAddons([]); setTcAccepted(false) }} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>Book another shoot</button>
+                    <button onClick={() => { setBookingStep(1); setSelectedCat(''); setSelectedShoot(null); setSelectedDel(null); setSelectedAddons([]); setTcAccepted(false); setPreferredDate(''); setDraftDue(''); setDeliveryDue(''); setBookingNotes(''); setAccessNotes(''); setPropertyAddress('') }} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>Book another shoot</button>
                   </div>
                 </div>
               )}
