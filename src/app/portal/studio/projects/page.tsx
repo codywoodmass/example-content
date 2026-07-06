@@ -41,6 +41,10 @@ export default function ProjectsPage() {
   const [showNewModal, setShowNewModal] = useState(false)
   const [filterCat, setFilterCat] = useState('All')
   const [dragId, setDragId] = useState<string | null>(null)
+  const [modalProject, setModalProject] = useState<Project | null>(null)
+  const [modalEditing, setModalEditing] = useState(false)
+  const [modalSaving, setModalSaving] = useState(false)
+  const [modalSaved, setModalSaved] = useState(false)
   const [dragOverStage, setDragOverStage] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
@@ -62,6 +66,39 @@ export default function ProjectsPage() {
   async function moveProject(id: string, stage: string) {
     setProjects(p => p.map(proj => proj.id === id ? { ...proj, stage } : proj))
     await supabase.from('projects1').update({ stage }).eq('id', id)
+  }
+
+  const STAGE_PROGRESS: Record<string, number> = {
+    'Pre-Production': 10,
+    'Shooting': 35,
+    'Post-Production': 65,
+    'Revisions': 85,
+    'Invoicing': 100,
+  }
+
+  async function saveModalProject() {
+    if (!modalProject) return
+    setModalSaving(true)
+    const { error } = await supabase.from('projects1').update({
+      title: modalProject.title,
+      client: modalProject.client,
+      email: modalProject.email,
+      category: modalProject.category,
+      address: modalProject.address,
+      stage: modalProject.stage,
+      shoot_date: modalProject.shoot_date || null,
+      draft_due: modalProject.draft_due || null,
+      delivery_due: modalProject.delivery_due || null,
+      drive_url: modalProject.drive_url,
+      progress: modalProject.progress,
+    }).eq('id', modalProject.id)
+    if (!error) {
+      setProjects(p => p.map(proj => proj.id === modalProject.id ? { ...proj, ...modalProject } : proj))
+      setModalSaved(true)
+      setModalEditing(false)
+      setTimeout(() => setModalSaved(false), 2000)
+    }
+    setModalSaving(false)
   }
 
   async function addProject() {
@@ -103,7 +140,7 @@ export default function ProjectsPage() {
         draggable
         onDragStart={() => setDragId(project.id)}
         onDragEnd={() => { setDragId(null); setDragOverStage(null) }}
-        onClick={() => router.push(`/portal/studio/projects/${project.id}`)}
+        onClick={() => { if (!dragId) { setModalProject(project); setModalEditing(false) } }}
         style={{ background: '#1A1F28', border: `0.5px solid ${dragId === project.id ? '#C8C2BB' : 'rgba(200,194,187,0.09)'}`, borderRadius: 6, padding: '14px 16px', cursor: 'pointer', opacity: dragId === project.id ? 0.5 : 1, transition: 'all 0.15s' }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
@@ -195,7 +232,7 @@ export default function ProjectsPage() {
               </thead>
               <tbody>
                 {filtered.map((project, i) => (
-                  <tr key={project.id} onClick={() => router.push(`/portal/studio/projects/${project.id}`)} style={{ cursor: 'pointer', background: i % 2 === 0 ? 'transparent' : 'rgba(200,194,187,0.02)' }}>
+                  <tr key={project.id} onClick={() => { setModalProject(project); setModalEditing(false) }} style={{ cursor: 'pointer', background: i % 2 === 0 ? 'transparent' : 'rgba(200,194,187,0.02)' }}>
                     <td style={{ padding: '12px 16px', borderBottom: '0.5px solid rgba(200,194,187,0.05)' }}>
                       <div style={{ fontSize: 13, fontWeight: 500, color: '#C8C2BB' }}>{project.title}</div>
                       {project.from_booking && <span style={{ fontSize: 9, color: 'rgba(100,150,220,0.7)' }}>From booking</span>}
@@ -266,6 +303,178 @@ export default function ProjectsPage() {
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
               <button onClick={() => setShowNewModal(false)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
               <button onClick={addProject} disabled={saving || !newForm.title || !newForm.client} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, background: saving || !newForm.title || !newForm.client ? 'rgba(200,194,187,0.1)' : '#C8C2BB', color: saving || !newForm.title || !newForm.client ? 'rgba(200,194,187,0.2)' : '#111', border: 'none', cursor: saving || !newForm.title || !newForm.client ? 'not-allowed' : 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>{saving ? 'Saving...' : 'Create project'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PROJECT MODAL */}
+      {modalProject && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }} onClick={e => { if (e.target === e.currentTarget) { setModalProject(null); setModalEditing(false) } }}>
+          <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 10, width: '100%', maxWidth: 680, maxHeight: '90vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 24px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', position: 'sticky', top: 0, background: '#1A1F28', zIndex: 1 }}>
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 500, color: '#fff' }}>{modalProject.title}</div>
+                <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', marginTop: 2 }}>{modalProject.client} · {modalProject.category}</div>
+              </div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                {!modalEditing ? (
+                  <>
+                    <button onClick={() => router.push(`/portal/studio/projects/${modalProject.id}`)} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '6px 12px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Full page</button>
+                    <button onClick={() => setModalEditing(true)} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '6px 12px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>Edit</button>
+                  </>
+                ) : (
+                  <>
+                    <button onClick={() => setModalEditing(false)} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '6px 12px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+                    <button onClick={saveModalProject} disabled={modalSaving} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '6px 12px', borderRadius: 3, background: modalSaved ? 'rgba(100,200,130,0.2)' : '#C8C2BB', color: modalSaved ? 'rgba(100,200,130,0.9)' : '#111', border: modalSaved ? '0.5px solid rgba(100,200,130,0.4)' : 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>{modalSaving ? 'Saving...' : modalSaved ? '✓ Saved' : 'Save'}</button>
+                  </>
+                )}
+                <button onClick={() => { setModalProject(null); setModalEditing(false) }} style={{ fontSize: 20, color: 'rgba(200,194,187,0.4)', background: 'transparent', border: 'none', cursor: 'pointer', lineHeight: 1, padding: '0 4px' }}>×</button>
+              </div>
+            </div>
+            <div style={{ padding: 24 }}>
+              <div style={{ marginBottom: 24 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+                  {['Pre-Production','Shooting','Post-Production','Revisions','Invoicing'].map((stage, idx) => {
+                    const SC: Record<string,string> = {'Pre-Production':'rgba(100,150,220,0.9)','Shooting':'rgba(210,175,80,0.9)','Post-Production':'rgba(160,100,220,0.9)','Revisions':'rgba(220,120,60,0.9)','Invoicing':'rgba(100,200,130,0.9)'}
+                    const stageIdx = ['Pre-Production','Shooting','Post-Production','Revisions','Invoicing'].indexOf(modalProject.stage)
+                    const isDone = idx < stageIdx; const isCurrent = idx === stageIdx
+                    return (
+                      <div key={stage} onClick={() => setModalProject(p => p ? { ...p, stage, progress: STAGE_PROGRESS[stage] } : p)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, cursor: 'pointer', flex: 1 }}>
+                        <div style={{ width: 26, height: 26, borderRadius: '50%', background: isDone ? 'rgba(100,200,130,0.15)' : isCurrent ? 'rgba(200,194,187,0.08)' : 'transparent', border: `1.5px solid ${isDone ? 'rgba(100,200,130,0.5)' : isCurrent ? SC[stage] : 'rgba(200,194,187,0.15)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: isDone ? 'rgba(100,200,130,0.8)' : isCurrent ? SC[stage] : 'rgba(200,194,187,0.2)' }}>{isDone ? '✓' : idx+1}</div>
+                        <span style={{ fontSize: 9, color: isCurrent ? '#C8C2BB' : 'rgba(200,194,187,0.3)', textAlign: 'center', lineHeight: 1.3 }}>{stage}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <span style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)' }}>Progress</span>
+                  <span style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>{modalProject.progress}%</span>
+                </div>
+                <input type="range" min="0" max="100" value={modalProject.progress} onChange={e => setModalProject(p => p ? { ...p, progress: parseInt(e.target.value) } : p)} style={{ width: '100%', accentColor: '#C8C2BB', cursor: 'pointer' }} />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
+                {[
+                  { label: 'Client', key: 'client' as const },
+                  { label: 'Email', key: 'email' as const },
+                  { label: modalProject.category === 'Property' ? 'Property address' : 'Shoot location', key: 'address' as const },
+                ].map(({ label, key }) => (
+                  <div key={key} style={{ gridColumn: key === 'address' ? 'span 2' : 'span 1' }}>
+                    <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>{label}</div>
+                    {modalEditing ? <input value={modalProject[key] || ''} onChange={e => setModalProject(p => p ? { ...p, [key]: e.target.value } : p)} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '8px 10px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }} /> : <div style={{ fontSize: 13, color: '#C8C2BB' }}>{modalProject[key] || '—'}</div>}
+                  </div>
+                ))}
+                <div>
+                  <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>Stage</div>
+                  {modalEditing ? (
+                    <select value={modalProject.stage} onChange={e => setModalProject(p => p ? { ...p, stage: e.target.value, progress: STAGE_PROGRESS[e.target.value] } : p)} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '8px 10px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }}>
+                      {['Pre-Production','Shooting','Post-Production','Revisions','Invoicing'].map(s => <option key={s}>{s}</option>)}
+                    </select>
+                  ) : <div style={{ fontSize: 13, color: '#C8C2BB' }}>{modalProject.stage}</div>}
+                </div>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, marginBottom: 20 }}>
+                {[{ label: 'Shoot date', key: 'shoot_date' as const }, { label: 'Draft due', key: 'draft_due' as const }, { label: 'Delivery date', key: 'delivery_due' as const }].map(({ label, key }) => (
+                  <div key={key}>
+                    <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>{label}</div>
+                    {modalEditing ? <input type="date" value={modalProject[key] || ''} onChange={e => setModalProject(p => p ? { ...p, [key]: e.target.value } : p)} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '8px 10px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }} /> : <div style={{ fontSize: 13, color: '#C8C2BB' }}>{modalProject[key] ? new Date(modalProject[key]).toLocaleDateString('en-NZ',{day:'numeric',month:'short',year:'numeric'}) : '—'}</div>}
+                  </div>
+                ))}
+              </div>
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>Google Drive</div>
+                {modalEditing ? <input value={modalProject.drive_url || ''} onChange={e => setModalProject(p => p ? { ...p, drive_url: e.target.value } : p)} placeholder="https://drive.google.com/drive/folders/..." style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '8px 10px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }} /> : modalProject.drive_url ? <a href={modalProject.drive_url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13, color: 'rgba(100,150,220,0.8)', textDecoration: 'none' }}>📁 Open project folder →</a> : <div style={{ fontSize: 13, color: 'rgba(200,194,187,0.25)' }}>No folder linked</div>}
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 16, borderTop: '0.5px solid rgba(200,194,187,0.09)' }}>
+                <button onClick={() => { setModalProject(null); setModalEditing(false) }} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.15)', color: 'rgba(200,194,187,0.4)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Close</button>
+                <button onClick={() => router.push(`/portal/studio/projects/${modalProject.id}`)} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, background: 'rgba(200,194,187,0.08)', color: '#C8C2BB', border: '0.5px solid rgba(200,194,187,0.15)', cursor: 'pointer', fontFamily: 'inherit' }}>Open full project →</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PROJECT MODAL */}
+      {modalProject && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }} onClick={e => { if (e.target === e.currentTarget) { setModalProject(null); setModalEditing(false) } }}>
+          <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 10, width: '100%', maxWidth: 680, maxHeight: '90vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 24px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', position: 'sticky', top: 0, background: '#1A1F28', zIndex: 1 }}>
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 500, color: '#fff' }}>{modalProject.title}</div>
+                <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', marginTop: 2 }}>{modalProject.client} · {modalProject.category}</div>
+              </div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                {!modalEditing ? (
+                  <>
+                    <button onClick={() => router.push(`/portal/studio/projects/${modalProject.id}`)} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '6px 12px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Full page</button>
+                    <button onClick={() => setModalEditing(true)} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '6px 12px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>Edit</button>
+                  </>
+                ) : (
+                  <>
+                    <button onClick={() => setModalEditing(false)} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '6px 12px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+                    <button onClick={saveModalProject} disabled={modalSaving} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '6px 12px', borderRadius: 3, background: modalSaved ? 'rgba(100,200,130,0.2)' : '#C8C2BB', color: modalSaved ? 'rgba(100,200,130,0.9)' : '#111', border: modalSaved ? '0.5px solid rgba(100,200,130,0.4)' : 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>{modalSaving ? 'Saving...' : modalSaved ? '✓ Saved' : 'Save'}</button>
+                  </>
+                )}
+                <button onClick={() => { setModalProject(null); setModalEditing(false) }} style={{ fontSize: 20, color: 'rgba(200,194,187,0.4)', background: 'transparent', border: 'none', cursor: 'pointer', lineHeight: 1, padding: '0 4px' }}>×</button>
+              </div>
+            </div>
+            <div style={{ padding: 24 }}>
+              <div style={{ marginBottom: 24 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+                  {['Pre-Production','Shooting','Post-Production','Revisions','Invoicing'].map((stage, idx) => {
+                    const SC: Record<string,string> = {'Pre-Production':'rgba(100,150,220,0.9)','Shooting':'rgba(210,175,80,0.9)','Post-Production':'rgba(160,100,220,0.9)','Revisions':'rgba(220,120,60,0.9)','Invoicing':'rgba(100,200,130,0.9)'}
+                    const stageIdx = ['Pre-Production','Shooting','Post-Production','Revisions','Invoicing'].indexOf(modalProject.stage)
+                    const isDone = idx < stageIdx; const isCurrent = idx === stageIdx
+                    return (
+                      <div key={stage} onClick={() => setModalProject(p => p ? { ...p, stage, progress: STAGE_PROGRESS[stage] } : p)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, cursor: 'pointer', flex: 1 }}>
+                        <div style={{ width: 26, height: 26, borderRadius: '50%', background: isDone ? 'rgba(100,200,130,0.15)' : isCurrent ? 'rgba(200,194,187,0.08)' : 'transparent', border: `1.5px solid ${isDone ? 'rgba(100,200,130,0.5)' : isCurrent ? SC[stage] : 'rgba(200,194,187,0.15)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: isDone ? 'rgba(100,200,130,0.8)' : isCurrent ? SC[stage] : 'rgba(200,194,187,0.2)' }}>{isDone ? '✓' : idx+1}</div>
+                        <span style={{ fontSize: 9, color: isCurrent ? '#C8C2BB' : 'rgba(200,194,187,0.3)', textAlign: 'center', lineHeight: 1.3 }}>{stage}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <span style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)' }}>Progress</span>
+                  <span style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>{modalProject.progress}%</span>
+                </div>
+                <input type="range" min="0" max="100" value={modalProject.progress} onChange={e => setModalProject(p => p ? { ...p, progress: parseInt(e.target.value) } : p)} style={{ width: '100%', accentColor: '#C8C2BB', cursor: 'pointer' }} />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
+                {[
+                  { label: 'Client', key: 'client' as const },
+                  { label: 'Email', key: 'email' as const },
+                  { label: modalProject.category === 'Property' ? 'Property address' : 'Shoot location', key: 'address' as const },
+                ].map(({ label, key }) => (
+                  <div key={key} style={{ gridColumn: key === 'address' ? 'span 2' : 'span 1' }}>
+                    <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>{label}</div>
+                    {modalEditing ? <input value={modalProject[key] || ''} onChange={e => setModalProject(p => p ? { ...p, [key]: e.target.value } : p)} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '8px 10px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }} /> : <div style={{ fontSize: 13, color: '#C8C2BB' }}>{modalProject[key] || '—'}</div>}
+                  </div>
+                ))}
+                <div>
+                  <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>Stage</div>
+                  {modalEditing ? (
+                    <select value={modalProject.stage} onChange={e => setModalProject(p => p ? { ...p, stage: e.target.value, progress: STAGE_PROGRESS[e.target.value] } : p)} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '8px 10px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }}>
+                      {['Pre-Production','Shooting','Post-Production','Revisions','Invoicing'].map(s => <option key={s}>{s}</option>)}
+                    </select>
+                  ) : <div style={{ fontSize: 13, color: '#C8C2BB' }}>{modalProject.stage}</div>}
+                </div>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, marginBottom: 20 }}>
+                {[{ label: 'Shoot date', key: 'shoot_date' as const }, { label: 'Draft due', key: 'draft_due' as const }, { label: 'Delivery date', key: 'delivery_due' as const }].map(({ label, key }) => (
+                  <div key={key}>
+                    <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>{label}</div>
+                    {modalEditing ? <input type="date" value={modalProject[key] || ''} onChange={e => setModalProject(p => p ? { ...p, [key]: e.target.value } : p)} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '8px 10px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }} /> : <div style={{ fontSize: 13, color: '#C8C2BB' }}>{modalProject[key] ? new Date(modalProject[key]).toLocaleDateString('en-NZ',{day:'numeric',month:'short',year:'numeric'}) : '—'}</div>}
+                  </div>
+                ))}
+              </div>
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>Google Drive</div>
+                {modalEditing ? <input value={modalProject.drive_url || ''} onChange={e => setModalProject(p => p ? { ...p, drive_url: e.target.value } : p)} placeholder="https://drive.google.com/drive/folders/..." style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '8px 10px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }} /> : modalProject.drive_url ? <a href={modalProject.drive_url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13, color: 'rgba(100,150,220,0.8)', textDecoration: 'none' }}>📁 Open project folder →</a> : <div style={{ fontSize: 13, color: 'rgba(200,194,187,0.25)' }}>No folder linked</div>}
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 16, borderTop: '0.5px solid rgba(200,194,187,0.09)' }}>
+                <button onClick={() => { setModalProject(null); setModalEditing(false) }} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.15)', color: 'rgba(200,194,187,0.4)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Close</button>
+                <button onClick={() => router.push(`/portal/studio/projects/${modalProject.id}`)} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, background: 'rgba(200,194,187,0.08)', color: '#C8C2BB', border: '0.5px solid rgba(200,194,187,0.15)', cursor: 'pointer', fontFamily: 'inherit' }}>Open full project →</button>
+              </div>
             </div>
           </div>
         </div>

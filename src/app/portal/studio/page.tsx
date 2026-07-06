@@ -8,6 +8,10 @@ export default function StudioPortal() {
   const [user, setUser] = useState<any>(null)
   const [bookings, setBookings] = useState<any[]>([])
   const [bookingCount, setBookingCount] = useState(0)
+  const [dashProjects, setDashProjects] = useState<any[]>([])
+  const [upcomingShoots, setUpcomingShoots] = useState<any[]>([])
+  const [recentDeliveries, setRecentDeliveries] = useState<any[]>([])
+
   const [scheduleModal, setScheduleModal] = useState(false)
   const [selectedBooking, setSelectedBooking] = useState<any>(null)
   const [shootDate, setShootDate] = useState("")
@@ -37,6 +41,18 @@ export default function StudioPortal() {
     if (!error && data) {
       setBookings(data)
       setBookingCount(data.length)
+    }
+    const { data: projects } = await supabase.from('projects1').select('*').order('created_at', { ascending: false })
+    if (projects) {
+      const now = new Date()
+      const in14 = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000)
+      setDashProjects(projects.filter((p: any) => p.stage !== 'Invoicing' || p.progress < 100))
+      setUpcomingShoots(projects.filter((p: any) => {
+        if (!p.shoot_date) return false
+        const d = new Date(p.shoot_date)
+        return d >= now && d <= in14
+      }).sort((a: any, b: any) => new Date(a.shoot_date).getTime() - new Date(b.shoot_date).getTime()))
+      setRecentDeliveries(projects.filter((p: any) => p.stage === 'Invoicing' && p.progress === 100).slice(0, 3))
     }
   }
 
@@ -211,93 +227,121 @@ export default function StudioPortal() {
         {activeView === 'dashboard' && (
           <div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 28px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', background: '#14181F', position: 'sticky', top: 0, zIndex: 10 }}>
-              <div><div style={{ fontSize: 14, fontWeight: 500, color: '#fff' }}>Studio Dashboard</div><div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', marginTop: 2 }}>Monday 16 June 2026 · Week 25</div></div>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 500, color: '#fff' }}>Studio Dashboard</div>
+                <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', marginTop: 2 }}>{new Date().toLocaleDateString('en-NZ', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</div>
+              </div>
               <div style={{ display: 'flex', gap: 8 }}>
-                <button onClick={() => setActiveView('bookings')} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>${bookingCount} new request${bookingCount !== 1 ? 's' : ''}</button>
-                <button onClick={() => setActiveView('projects')} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>+ New project</button>
+                {bookingCount > 0 && (
+                  <button onClick={() => setActiveView('bookings')} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, border: '0.5px solid rgba(210,90,90,0.4)', color: 'rgba(210,90,90,0.9)', background: 'rgba(210,90,90,0.08)', cursor: 'pointer', fontFamily: 'inherit' }}>
+                    {bookingCount} new request{bookingCount !== 1 ? 's' : ''}
+                  </button>
+                )}
+                <button onClick={() => router.push('/portal/studio/projects')} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>+ New project</button>
               </div>
             </div>
             <div style={{ padding: 28 }}>
-              <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 12 }}>This month — June 2026</div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10, marginBottom: 20 }}>
+              <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 14 }}>Overview</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 28 }}>
                 {[
-                  { label: 'Revenue', value: '$18,400', sub: '↑ 12% vs May', subColor: 'rgba(100,200,130,0.85)' },
-                  { label: 'Active projects', value: '8', sub: '3 shooting this week', subColor: 'rgba(200,194,187,0.28)' },
-                  { label: 'Hours logged', value: '94h', sub: 'Across 4 team members', subColor: 'rgba(200,194,187,0.28)' },
-                  { label: 'Net profit', value: '$11,240', sub: '61% margin', subColor: 'rgba(100,200,130,0.85)' },
-                ].map(({ label, value, sub, subColor }) => (
-                  <div key={label} style={{ ...s.panel, padding: '16px 18px' }}>
-                    <div style={{ fontSize: 10, color: 'rgba(200,194,187,0.38)', marginBottom: 6 }}>{label}</div>
-                    <div style={{ fontSize: 24, fontWeight: 500, color: '#fff', letterSpacing: '-0.02em' }}>{value}</div>
-                    <div style={{ fontSize: 10, color: subColor, marginTop: 4 }}>{sub}</div>
+                  { label: 'Active projects', value: dashProjects.length, sub: dashProjects.filter((p: any) => p.stage === 'Shooting').length + ' shooting this week' },
+                  { label: 'Pending requests', value: bookingCount, sub: bookingCount > 0 ? 'Awaiting review' : 'All clear', alert: bookingCount > 0 },
+                  { label: 'In post-production', value: dashProjects.filter((p: any) => p.stage === 'Post-Production' || p.stage === 'Revisions').length, sub: 'Editing & revisions' },
+                  { label: 'Ready to invoice', value: dashProjects.filter((p: any) => p.stage === 'Invoicing').length, sub: 'Completed projects' },
+                ].map(({ label, value, sub, alert }: any) => (
+                  <div key={label} style={{ background: '#1A1F28', border: '0.5px solid ' + (alert ? 'rgba(210,90,90,0.3)' : 'rgba(200,194,187,0.09)'), borderRadius: 7, padding: '18px 20px' }}>
+                    <div style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 8 }}>{label}</div>
+                    <div style={{ fontSize: 28, fontWeight: 600, color: alert ? 'rgba(210,90,90,0.9)' : '#fff', marginBottom: 6 }}>{value}</div>
+                    <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.35)' }}>{sub}</div>
                   </div>
                 ))}
               </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 14, marginBottom: 14 }}>
-                <div style={s.panel}>
-                  <div style={{ padding: '14px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>Active projects</span>
-                    <button onClick={() => setActiveView('projects')} style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>View all</button>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 20 }}>
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                    <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)' }}>Active projects</div>
+                    <button onClick={() => router.push('/portal/studio/projects')} style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>View all →</button>
                   </div>
-                  {[
-                    { name: '14 Clifton Rd', client: 'Blackwell Properties', progress: 80, status: 'Editing', sc: 'rgba(100,200,130,0.85)', sb: 'rgba(30,70,45,0.5)' },
-                    { name: 'Orchard Lane Dev.', client: 'Blackwell Properties', progress: 45, status: 'Shooting', sc: 'rgba(210,175,80,0.85)', sb: 'rgba(65,52,18,0.5)' },
-                    { name: 'Black Barn — Brand', client: 'Black Barn Retreats', progress: 20, status: 'Pre-prod', sc: 'rgba(100,150,220,0.85)', sb: 'rgba(25,45,80,0.5)' },
-                    { name: 'Elephant Hill Winery', client: 'Elephant Hill', progress: 95, status: 'Review', sc: 'rgba(100,200,130,0.85)', sb: 'rgba(30,70,45,0.5)' },
-                  ].map((p, i) => (
-                    <div key={i} onClick={() => setActiveView('projects')} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 18px', borderBottom: i < 3 ? '0.5px solid rgba(200,194,187,0.06)' : 'none', cursor: 'pointer' }}>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 13, fontWeight: 500, color: '#C8C2BB' }}>{p.name}</div>
-                        <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>{p.client}</div>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: 120 }}>
-                        <div style={{ flex: 1, height: 3, background: 'rgba(200,194,187,0.08)', borderRadius: 2 }}><div style={{ height: '100%', width: `${p.progress}%`, background: '#C8C2BB', opacity: 0.6, borderRadius: 2 }} /></div>
-                        <span style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>{p.progress}%</span>
-                      </div>
-                      {pill(p.status, p.sc, p.sb)}
-                    </div>
-                  ))}
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                  <div style={s.panel}>
-                    <div style={{ padding: '14px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>This week's shoots</span>
-                      <button onClick={() => setActiveView('schedule')} style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>Schedule</button>
-                    </div>
-                    {[
-                      { day: '17', month: 'Jun', title: 'Mission Heights', meta: '7:30am · Taradale', status: 'Confirmed' },
-                      { day: '19', month: 'Jun', title: 'Black Barn Day 1', meta: '9:00am · Havelock North', status: 'Pending' },
-                    ].map((sh, i) => (
-                      <div key={i} style={{ display: 'flex', gap: 10, padding: '11px 18px', borderBottom: i === 0 ? '0.5px solid rgba(200,194,187,0.06)' : 'none' }}>
-                        <div style={{ width: 34, textAlign: 'center', background: 'rgba(61,71,86,0.3)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '4px 2px', flexShrink: 0 }}>
-                          <div style={{ fontSize: 14, fontWeight: 500, color: '#fff' }}>{sh.day}</div>
-                          <div style={{ fontSize: 8, color: 'rgba(200,194,187,0.4)' }}>{sh.month}</div>
+                  <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, overflow: 'hidden' }}>
+                    {dashProjects.length === 0 && <div style={{ padding: '32px 20px', textAlign: 'center', color: 'rgba(200,194,187,0.25)', fontSize: 12 }}>No active projects</div>}
+                    {dashProjects.slice(0, 6).map((p: any, i: number) => {
+                      const SC: Record<string,any> = {'Pre-Production':{color:'rgba(100,150,220,0.9)',bg:'rgba(25,45,80,0.4)'},'Shooting':{color:'rgba(210,175,80,0.9)',bg:'rgba(65,52,18,0.4)'},'Post-Production':{color:'rgba(160,100,220,0.9)',bg:'rgba(50,25,80,0.4)'},'Revisions':{color:'rgba(220,120,60,0.9)',bg:'rgba(80,35,15,0.4)'},'Invoicing':{color:'rgba(100,200,130,0.9)',bg:'rgba(30,70,45,0.4)'}}
+                      const sc = SC[p.stage] || {color:'#C8C2BB',bg:'rgba(200,194,187,0.1)'}
+                      return (
+                        <div key={p.id} onClick={() => router.push('/portal/studio/projects/' + p.id)} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '13px 18px', borderBottom: i < Math.min(dashProjects.length,6)-1 ? '0.5px solid rgba(200,194,187,0.06)' : 'none', cursor: 'pointer' }}>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: 13, fontWeight: 500, color: '#C8C2BB', marginBottom: 3 }}>{p.title}</div>
+                            <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>{p.client}{p.shoot_date ? ' · Shoot: ' + new Date(p.shoot_date).toLocaleDateString('en-NZ',{day:'numeric',month:'short'}) : ''}</div>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <div style={{ width: 80, height: 3, background: 'rgba(200,194,187,0.07)', borderRadius: 2 }}>
+                              <div style={{ height: '100%', width: p.progress + '%', background: '#C8C2BB', opacity: 0.5, borderRadius: 2 }} />
+                            </div>
+                            <span style={{ fontSize: 10, color: 'rgba(200,194,187,0.35)', minWidth: 28 }}>{p.progress}%</span>
+                            <span style={{ fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '3px 8px', borderRadius: 2, background: sc.bg, color: sc.color, whiteSpace: 'nowrap' }}>{p.stage}</span>
+                          </div>
                         </div>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>{sh.title}</div>
-                          <div style={{ fontSize: 10, color: 'rgba(200,194,187,0.4)' }}>{sh.meta}</div>
-                        </div>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
-                  <div style={{ background: 'rgba(210,175,80,0.07)', border: '0.5px solid rgba(210,175,80,0.2)', borderRadius: 7, padding: 14 }}>
-                    <div style={{ fontSize: 12, fontWeight: 500, color: 'rgba(210,175,80,0.85)', marginBottom: 8 }}>${bookingCount} booking request${bookingCount !== 1 ? 's' : ''} pending</div>
-                    <button onClick={() => setActiveView('bookings')} style={{ width: '100%', fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Review requests</button>
+                  {recentDeliveries.length > 0 && (
+                    <div style={{ marginTop: 20 }}>
+                      <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 14 }}>Recent deliveries</div>
+                      <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, overflow: 'hidden' }}>
+                        {recentDeliveries.map((p: any, i: number) => (
+                          <div key={p.id} onClick={() => router.push('/portal/studio/projects/' + p.id)} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '13px 18px', borderBottom: i < recentDeliveries.length-1 ? '0.5px solid rgba(200,194,187,0.06)' : 'none', cursor: 'pointer' }}>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontSize: 13, fontWeight: 500, color: '#C8C2BB', marginBottom: 3 }}>{p.title}</div>
+                              <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>{p.client}</div>
+                            </div>
+                            <span style={{ fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '3px 8px', borderRadius: 2, background: 'rgba(100,200,130,0.15)', color: 'rgba(100,200,130,0.9)', border: '0.5px solid rgba(100,200,130,0.3)' }}>Delivered</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                  <div>
+                    <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 14 }}>Upcoming shoots — next 14 days</div>
+                    <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, overflow: 'hidden' }}>
+                      {upcomingShoots.length === 0 && <div style={{ padding: '20px', textAlign: 'center', color: 'rgba(200,194,187,0.25)', fontSize: 12 }}>No shoots scheduled</div>}
+                      {upcomingShoots.map((p: any, i: number) => {
+                        const d = new Date(p.shoot_date)
+                        return (
+                          <div key={p.id} onClick={() => router.push('/portal/studio/projects/' + p.id)} style={{ display: 'flex', gap: 14, padding: '13px 16px', borderBottom: i < upcomingShoots.length-1 ? '0.5px solid rgba(200,194,187,0.06)' : 'none', cursor: 'pointer', alignItems: 'center' }}>
+                            <div style={{ width: 38, height: 38, borderRadius: 5, background: 'rgba(200,194,187,0.06)', border: '0.5px solid rgba(200,194,187,0.1)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                              <div style={{ fontSize: 14, fontWeight: 600, color: '#C8C2BB', lineHeight: 1 }}>{d.getDate()}</div>
+                              <div style={{ fontSize: 9, color: 'rgba(200,194,187,0.4)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{d.toLocaleDateString('en-NZ',{month:'short'})}</div>
+                            </div>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>{p.title}</div>
+                              <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>{p.client}{p.address ? ' · ' + p.address.split(',')[0] : ''}</div>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 14 }}>Booking requests</div>
+                    <div style={{ background: bookingCount > 0 ? 'rgba(210,90,90,0.06)' : '#1A1F28', border: '0.5px solid ' + (bookingCount > 0 ? 'rgba(210,90,90,0.25)' : 'rgba(200,194,187,0.09)'), borderRadius: 7, padding: '16px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <div style={{ fontSize: 20, fontWeight: 600, color: bookingCount > 0 ? 'rgba(210,90,90,0.9)' : '#C8C2BB' }}>{bookingCount}</div>
+                        <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', marginTop: 2 }}>{bookingCount === 0 ? 'No pending requests' : 'Pending request' + (bookingCount !== 1 ? 's' : '')}</div>
+                      </div>
+                      {bookingCount > 0 && <button onClick={() => setActiveView('bookings')} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, border: '0.5px solid rgba(210,90,90,0.4)', color: 'rgba(210,90,90,0.9)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Review →</button>}
+                    </div>
+                  </div>
+                  <div style={{ padding: '12px 16px', background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{ width: 7, height: 7, borderRadius: '50%', background: 'rgba(100,200,130,0.8)', flexShrink: 0 }} />
+                    <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>Logged in as {user?.email} · Database connected</div>
                   </div>
                 </div>
-              </div>
-
-              <div style={{ background: 'rgba(100,200,130,0.06)', border: '0.5px solid rgba(100,200,130,0.2)', borderRadius: 7, padding: '14px 18px', display: 'flex', gap: 12, alignItems: 'center' }}>
-                <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'rgba(100,200,130,0.85)' }} />
-                <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>Logged in as {user?.email} · Database connected</div>
               </div>
             </div>
           </div>
         )}
-
-        {/* ===== PROJECTS ===== */}
         {activeView === 'projects' && (
           <div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 28px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', background: '#14181F' }}>
