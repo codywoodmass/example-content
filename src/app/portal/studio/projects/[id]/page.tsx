@@ -33,7 +33,9 @@ export default function ProjectDetailPage() {
   const [deliverables, setDeliverables] = useState<{ id: string; name: string; done: boolean }[]>([])
   const inp: React.CSSProperties = { background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }
   const lbl: React.CSSProperties = { fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)', marginBottom: 6, display: 'block' }
-  useEffect(() => { if (id) loadProject() }, [id])
+  useEffect(() => {
+    if (id) router.replace('/portal/studio/projects?open=' + id)
+  }, [id])
   async function loadProject() {
     setLoading(true)
     const { data, error } = await supabase.from('projects1').select('*').eq('id', id).single()

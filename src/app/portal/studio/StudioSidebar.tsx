@@ -3,11 +3,21 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 
 const NAV = [
-  { label: 'Overview', items: [{ id: 'dashboard', label: 'Dashboard', href: '/portal/studio' }] },
+  { label: 'Overview', items: [
+    { id: 'dashboard', label: 'Dashboard', href: '/portal/studio' },
+  ]},
   { label: 'Work', items: [
     { id: 'projects', label: 'Projects', href: '/portal/studio/projects' },
-    { id: 'bookings', label: 'Booking Requests', href: '/portal/studio' },
+    { id: 'schedule', label: 'Shoot Schedule', href: '/portal/studio?view=schedule' },
+    { id: 'bookings', label: 'Booking Requests', href: '/portal/studio?view=bookings' },
     { id: 'brief', label: 'Property Brief', href: '/portal/studio/brief' },
+  ]},
+  { label: 'Team', items: [
+    { id: 'team', label: 'Team & Time', href: '/portal/studio/team' },
+    { id: 'equipment', label: 'Equipment', href: '/portal/studio/equipment' },
+  ]},
+  { label: 'Finance', items: [
+    { id: 'finance', label: 'P&L Overview', href: '/portal/studio?view=finance' },
   ]},
   { label: 'Clients', items: [
     { id: 'clients', label: 'Clients', href: '/portal/studio/clients' },
@@ -15,7 +25,7 @@ const NAV = [
   ]},
 ]
 
-export default function StudioSidebar({ active }: { active?: string }) {
+export default function StudioSidebar({ active, onViewChange }: { active?: string; onViewChange?: (view: string) => void }) {
   const router = useRouter()
 
   async function handleSignOut() {
@@ -45,7 +55,7 @@ export default function StudioSidebar({ active }: { active?: string }) {
           <div key={group.label}>
             <div style={{ fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.22)', padding: '0 8px', margin: '14px 0 5px' }}>{group.label}</div>
             {group.items.map(item => (
-              <button key={item.id} onClick={() => router.push(item.href)} style={{ display: 'flex', alignItems: 'center', width: '100%', padding: '8px 10px', borderRadius: 5, fontSize: 12, color: active === item.id ? '#C8C2BB' : 'rgba(200,194,187,0.38)', background: active === item.id ? 'rgba(61,71,86,0.4)' : 'transparent', border: active === item.id ? '0.5px solid rgba(200,194,187,0.09)' : '0.5px solid transparent', cursor: 'pointer', marginBottom: 1, textAlign: 'left', fontFamily: 'inherit' }}>
+              <button key={item.id} onClick={() => { if (onViewChange && item.href.includes('?view=')) { onViewChange(item.href.split('?view=')[1]) } else { router.push(item.href) } }} style={{ display: 'flex', alignItems: 'center', width: '100%', padding: '8px 10px', borderRadius: 5, fontSize: 12, color: active === item.id ? '#C8C2BB' : 'rgba(200,194,187,0.38)', background: active === item.id ? 'rgba(61,71,86,0.4)' : 'transparent', border: active === item.id ? '0.5px solid rgba(200,194,187,0.09)' : '0.5px solid transparent', cursor: 'pointer', marginBottom: 1, textAlign: 'left', fontFamily: 'inherit' }}>
                 {item.label}
               </button>
             ))}

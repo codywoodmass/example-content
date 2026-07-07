@@ -1,7 +1,7 @@
 'use client'
 import StudioSidebar from '../StudioSidebar'
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 
 const STAGES = ['Pre-Production', 'Shooting', 'Post-Production', 'Revisions', 'Invoicing']
@@ -41,10 +41,12 @@ export default function ProjectsPage() {
   const [showNewModal, setShowNewModal] = useState(false)
   const [filterCat, setFilterCat] = useState('All')
   const [dragId, setDragId] = useState<string | null>(null)
+  const searchParams = useSearchParams()
   const [modalProject, setModalProject] = useState<Project | null>(null)
   const [modalEditing, setModalEditing] = useState(false)
   const [modalSaving, setModalSaving] = useState(false)
   const [modalSaved, setModalSaved] = useState(false)
+  const [showArchived, setShowArchived] = useState(false)
   const [dragOverStage, setDragOverStage] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
@@ -59,7 +61,14 @@ export default function ProjectsPage() {
   async function loadProjects() {
     setLoading(true)
     const { data, error } = await supabase.from('projects1').select('*').order('created_at', { ascending: false })
-    if (!error && data) setProjects(data)
+    if (!error && data) {
+      setProjects(data)
+      const openId = searchParams.get('open')
+      if (openId) {
+        const proj = data.find((p: Project) => p.id === openId)
+        if (proj) { setModalProject(proj); setModalEditing(false) }
+      }
+    }
     setLoading(false)
   }
 
@@ -101,6 +110,18 @@ export default function ProjectsPage() {
     setModalSaving(false)
   }
 
+  async function archiveProject(id: string, archived: boolean) {
+    await supabase.from('projects1').update({ archived }).eq('id', id)
+    setProjects(p => p.map(proj => proj.id === id ? { ...proj, archived } : proj))
+    setModalProject(null)
+  }
+
+  async function archiveProject(id: string, archived: boolean) {
+    await supabase.from('projects1').update({ archived }).eq('id', id)
+    setProjects(p => p.map(proj => proj.id === id ? { ...proj, archived } : proj))
+    setModalProject(null)
+  }
+
   async function addProject() {
     if (!newForm.title || !newForm.client) return
     setSaving(true)
@@ -124,7 +145,11 @@ export default function ProjectsPage() {
     setSaving(false)
   }
 
-  const filtered = filterCat === 'All' ? projects : projects.filter(p => p.category === filterCat)
+  const filtered = projects.filter(p => {
+    const matchesCat = filterCat === 'All' || p.category === filterCat
+    const matchesArchived = showArchived ? p.archived === true : !p.archived
+    return matchesCat && matchesArchived
+  })
 
   const inp: React.CSSProperties = { background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }
   const lbl: React.CSSProperties = { fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)', marginBottom: 6, display: 'block' }
@@ -176,10 +201,11 @@ export default function ProjectsPage() {
           <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', marginTop: 1 }}>{projects.length} projects · {projects.filter(p => p.stage === 'Invoicing').length} invoicing</div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ display: 'flex', gap: 6 }}>
-            {['All', 'Property', 'Commercial', 'Events', 'Socials'].map(cat => (
-              <button key={cat} onClick={() => setFilterCat(cat)} style={{ fontSize: 11, padding: '5px 12px', borderRadius: 3, border: `0.5px solid ${filterCat === cat ? '#C8C2BB' : 'rgba(200,194,187,0.15)'}`, background: filterCat === cat ? 'rgba(200,194,187,0.08)' : 'transparent', color: filterCat === cat ? '#C8C2BB' : 'rgba(200,194,187,0.35)', cursor: 'pointer', fontFamily: 'inherit' }}>{cat}</button>
-            ))}
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <select value={filterCat} onChange={e => setFilterCat(e.target.value)} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '6px 12px', fontSize: 11, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', cursor: 'pointer' }}>
+              {['All', 'Property', 'Commercial', 'Events', 'Socials'].map(cat => <option key={cat} value={cat}>{cat}</option>)}
+            </select>
+            <button onClick={() => setShowArchived(!showArchived)} style={{ fontSize: 11, padding: '6px 12px', borderRadius: 4, border: `0.5px solid ${showArchived ? 'rgba(210,175,80,0.4)' : 'rgba(200,194,187,0.15)'}`, background: showArchived ? 'rgba(210,175,80,0.08)' : 'transparent', color: showArchived ? 'rgba(210,175,80,0.9)' : 'rgba(200,194,187,0.35)', cursor: 'pointer', fontFamily: 'inherit' }}>📦 Archived</button>
           </div>
           <div style={{ display: 'flex', background: 'rgba(200,194,187,0.06)', borderRadius: 4, padding: 2 }}>
             {(['kanban', 'list'] as const).map(mode => (
@@ -192,7 +218,7 @@ export default function ProjectsPage() {
 
       {/* KANBAN */}
       {viewMode === 'kanban' && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', height: 'calc(100vh - 57px)', overflow: 'hidden' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', height: 'calc(100vh - 57px)', overflow: 'auto' }}>
           {STAGES.map(stage => {
             const stageProjects = filtered.filter(p => p.stage === stage)
             const c = STAGE_COLORS[stage]
@@ -320,7 +346,6 @@ export default function ProjectsPage() {
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 {!modalEditing ? (
                   <>
-                    <button onClick={() => router.push(`/portal/studio/projects/${modalProject.id}`)} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '6px 12px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Full page</button>
                     <button onClick={() => setModalEditing(true)} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '6px 12px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>Edit</button>
                   </>
                 ) : (
@@ -439,8 +464,14 @@ export default function ProjectsPage() {
                 </div>
               )}
               <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 16, borderTop: '0.5px solid rgba(200,194,187,0.09)' }}>
-                <button onClick={async () => { await saveModalProject(); setModalProject(null); setModalEditing(false) }} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.15)', color: 'rgba(200,194,187,0.4)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Close</button>
-                <button onClick={() => router.push(`/portal/studio/projects/${modalProject.id}`)} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, background: 'rgba(200,194,187,0.08)', color: '#C8C2BB', border: '0.5px solid rgba(200,194,187,0.15)', cursor: 'pointer', fontFamily: 'inherit' }}>Open full project →</button>
+                {modalProject.stage === 'Invoicing' && !modalProject.archived && (
+                  <button onClick={() => archiveProject(modalProject.id, true)} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(210,175,80,0.3)', color: 'rgba(210,175,80,0.8)', background: 'rgba(210,175,80,0.06)', cursor: 'pointer', fontFamily: 'inherit' }}>📦 Archive project</button>
+                )}
+                {modalProject.archived && (
+                  <button onClick={() => archiveProject(modalProject.id, false)} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(100,200,130,0.3)', color: 'rgba(100,200,130,0.8)', background: 'rgba(100,200,130,0.06)', cursor: 'pointer', fontFamily: 'inherit' }}>↩ Unarchive</button>
+                )}
+                {!modalProject.archived && modalProject.stage !== 'Invoicing' && <div />}
+                <button onClick={async () => { await saveModalProject(); setModalProject(null); setModalEditing(false); router.push('/portal/studio/projects') }} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>← Back to projects</button>
               </div>
             </div>
           </div>
@@ -459,7 +490,6 @@ export default function ProjectsPage() {
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 {!modalEditing ? (
                   <>
-                    <button onClick={() => router.push(`/portal/studio/projects/${modalProject.id}`)} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '6px 12px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Full page</button>
                     <button onClick={() => setModalEditing(true)} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '6px 12px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>Edit</button>
                   </>
                 ) : (
@@ -578,8 +608,14 @@ export default function ProjectsPage() {
                 </div>
               )}
               <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 16, borderTop: '0.5px solid rgba(200,194,187,0.09)' }}>
-                <button onClick={async () => { await saveModalProject(); setModalProject(null); setModalEditing(false) }} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.15)', color: 'rgba(200,194,187,0.4)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Close</button>
-                <button onClick={() => router.push(`/portal/studio/projects/${modalProject.id}`)} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, background: 'rgba(200,194,187,0.08)', color: '#C8C2BB', border: '0.5px solid rgba(200,194,187,0.15)', cursor: 'pointer', fontFamily: 'inherit' }}>Open full project →</button>
+                {modalProject.stage === 'Invoicing' && !modalProject.archived && (
+                  <button onClick={() => archiveProject(modalProject.id, true)} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(210,175,80,0.3)', color: 'rgba(210,175,80,0.8)', background: 'rgba(210,175,80,0.06)', cursor: 'pointer', fontFamily: 'inherit' }}>📦 Archive project</button>
+                )}
+                {modalProject.archived && (
+                  <button onClick={() => archiveProject(modalProject.id, false)} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(100,200,130,0.3)', color: 'rgba(100,200,130,0.8)', background: 'rgba(100,200,130,0.06)', cursor: 'pointer', fontFamily: 'inherit' }}>↩ Unarchive</button>
+                )}
+                {!modalProject.archived && modalProject.stage !== 'Invoicing' && <div />}
+                <button onClick={async () => { await saveModalProject(); setModalProject(null); setModalEditing(false); router.push('/portal/studio/projects') }} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>← Back to projects</button>
               </div>
             </div>
           </div>

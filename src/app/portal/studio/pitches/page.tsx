@@ -1,6 +1,7 @@
 'use client'
+import StudioSidebar from '../StudioSidebar'
 import { supabase } from '@/lib/supabase'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 
 const TEMPLATES = {
@@ -85,6 +86,33 @@ export default function PitchDeckPage() {
   ])
   const [crew, setCrew] = useState<CrewMember[]>(DEFAULT_CREW)
   const [equipment, setEquipment] = useState<EquipmentItem[]>(DEFAULT_EQUIPMENT)
+
+  useEffect(() => {
+    supabase.from('team1').select('*').eq('active', true).order('created_at').then(({ data }) => {
+      if (data && data.length > 0) {
+        setCrew(data.map((m: any, i: number) => ({
+          id: m.id,
+          name: m.name,
+          role: m.role,
+          bio: m.bio || '',
+          photoUrl: m.photo_url || '',
+          selected: i === 0,
+        })))
+      }
+    })
+    supabase.from('equipment1').select('*').order('created_at').then(({ data }) => {
+      if (data && data.length > 0) {
+        setEquipment(data.map((e: any) => ({
+          id: e.id,
+          name: e.name,
+          selected: false,
+          hire: false,
+          hireRate: 0,
+          days: 1,
+        })))
+      }
+    })
+  }, [])
   const [pricingNotes, setPricingNotes] = useState('')
   const [showDeposit, setShowDeposit] = useState(true)
   const [tcNotes, setTcNotes] = useState('')
@@ -396,7 +424,9 @@ export default function PitchDeckPage() {
   }
 
   return (
-    <main style={{ background: '#0E1014', minHeight: '100vh', fontFamily: 'Inter, sans-serif', color: '#C8C2BB', fontSize: 13 }}>
+    <main style={{ background: '#0E1014', minHeight: '100vh', fontFamily: 'Inter, sans-serif', color: '#C8C2BB', fontSize: 13, display: 'flex' }}>
+      <StudioSidebar active="pitches" />
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
       {/* TOPBAR */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 20px', height: 48, borderBottom: '0.5px solid rgba(200,194,187,0.09)', background: '#14181F', position: 'sticky', top: 0, zIndex: 20 }}>
@@ -849,6 +879,7 @@ export default function PitchDeckPage() {
         </div>
       )}
 
+      </div>
     </main>
   )
 }

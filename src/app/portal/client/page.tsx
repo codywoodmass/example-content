@@ -12,6 +12,7 @@ export default function ClientPortal() {
   const [selectedCat, setSelectedCat] = useState('')
   const [selectedShoot, setSelectedShoot] = useState<any>(null)
   const [selectedDel, setSelectedDel] = useState<any>(null)
+  const [selectedSubDel, setSelectedSubDel] = useState<any>(null)
   const [selectedAddons, setSelectedAddons] = useState<any[]>([])
   const [preferredDate, setPreferredDate] = useState("")
   const [propertyAddress, setPropertyAddress] = useState("")
@@ -51,9 +52,29 @@ export default function ClientPortal() {
   const grandTotal = (selectedShoot?.price || 0) + (selectedDel?.price || 0) + addonTotal
 
   const propertyShootPackages = [
-    { name: 'Full Property Highlights', price: 890, includes: ['Up to 3 hrs on-site', 'Exterior & interior coverage', 'Aerial drone included', 'Edited highlight reel', 'Colour graded'] },
-    { name: 'Full Property Walkthrough', price: 1190, includes: ['Up to 5 hrs on-site', 'Room-by-room walkthrough', 'Aerial drone included', 'Full walkthrough film', 'Behind-the-scenes stills'] },
-    { name: 'Social Content Highlights', price: 590, includes: ['Up to 2 hrs on-site', 'Vertical & square formats', 'Instagram & TikTok ready', '48hr turnaround'] },
+    {
+      name: 'Campaign Essentials', price: 890,
+      includes: ['3hrs on-site', '6hrs editing', 'Aerial drone included', 'Colour graded'],
+      deliverables: [
+        { name: 'Walkthrough Video (45–60s)', price: 0, includes: ['1x walkthrough video', 'Google Drive delivery'] },
+        { name: '2x Showcase Reels (20s)', price: 0, includes: ['2x 20s showcase reels', 'Vertical & landscape cuts', 'Google Drive delivery'] },
+      ]
+    },
+    {
+      name: 'Campaign Plus', price: 1280,
+      includes: ['4hrs on-site', 'Lifestyle/talent shoot included', '8hrs editing', 'Aerial drone included'],
+      deliverables: [
+        { name: 'Walkthrough Video (60s)', price: 0, includes: ['1x 60s walkthrough video', 'Google Drive delivery'] },
+        { name: '3x Reels + Carousel', price: 0, includes: ['3x social reels', '1x carousel', 'Google Drive delivery'] },
+      ]
+    },
+    {
+      name: 'Architectural', price: 2480,
+      includes: ['Full day shoot', 'Coming Soon Reel', '1–2 min Property Showcase', 'Story Content', 'Carousel'],
+      deliverables: [
+        { name: 'Full Architectural Package', price: 0, includes: ['Coming Soon Reel', '1–2 min Property Showcase', 'Story Content', 'Carousel', 'Google Drive delivery'] },
+      ]
+    },
   ]
 
   const commercialShootPackages = [
@@ -62,12 +83,8 @@ export default function ClientPortal() {
     { name: 'Event Coverage', price: 1190, includes: ['Full event duration', 'Video + photo coverage', 'Highlight reel included', 'Same-day social cuts available'] },
   ]
 
-  const propertyDeliverables = [
-    { name: 'Walkthrough + Highlights', price: 290, includes: ['1x full walkthrough video', '1x 60-90 sec highlight reel', 'Google Drive delivery'] },
-    { name: 'Social Reels Pack (4x)', price: 390, includes: ['4x social highlight reels', 'Vertical & landscape cuts', 'Cover frames included', 'Google Drive delivery'] },
-    { name: 'Single Social Reel', price: 140, includes: ['1x social highlight reel', 'Vertical or landscape', 'Google Drive delivery'] },
-    { name: 'Stills Pack', price: 240, includes: ['20-30 edited stills', 'High-res + web-res exports', 'Google Drive delivery'] },
-  ]
+  const propertyDeliverables: any[] = []
+
 
   const commercialDeliverables = [
     { name: 'Hero Film + Social Cut', price: 290, includes: ['1x hero film (2-3 min)', '1x 60 sec social cut', 'Google Drive delivery'] },
@@ -77,12 +94,13 @@ export default function ClientPortal() {
   ]
 
   const propertyAddons = [
-    { name: 'Twilight Shoot', price: 350, desc: 'Golden hour & dusk exterior coverage' },
-    { name: 'Lifestyle Property', price: 280, desc: 'Directed lifestyle shots with supplied talent' },
-    { name: 'Additional Talent', price: 220, desc: 'Extra model sourced by Example Content' },
-    { name: 'Rush Delivery (48hr)', price: 180, desc: 'Priority edit and delivery within 48 hours' },
-    { name: 'Floor Plan Graphics', price: 140, desc: 'Branded 2D floor plan overlay added to video' },
-    { name: 'Virtual Tour Integration', price: 200, desc: '360° photography embedded as virtual tour link' },
+    { name: 'Additional 20s Reel', price: 250, desc: 'One additional 20s showcase reel' },
+    { name: 'Additional 40s Reel', price: 400, desc: 'One additional 40s showcase reel' },
+    { name: 'Carousel', price: 100, desc: 'Branded property carousel for social media' },
+    { name: 'Open Home Story', price: 80, desc: 'Short-form story content for open home promotion' },
+    { name: 'Content Library', price: 100, desc: 'Extended content library for ongoing social use' },
+    { name: 'Twilight Shoot', price: 350, desc: 'Golden hour & dusk exterior shoot' },
+    { name: 'Additional Shoot Time', price: 350, desc: 'Extra time on-site beyond package allocation' },
   ]
 
   const commercialAddons = [
@@ -364,35 +382,58 @@ export default function ClientPortal() {
               )}
               {bookingStep === 2 && (
                 <div>
-                  <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 12 }}>Shoot package — select one</div>
+                  <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 12 }}>Select package</div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 22 }}>
-                    {shootPackages.map(pkg => (
-                      <div key={pkg.name} onClick={() => setSelectedShoot(pkg)} style={{ border: `0.5px solid ${selectedShoot?.name === pkg.name ? '#C8C2BB' : 'rgba(200,194,187,0.09)'}`, borderRadius: 8, padding: '16px 18px', cursor: 'pointer', background: selectedShoot?.name === pkg.name ? 'rgba(200,194,187,0.05)' : '#1A1F28', position: 'relative' }}>
+                    {shootPackages.map((pkg: any) => (
+                      <div key={pkg.name} onClick={() => { setSelectedShoot(pkg); setSelectedSubDel(null); setSelectedDel(null) }} style={{ border: `0.5px solid ${selectedShoot?.name === pkg.name ? '#C8C2BB' : 'rgba(200,194,187,0.09)'}`, borderRadius: 8, padding: '16px 18px', cursor: 'pointer', background: selectedShoot?.name === pkg.name ? 'rgba(200,194,187,0.05)' : '#1A1F28', position: 'relative' }}>
                         {selectedShoot?.name === pkg.name && <span style={{ position: 'absolute', top: 12, right: 14, color: '#C8C2BB', fontSize: 12 }}>✓</span>}
                         <div style={{ fontSize: 13, fontWeight: 500, color: '#C8C2BB', marginBottom: 6, paddingRight: 16 }}>{pkg.name}</div>
                         <div style={{ fontSize: 19, fontWeight: 500, color: '#fff', letterSpacing: '-0.02em', marginBottom: 10 }}>${pkg.price.toLocaleString()} <span style={{ fontSize: 11, fontWeight: 400, color: 'rgba(200,194,187,0.4)' }}>+ GST</span></div>
                         <ul style={{ listStyle: 'none' }}>
-                          {pkg.includes.map(item => <li key={item} style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', display: 'flex', gap: 7, marginBottom: 5 }}><span style={{ color: 'rgba(200,194,187,0.25)' }}>—</span>{item}</li>)}
+                          {pkg.includes.map((item: string) => <li key={item} style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', display: 'flex', gap: 7, marginBottom: 5 }}><span style={{ color: 'rgba(200,194,187,0.25)' }}>—</span>{item}</li>)}
                         </ul>
                       </div>
                     ))}
                   </div>
-                  <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 12 }}>Deliverable package — select one</div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 22 }}>
-                    {deliverables.map(pkg => (
-                      <div key={pkg.name} onClick={() => setSelectedDel(pkg)} style={{ border: `0.5px solid ${selectedDel?.name === pkg.name ? '#C8C2BB' : 'rgba(200,194,187,0.09)'}`, borderRadius: 8, padding: '14px 16px', cursor: 'pointer', background: selectedDel?.name === pkg.name ? 'rgba(200,194,187,0.05)' : '#1A1F28', position: 'relative' }}>
-                        {selectedDel?.name === pkg.name && <span style={{ position: 'absolute', top: 10, right: 12, color: '#C8C2BB', fontSize: 12 }}>✓</span>}
-                        <div style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB', marginBottom: 5, paddingRight: 14 }}>{pkg.name}</div>
-                        <div style={{ fontSize: 17, fontWeight: 500, color: '#fff', letterSpacing: '-0.02em', marginBottom: 8 }}>${pkg.price} <span style={{ fontSize: 11, fontWeight: 400, color: 'rgba(200,194,187,0.4)' }}>+ GST</span></div>
-                        <ul style={{ listStyle: 'none' }}>
-                          {pkg.includes.map(item => <li key={item} style={{ fontSize: 10, color: 'rgba(200,194,187,0.4)', display: 'flex', gap: 6, marginBottom: 4 }}><span style={{ color: 'rgba(200,194,187,0.25)' }}>—</span>{item}</li>)}
-                        </ul>
+
+                  {selectedShoot && selectedShoot.deliverables && (
+                    <div style={{ marginBottom: 22 }}>
+                      <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 12 }}>Choose your deliverable</div>
+                      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${selectedShoot.deliverables.length}, 1fr)`, gap: 12 }}>
+                        {selectedShoot.deliverables.map((del: any) => (
+                          <div key={del.name} onClick={() => { setSelectedSubDel(del); setSelectedDel(del) }} style={{ border: `0.5px solid ${selectedSubDel?.name === del.name ? '#C8C2BB' : 'rgba(200,194,187,0.09)'}`, borderRadius: 8, padding: '14px 16px', cursor: 'pointer', background: selectedSubDel?.name === del.name ? 'rgba(200,194,187,0.05)' : '#1A1F28', position: 'relative' }}>
+                            {selectedSubDel?.name === del.name && <span style={{ position: 'absolute', top: 10, right: 12, color: '#C8C2BB', fontSize: 12 }}>✓</span>}
+                            <div style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB', marginBottom: 8, paddingRight: 14 }}>{del.name}</div>
+                            <ul style={{ listStyle: 'none' }}>
+                              {del.includes.map((item: string) => <li key={item} style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', display: 'flex', gap: 6, marginBottom: 4 }}><span style={{ color: 'rgba(200,194,187,0.25)' }}>—</span>{item}</li>)}
+                            </ul>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  )}
+
+                  {selectedShoot && !selectedShoot.deliverables && deliverables.length > 0 && (
+                    <div style={{ marginBottom: 22 }}>
+                      <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 12 }}>Deliverable package — select one</div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12 }}>
+                        {deliverables.map((pkg: any) => (
+                          <div key={pkg.name} onClick={() => setSelectedDel(pkg)} style={{ border: `0.5px solid ${selectedDel?.name === pkg.name ? '#C8C2BB' : 'rgba(200,194,187,0.09)'}`, borderRadius: 8, padding: '14px 16px', cursor: 'pointer', background: selectedDel?.name === pkg.name ? 'rgba(200,194,187,0.05)' : '#1A1F28', position: 'relative' }}>
+                            {selectedDel?.name === pkg.name && <span style={{ position: 'absolute', top: 10, right: 12, color: '#C8C2BB', fontSize: 12 }}>✓</span>}
+                            <div style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB', marginBottom: 5, paddingRight: 14 }}>{pkg.name}</div>
+                            <div style={{ fontSize: 17, fontWeight: 500, color: '#fff', letterSpacing: '-0.02em', marginBottom: 8 }}>${pkg.price} <span style={{ fontSize: 11, fontWeight: 400, color: 'rgba(200,194,187,0.4)' }}>+ GST</span></div>
+                            <ul style={{ listStyle: 'none' }}>
+                              {pkg.includes.map((item: string) => <li key={item} style={{ fontSize: 10, color: 'rgba(200,194,187,0.4)', display: 'flex', gap: 6, marginBottom: 4 }}><span style={{ color: 'rgba(200,194,187,0.25)' }}>—</span>{item}</li>)}
+                            </ul>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 16, borderTop: '0.5px solid rgba(200,194,187,0.09)' }}>
                     <button onClick={() => setBookingStep(1)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>← Back</button>
-                    <button onClick={() => selectedShoot && selectedDel && setBookingStep(3)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, background: selectedShoot && selectedDel ? '#C8C2BB' : 'rgba(200,194,187,0.1)', color: selectedShoot && selectedDel ? '#111' : 'rgba(200,194,187,0.2)', border: 'none', cursor: selectedShoot && selectedDel ? 'pointer' : 'not-allowed', fontWeight: 500, fontFamily: 'inherit' }}>Continue →</button>
+                    <button onClick={() => selectedShoot && (selectedDel || selectedSubDel) && setBookingStep(3)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, background: selectedShoot && (selectedDel || selectedSubDel) ? '#C8C2BB' : 'rgba(200,194,187,0.1)', color: selectedShoot && (selectedDel || selectedSubDel) ? '#111' : 'rgba(200,194,187,0.2)', border: 'none', cursor: selectedShoot && (selectedDel || selectedSubDel) ? 'pointer' : 'not-allowed', fontWeight: 500, fontFamily: 'inherit' }}>Continue →</button>
                   </div>
                 </div>
               )}
