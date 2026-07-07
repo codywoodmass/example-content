@@ -28,7 +28,18 @@ export default function StudioPortal() {
 
 
   const [loading, setLoading] = useState(true)
-  const [activeView, setActiveView] = useState('dashboard')
+  const [activeView, setActiveView] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const hash = window.location.hash.replace('#', '')
+      return hash || 'dashboard'
+    }
+    return 'dashboard'
+  })
+
+  useEffect(() => {
+    const hash = window.location.hash.replace('#', '')
+    if (hash) setActiveView(hash)
+  }, [])
   const [briefData, setBriefData] = useState<Record<number, any>>({})
   const [briefLoading, setBriefLoading] = useState<Record<number, boolean>>({})
 
@@ -42,7 +53,7 @@ export default function StudioPortal() {
     })
   }, [router])
   const STAGE_PROGRESS: Record<string, number> = {
-    'Pre-Production': 10, 'Shooting': 35, 'Post-Production': 65, 'Revisions': 85, 'Invoicing': 100,
+    'Pre-Production': 10, 'Shooting': 35, 'Post-Production': 65, 'Revisions': 85, 'Awaiting Confirmation': 100,
   }
 
   async function saveModalProject() {
@@ -74,13 +85,13 @@ export default function StudioPortal() {
     if (projects) {
       const now = new Date()
       const in14 = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000)
-      setDashProjects(projects.filter((p: any) => p.stage !== 'Invoicing' || p.progress < 100))
+      setDashProjects(projects.filter((p: any) => p.stage !== 'Awaiting Confirmation' || p.progress < 100))
       setUpcomingShoots(projects.filter((p: any) => {
         if (!p.shoot_date) return false
         const d = new Date(p.shoot_date)
         return d >= now && d <= in14
       }).sort((a: any, b: any) => new Date(a.shoot_date).getTime() - new Date(b.shoot_date).getTime()))
-      setRecentDeliveries(projects.filter((p: any) => p.stage === 'Invoicing' && p.progress === 100).slice(0, 3))
+      setRecentDeliveries(projects.filter((p: any) => p.stage === 'Awaiting Confirmation' && p.progress === 100).slice(0, 3))
     }
   }
 
@@ -239,8 +250,8 @@ export default function StudioPortal() {
           <div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 28px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', background: '#14181F', position: 'sticky', top: 0, zIndex: 10 }}>
               <div>
-                <div style={{ fontSize: 14, fontWeight: 500, color: '#fff' }}>Studio Dashboard</div>
-                <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', marginTop: 2 }}>{new Date().toLocaleDateString('en-NZ', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: '#fff', letterSpacing: '-0.02em', textTransform: 'uppercase', fontFamily: 'Inter, sans-serif', fontStyle: 'italic' }}>Studio Dashboard</div>
+                <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', marginTop: 2, letterSpacing: '0.04em' }}>{new Date().toLocaleDateString('en-NZ', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</div>
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
                 {bookingCount > 0 && (
@@ -258,7 +269,7 @@ export default function StudioPortal() {
                   { label: 'Active projects', value: dashProjects.length, sub: dashProjects.filter((p: any) => p.stage === 'Shooting').length + ' shooting this week' },
                   { label: 'Pending requests', value: bookingCount, sub: bookingCount > 0 ? 'Awaiting review' : 'All clear', alert: bookingCount > 0 },
                   { label: 'In post-production', value: dashProjects.filter((p: any) => p.stage === 'Post-Production' || p.stage === 'Revisions').length, sub: 'Editing & revisions' },
-                  { label: 'Ready to invoice', value: dashProjects.filter((p: any) => p.stage === 'Invoicing').length, sub: 'Completed projects' },
+                  { label: 'Ready to invoice', value: dashProjects.filter((p: any) => p.stage === 'Awaiting Confirmation').length, sub: 'Completed projects' },
                 ].map(({ label, value, sub, alert }: any) => (
                   <div key={label} style={{ background: '#1A1F28', border: '0.5px solid ' + (alert ? 'rgba(210,90,90,0.3)' : 'rgba(200,194,187,0.09)'), borderRadius: 7, padding: '18px 20px' }}>
                     <div style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 8 }}>{label}</div>
@@ -268,33 +279,59 @@ export default function StudioPortal() {
                 ))}
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 20 }}>
-                <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: -6 }}>
                     <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)' }}>Active projects</div>
                     <button onClick={() => router.push('/portal/studio/projects')} style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>View all →</button>
                   </div>
-                  <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, overflow: 'hidden' }}>
-                    {dashProjects.length === 0 && <div style={{ padding: '32px 20px', textAlign: 'center', color: 'rgba(200,194,187,0.25)', fontSize: 12 }}>No active projects</div>}
-                    {dashProjects.slice(0, 6).map((p: any, i: number) => {
-                      const SC: Record<string,any> = {'Pre-Production':{color:'rgba(100,150,220,0.9)',bg:'rgba(25,45,80,0.4)'},'Shooting':{color:'rgba(210,175,80,0.9)',bg:'rgba(65,52,18,0.4)'},'Post-Production':{color:'rgba(160,100,220,0.9)',bg:'rgba(50,25,80,0.4)'},'Revisions':{color:'rgba(220,120,60,0.9)',bg:'rgba(80,35,15,0.4)'},'Invoicing':{color:'rgba(100,200,130,0.9)',bg:'rgba(30,70,45,0.4)'}}
+                  {(() => {
+                    const SC: Record<string,any> = {'Pre-Production':{color:'rgba(100,150,220,0.9)',bg:'rgba(25,45,80,0.4)'},'Shooting':{color:'rgba(210,175,80,0.9)',bg:'rgba(65,52,18,0.4)'},'Post-Production':{color:'rgba(160,100,220,0.9)',bg:'rgba(50,25,80,0.4)'},'Revisions':{color:'rgba(220,120,60,0.9)',bg:'rgba(80,35,15,0.4)'},'Awaiting Confirmation':{color:'rgba(100,200,130,0.9)',bg:'rgba(30,70,45,0.4)'}}
+                    const now = new Date()
+                    const in14 = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000)
+                    const recentBookings = [...dashProjects].filter(p => p.from_booking).sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0,5)
+                    const nearDelivery = [...dashProjects].filter(p => p.delivery_due && new Date(p.delivery_due) >= now && new Date(p.delivery_due) <= in14).sort((a,b) => new Date(a.delivery_due).getTime() - new Date(b.delivery_due).getTime()).slice(0,5)
+                    const postProd = [...dashProjects].filter(p => p.stage === 'Post-Production' || p.stage === 'Revisions').slice(0,5)
+
+                    function ProjectRow({ p, last }: { p: any; last: boolean }) {
                       const sc = SC[p.stage] || {color:'#C8C2BB',bg:'rgba(200,194,187,0.1)'}
                       return (
-                        <div key={p.id} onClick={() => { setModalProject(p); setModalEditing(false) }} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '13px 18px', borderBottom: i < Math.min(dashProjects.length,6)-1 ? '0.5px solid rgba(200,194,187,0.06)' : 'none', cursor: 'pointer' }}>
+                        <div onClick={() => { setModalProject(p); setModalEditing(false) }} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '11px 16px', borderBottom: last ? 'none' : '0.5px solid rgba(200,194,187,0.06)', cursor: 'pointer' }}>
                           <div style={{ flex: 1 }}>
-                            <div style={{ fontSize: 13, fontWeight: 500, color: '#C8C2BB', marginBottom: 3 }}>{p.title}</div>
-                            <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>{p.client}{p.shoot_date ? ' · Shoot: ' + new Date(p.shoot_date).toLocaleDateString('en-NZ',{day:'numeric',month:'short'}) : ''}</div>
+                            <div style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB', marginBottom: 2 }}>{p.title}</div>
+                            <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>{p.client}{p.delivery_due ? ' · Due: ' + new Date(p.delivery_due).toLocaleDateString('en-NZ',{day:'numeric',month:'short'}) : ''}</div>
                           </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                            <div style={{ width: 80, height: 3, background: 'rgba(200,194,187,0.07)', borderRadius: 2 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <div style={{ width: 60, height: 3, background: 'rgba(200,194,187,0.07)', borderRadius: 2 }}>
                               <div style={{ height: '100%', width: p.progress + '%', background: '#C8C2BB', opacity: 0.5, borderRadius: 2 }} />
                             </div>
-                            <span style={{ fontSize: 10, color: 'rgba(200,194,187,0.35)', minWidth: 28 }}>{p.progress}%</span>
-                            <span style={{ fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '3px 8px', borderRadius: 2, background: sc.bg, color: sc.color, whiteSpace: 'nowrap' }}>{p.stage}</span>
+                            <span style={{ fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '2px 7px', borderRadius: 2, background: sc.bg, color: sc.color, whiteSpace: 'nowrap' }}>{p.stage}</span>
                           </div>
                         </div>
                       )
-                    })}
-                  </div>
+                    }
+
+                    return (
+                      <>
+                        {[
+                          { label: 'Recent bookings', projects: recentBookings, color: 'rgba(100,150,220,0.9)' },
+                          { label: 'Approaching delivery', projects: nearDelivery, color: 'rgba(220,120,60,0.9)' },
+                          { label: 'Post-production', projects: postProd, color: 'rgba(160,100,220,0.9)' },
+                        ].map(({ label, projects, color }) => (
+                          <div key={label}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                              <div style={{ width: 6, height: 6, borderRadius: '50%', background: color }} />
+                              <span style={{ fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)' }}>{label}</span>
+                            </div>
+                            <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, overflow: 'hidden' }}>
+                              {projects.length === 0 ? (
+                                <div style={{ padding: '14px 16px', fontSize: 12, color: 'rgba(200,194,187,0.25)' }}>No projects</div>
+                              ) : projects.map((p, i) => <ProjectRow key={p.id} p={p} last={i === projects.length - 1} />)}
+                            </div>
+                          </div>
+                        ))}
+                      </>
+                    )
+                  })()}
                   {recentDeliveries.length > 0 && (
                     <div style={{ marginTop: 20 }}>
                       <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 14 }}>Recent deliveries</div>
@@ -711,9 +748,9 @@ export default function StudioPortal() {
             <div style={{ padding: 24 }}>
               <div style={{ marginBottom: 24 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-                  {['Pre-Production','Shooting','Post-Production','Revisions','Invoicing'].map((stage, idx) => {
-                    const SC: Record<string,string> = {'Pre-Production':'rgba(100,150,220,0.9)','Shooting':'rgba(210,175,80,0.9)','Post-Production':'rgba(160,100,220,0.9)','Revisions':'rgba(220,120,60,0.9)','Invoicing':'rgba(100,200,130,0.9)'}
-                    const stageIdx = ['Pre-Production','Shooting','Post-Production','Revisions','Invoicing'].indexOf(modalProject.stage)
+                  {['Pre-Production','Shooting','Post-Production','Revisions','Awaiting Confirmation'].map((stage, idx) => {
+                    const SC: Record<string,string> = {'Pre-Production':'rgba(100,150,220,0.9)','Shooting':'rgba(210,175,80,0.9)','Post-Production':'rgba(160,100,220,0.9)','Revisions':'rgba(220,120,60,0.9)','Awaiting Confirmation':'rgba(100,200,130,0.9)'}
+                    const stageIdx = ['Pre-Production','Shooting','Post-Production','Revisions','Awaiting Confirmation'].indexOf(modalProject.stage)
                     const isDone = idx < stageIdx; const isCurrent = idx === stageIdx
                     return (
                       <div key={stage} onClick={() => setModalProject((p: any) => p ? { ...p, stage, progress: STAGE_PROGRESS[stage] } : p)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, cursor: 'pointer', flex: 1 }}>
@@ -729,7 +766,7 @@ export default function StudioPortal() {
                 </div>
                 <input type="range" min="0" max="100" value={modalProject.progress} onChange={e => {
                   const val = parseInt(e.target.value)
-                  const stage = val >= 100 ? 'Invoicing' : val >= 85 ? 'Revisions' : val >= 65 ? 'Post-Production' : val >= 35 ? 'Shooting' : 'Pre-Production'
+                  const stage = val >= 100 ? 'Awaiting Confirmation' : val >= 85 ? 'Revisions' : val >= 65 ? 'Post-Production' : val >= 35 ? 'Shooting' : 'Pre-Production'
                   setModalProject((p: any) => p ? { ...p, progress: val, stage } : p)
                 }} style={{ width: '100%', accentColor: '#C8C2BB', cursor: 'pointer' }} />
               </div>
@@ -748,7 +785,7 @@ export default function StudioPortal() {
                   <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>Stage</div>
                   {modalEditing ? (
                     <select value={modalProject.stage} onChange={e => setModalProject((p: any) => p ? { ...p, stage: e.target.value, progress: STAGE_PROGRESS[e.target.value] } : p)} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '8px 10px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }}>
-                      {['Pre-Production','Shooting','Post-Production','Revisions','Invoicing'].map(s => <option key={s}>{s}</option>)}
+                      {['Pre-Production','Shooting','Post-Production','Revisions','Awaiting Confirmation'].map(s => <option key={s}>{s}</option>)}
                     </select>
                   ) : <div style={{ fontSize: 13, color: '#C8C2BB' }}>{modalProject.stage}</div>}
                 </div>
@@ -848,9 +885,9 @@ export default function StudioPortal() {
             <div style={{ padding: 24 }}>
               <div style={{ marginBottom: 24 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-                  {['Pre-Production','Shooting','Post-Production','Revisions','Invoicing'].map((stage, idx) => {
-                    const SC: Record<string,string> = {'Pre-Production':'rgba(100,150,220,0.9)','Shooting':'rgba(210,175,80,0.9)','Post-Production':'rgba(160,100,220,0.9)','Revisions':'rgba(220,120,60,0.9)','Invoicing':'rgba(100,200,130,0.9)'}
-                    const stageIdx = ['Pre-Production','Shooting','Post-Production','Revisions','Invoicing'].indexOf(modalProject.stage)
+                  {['Pre-Production','Shooting','Post-Production','Revisions','Awaiting Confirmation'].map((stage, idx) => {
+                    const SC: Record<string,string> = {'Pre-Production':'rgba(100,150,220,0.9)','Shooting':'rgba(210,175,80,0.9)','Post-Production':'rgba(160,100,220,0.9)','Revisions':'rgba(220,120,60,0.9)','Awaiting Confirmation':'rgba(100,200,130,0.9)'}
+                    const stageIdx = ['Pre-Production','Shooting','Post-Production','Revisions','Awaiting Confirmation'].indexOf(modalProject.stage)
                     const isDone = idx < stageIdx; const isCurrent = idx === stageIdx
                     return (
                       <div key={stage} onClick={() => setModalProject((p: any) => p ? { ...p, stage, progress: STAGE_PROGRESS[stage] } : p)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, cursor: 'pointer', flex: 1 }}>
@@ -866,7 +903,7 @@ export default function StudioPortal() {
                 </div>
                 <input type="range" min="0" max="100" value={modalProject.progress} onChange={e => {
                   const val = parseInt(e.target.value)
-                  const stage = val >= 100 ? 'Invoicing' : val >= 85 ? 'Revisions' : val >= 65 ? 'Post-Production' : val >= 35 ? 'Shooting' : 'Pre-Production'
+                  const stage = val >= 100 ? 'Awaiting Confirmation' : val >= 85 ? 'Revisions' : val >= 65 ? 'Post-Production' : val >= 35 ? 'Shooting' : 'Pre-Production'
                   setModalProject((p: any) => p ? { ...p, progress: val, stage } : p)
                 }} style={{ width: '100%', accentColor: '#C8C2BB', cursor: 'pointer' }} />
               </div>
@@ -885,7 +922,7 @@ export default function StudioPortal() {
                   <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>Stage</div>
                   {modalEditing ? (
                     <select value={modalProject.stage} onChange={e => setModalProject((p: any) => p ? { ...p, stage: e.target.value, progress: STAGE_PROGRESS[e.target.value] } : p)} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '8px 10px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }}>
-                      {['Pre-Production','Shooting','Post-Production','Revisions','Invoicing'].map(s => <option key={s}>{s}</option>)}
+                      {['Pre-Production','Shooting','Post-Production','Revisions','Awaiting Confirmation'].map(s => <option key={s}>{s}</option>)}
                     </select>
                   ) : <div style={{ fontSize: 13, color: '#C8C2BB' }}>{modalProject.stage}</div>}
                 </div>

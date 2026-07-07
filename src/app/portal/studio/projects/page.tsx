@@ -4,14 +4,25 @@ import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 
-const STAGES = ['Pre-Production', 'Shooting', 'Post-Production', 'Revisions', 'Invoicing']
+function formatDate(dateStr: string | null | undefined): string {
+  if (!dateStr) return '—'
+  const d = new Date(dateStr + 'T12:00:00')
+  const day = d.toLocaleDateString('en-NZ', { weekday: 'long' })
+  const date = d.getDate()
+  const suffix = date === 1 || date === 21 || date === 31 ? 'st' : date === 2 || date === 22 ? 'nd' : date === 3 || date === 23 ? 'rd' : 'th'
+  const month = d.toLocaleDateString('en-NZ', { month: 'long' })
+  const year = d.getFullYear()
+  return `${day} ${date}${suffix} ${month} ${year}`
+}
+
+const STAGES = ['Pre-Production', 'Shooting', 'Post-Production', 'Revisions', 'Awaiting Confirmation']
 
 const STAGE_COLORS: Record<string, { color: string; bg: string; border: string }> = {
   'Pre-Production': { color: 'rgba(100,150,220,0.9)', bg: 'rgba(25,45,80,0.4)', border: 'rgba(100,150,220,0.25)' },
   'Shooting': { color: 'rgba(210,175,80,0.9)', bg: 'rgba(65,52,18,0.4)', border: 'rgba(210,175,80,0.25)' },
   'Post-Production': { color: 'rgba(160,100,220,0.9)', bg: 'rgba(50,25,80,0.4)', border: 'rgba(160,100,220,0.25)' },
   'Revisions': { color: 'rgba(220,120,60,0.9)', bg: 'rgba(80,35,15,0.4)', border: 'rgba(220,120,60,0.25)' },
-  'Invoicing': { color: 'rgba(100,200,130,0.9)', bg: 'rgba(30,70,45,0.4)', border: 'rgba(100,200,130,0.25)' },
+  'Awaiting Confirmation': { color: 'rgba(100,200,130,0.9)', bg: 'rgba(30,70,45,0.4)', border: 'rgba(100,200,130,0.25)' },
 }
 
 type Project = {
@@ -48,6 +59,8 @@ export default function ProjectsPage() {
   const [modalSaved, setModalSaved] = useState(false)
   const [showArchived, setShowArchived] = useState(false)
   const [dragOverStage, setDragOverStage] = useState<string | null>(null)
+  const [sortBy, setSortBy] = useState<string>('created_at')
+  const [groupByStage, setGroupByStage] = useState(false)
   const [saving, setSaving] = useState(false)
 
   const [newForm, setNewForm] = useState({
@@ -82,7 +95,7 @@ export default function ProjectsPage() {
     'Shooting': 35,
     'Post-Production': 65,
     'Revisions': 85,
-    'Invoicing': 100,
+    'Awaiting Confirmation': 100,
   }
 
   async function saveModalProject() {
@@ -149,6 +162,13 @@ export default function ProjectsPage() {
     const matchesCat = filterCat === 'All' || p.category === filterCat
     const matchesArchived = showArchived ? p.archived === true : !p.archived
     return matchesCat && matchesArchived
+  }).sort((a, b) => {
+    if (sortBy === 'shoot_date') return (a.shoot_date || '9999') < (b.shoot_date || '9999') ? -1 : 1
+    if (sortBy === 'delivery_due') return (a.delivery_due || '9999') < (b.delivery_due || '9999') ? -1 : 1
+    if (sortBy === 'client') return (a.client || '').localeCompare(b.client || '')
+    if (sortBy === 'progress') return b.progress - a.progress
+    if (sortBy === 'title') return (a.title || '').localeCompare(b.title || '')
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
   })
 
   const inp: React.CSSProperties = { background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }
@@ -177,7 +197,7 @@ export default function ProjectsPage() {
           <div style={{ height: '100%', width: `${project.progress}%`, background: project.progress === 100 ? 'rgba(100,200,130,0.7)' : '#C8C2BB', opacity: 0.6, borderRadius: 2 }} />
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontSize: 10, color: 'rgba(200,194,187,0.3)' }}>{project.shoot_date ? `Shoot: ${project.shoot_date}` : 'No shoot date'}</span>
+          <span style={{ fontSize: 10, color: 'rgba(200,194,187,0.3)' }}>{project.shoot_date ? formatDate(project.shoot_date) : 'No shoot date'}</span>
           <span style={{ fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '2px 7px', borderRadius: 2, background: 'rgba(200,194,187,0.08)', color: 'rgba(200,194,187,0.4)', border: '0.5px solid rgba(200,194,187,0.1)' }}>{project.category}</span>
         </div>
       </div>
@@ -198,7 +218,7 @@ export default function ProjectsPage() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 28px', height: 57, borderBottom: '0.5px solid rgba(200,194,187,0.09)', background: '#14181F', position: 'sticky', top: 0, zIndex: 20 }}>
         <div>
           <div style={{ fontSize: 14, fontWeight: 500, color: '#fff' }}>Projects</div>
-          <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', marginTop: 1 }}>{projects.length} projects · {projects.filter(p => p.stage === 'Invoicing').length} invoicing</div>
+          <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', marginTop: 1 }}>{projects.length} projects · {projects.filter(p => p.stage === 'Awaiting Confirmation').length} invoicing</div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -207,6 +227,17 @@ export default function ProjectsPage() {
             </select>
             <button onClick={() => setShowArchived(!showArchived)} style={{ fontSize: 11, padding: '6px 12px', borderRadius: 4, border: `0.5px solid ${showArchived ? 'rgba(210,175,80,0.4)' : 'rgba(200,194,187,0.15)'}`, background: showArchived ? 'rgba(210,175,80,0.08)' : 'transparent', color: showArchived ? 'rgba(210,175,80,0.9)' : 'rgba(200,194,187,0.35)', cursor: 'pointer', fontFamily: 'inherit' }}>📦 Archived</button>
           </div>
+          <select value={sortBy} onChange={e => setSortBy(e.target.value)} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '6px 12px', fontSize: 11, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', cursor: 'pointer' }}>
+            <option value="created_at">Sort: Recent</option>
+            <option value="shoot_date">Sort: Shoot date</option>
+            <option value="delivery_due">Sort: Delivery date</option>
+            <option value="client">Sort: Client</option>
+            <option value="title">Sort: Project name</option>
+            <option value="progress">Sort: Progress</option>
+          </select>
+          {viewMode === 'list' && (
+            <button onClick={() => setGroupByStage(!groupByStage)} style={{ fontSize: 11, padding: '6px 12px', borderRadius: 4, border: `0.5px solid ${groupByStage ? '#C8C2BB' : 'rgba(200,194,187,0.15)'}`, background: groupByStage ? 'rgba(200,194,187,0.08)' : 'transparent', color: groupByStage ? '#C8C2BB' : 'rgba(200,194,187,0.35)', cursor: 'pointer', fontFamily: 'inherit' }}>Group by stage</button>
+          )}
           <div style={{ display: 'flex', background: 'rgba(200,194,187,0.06)', borderRadius: 4, padding: 2 }}>
             {(['kanban', 'list'] as const).map(mode => (
               <button key={mode} onClick={() => setViewMode(mode)} style={{ fontSize: 11, padding: '5px 12px', borderRadius: 3, background: viewMode === mode ? 'rgba(200,194,187,0.12)' : 'transparent', color: viewMode === mode ? '#C8C2BB' : 'rgba(200,194,187,0.35)', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>{mode === 'kanban' ? '⬛ Kanban' : '☰ List'}</button>
@@ -249,6 +280,46 @@ export default function ProjectsPage() {
       {/* LIST */}
       {viewMode === 'list' && (
         <div style={{ padding: 28 }}>
+          {groupByStage ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              {['Pre-Production','Shooting','Post-Production','Revisions','Awaiting Confirmation'].map(stage => {
+                const stageProjects = filtered.filter(p => p.stage === stage)
+                if (stageProjects.length === 0) return null
+                const sc = STAGE_COLORS[stage] || { color: '#C8C2BB', border: 'rgba(200,194,187,0.2)' }
+                return (
+                  <div key={stage}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                      <div style={{ width: 8, height: 8, borderRadius: '50%', background: sc.color }} />
+                      <span style={{ fontSize: 11, fontWeight: 500, color: sc.color, letterSpacing: '0.08em', textTransform: 'uppercase' }}>{stage}</span>
+                      <span style={{ fontSize: 11, color: 'rgba(200,194,187,0.3)' }}>— {stageProjects.length} project{stageProjects.length !== 1 ? 's' : ''}</span>
+                    </div>
+                    <div style={{ background: '#1A1F28', border: `0.5px solid ${sc.color}33`, borderRadius: 7, overflow: 'hidden' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                        <tbody>
+                          {stageProjects.map((project, i) => (
+                            <tr key={project.id} onClick={() => { setModalProject(project); setModalEditing(false) }} style={{ cursor: 'pointer', background: i % 2 === 0 ? 'transparent' : 'rgba(200,194,187,0.02)' }}>
+                              <td style={{ padding: '11px 16px', borderBottom: '0.5px solid rgba(200,194,187,0.05)', fontSize: 13, fontWeight: 500, color: '#C8C2BB' }}>{project.title}</td>
+                              <td style={{ padding: '11px 16px', borderBottom: '0.5px solid rgba(200,194,187,0.05)', fontSize: 12, color: 'rgba(200,194,187,0.5)' }}>{project.client}</td>
+                              <td style={{ padding: '11px 16px', borderBottom: '0.5px solid rgba(200,194,187,0.05)', fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>{formatDate(project.shoot_date)}</td>
+                              <td style={{ padding: '11px 16px', borderBottom: '0.5px solid rgba(200,194,187,0.05)', fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>{formatDate(project.delivery_due)}</td>
+                              <td style={{ padding: '11px 16px', borderBottom: '0.5px solid rgba(200,194,187,0.05)' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                  <div style={{ width: 80, height: 3, background: 'rgba(200,194,187,0.07)', borderRadius: 2 }}>
+                                    <div style={{ height: '100%', width: `${project.progress}%`, background: '#C8C2BB', opacity: 0.5, borderRadius: 2 }} />
+                                  </div>
+                                  <span style={{ fontSize: 11, color: 'rgba(200,194,187,0.35)' }}>{project.progress}%</span>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          ) : (
           <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, overflow: 'hidden' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
@@ -266,9 +337,9 @@ export default function ProjectsPage() {
                     <td style={{ padding: '12px 16px', borderBottom: '0.5px solid rgba(200,194,187,0.05)', fontSize: 12, color: 'rgba(200,194,187,0.5)' }}>{project.client}</td>
                     <td style={{ padding: '12px 16px', borderBottom: '0.5px solid rgba(200,194,187,0.05)' }}><span style={{ fontSize: 10, padding: '3px 8px', borderRadius: 2, background: 'rgba(200,194,187,0.08)', color: 'rgba(200,194,187,0.5)', border: '0.5px solid rgba(200,194,187,0.1)' }}>{project.category}</span></td>
                     <td style={{ padding: '12px 16px', borderBottom: '0.5px solid rgba(200,194,187,0.05)' }}><StagePill stage={project.stage} /></td>
-                    <td style={{ padding: '12px 16px', borderBottom: '0.5px solid rgba(200,194,187,0.05)', fontSize: 12, color: 'rgba(200,194,187,0.4)' }}>{project.shoot_date || '—'}</td>
-                    <td style={{ padding: '12px 16px', borderBottom: '0.5px solid rgba(200,194,187,0.05)', fontSize: 12, color: 'rgba(200,194,187,0.4)' }}>{project.draft_due || '—'}</td>
-                    <td style={{ padding: '12px 16px', borderBottom: '0.5px solid rgba(200,194,187,0.05)', fontSize: 12, color: 'rgba(200,194,187,0.4)' }}>{project.delivery_due || '—'}</td>
+                    <td style={{ padding: '12px 16px', borderBottom: '0.5px solid rgba(200,194,187,0.05)', fontSize: 12, color: 'rgba(200,194,187,0.4)' }}>{formatDate(project.shoot_date)}</td>
+                    <td style={{ padding: '12px 16px', borderBottom: '0.5px solid rgba(200,194,187,0.05)', fontSize: 12, color: 'rgba(200,194,187,0.4)' }}>{formatDate(project.draft_due)}</td>
+                    <td style={{ padding: '12px 16px', borderBottom: '0.5px solid rgba(200,194,187,0.05)', fontSize: 12, color: 'rgba(200,194,187,0.4)' }}>{formatDate(project.delivery_due)}</td>
                     <td style={{ padding: '12px 16px', borderBottom: '0.5px solid rgba(200,194,187,0.05)' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <div style={{ flex: 1, height: 3, background: 'rgba(200,194,187,0.07)', borderRadius: 2 }}>
@@ -285,6 +356,7 @@ export default function ProjectsPage() {
               </tbody>
             </table>
           </div>
+          )}
         </div>
       )}
 
@@ -360,9 +432,9 @@ export default function ProjectsPage() {
             <div style={{ padding: 24 }}>
               <div style={{ marginBottom: 24 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-                  {['Pre-Production','Shooting','Post-Production','Revisions','Invoicing'].map((stage, idx) => {
-                    const SC: Record<string,string> = {'Pre-Production':'rgba(100,150,220,0.9)','Shooting':'rgba(210,175,80,0.9)','Post-Production':'rgba(160,100,220,0.9)','Revisions':'rgba(220,120,60,0.9)','Invoicing':'rgba(100,200,130,0.9)'}
-                    const stageIdx = ['Pre-Production','Shooting','Post-Production','Revisions','Invoicing'].indexOf(modalProject.stage)
+                  {['Pre-Production','Shooting','Post-Production','Revisions','Awaiting Confirmation'].map((stage, idx) => {
+                    const SC: Record<string,string> = {'Pre-Production':'rgba(100,150,220,0.9)','Shooting':'rgba(210,175,80,0.9)','Post-Production':'rgba(160,100,220,0.9)','Revisions':'rgba(220,120,60,0.9)','Awaiting Confirmation':'rgba(100,200,130,0.9)'}
+                    const stageIdx = ['Pre-Production','Shooting','Post-Production','Revisions','Awaiting Confirmation'].indexOf(modalProject.stage)
                     const isDone = idx < stageIdx; const isCurrent = idx === stageIdx
                     return (
                       <div key={stage} onClick={() => setModalProject(p => p ? { ...p, stage, progress: STAGE_PROGRESS[stage] } : p)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, cursor: 'pointer', flex: 1 }}>
@@ -378,7 +450,7 @@ export default function ProjectsPage() {
                 </div>
                 <input type="range" min="0" max="100" value={modalProject.progress} onChange={e => {
                   const val = parseInt(e.target.value)
-                  const stage = val >= 100 ? 'Invoicing' : val >= 85 ? 'Revisions' : val >= 65 ? 'Post-Production' : val >= 35 ? 'Shooting' : 'Pre-Production'
+                  const stage = val >= 100 ? 'Awaiting Confirmation' : val >= 85 ? 'Revisions' : val >= 65 ? 'Post-Production' : val >= 35 ? 'Shooting' : 'Pre-Production'
                   setModalProject(p => p ? { ...p, progress: val, stage } : p)
                 }} style={{ width: '100%', accentColor: '#C8C2BB', cursor: 'pointer' }} />
               </div>
@@ -397,7 +469,7 @@ export default function ProjectsPage() {
                   <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>Stage</div>
                   {modalEditing ? (
                     <select value={modalProject.stage} onChange={e => setModalProject(p => p ? { ...p, stage: e.target.value, progress: STAGE_PROGRESS[e.target.value] } : p)} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '8px 10px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }}>
-                      {['Pre-Production','Shooting','Post-Production','Revisions','Invoicing'].map(s => <option key={s}>{s}</option>)}
+                      {['Pre-Production','Shooting','Post-Production','Revisions','Awaiting Confirmation'].map(s => <option key={s}>{s}</option>)}
                     </select>
                   ) : <div style={{ fontSize: 13, color: '#C8C2BB' }}>{modalProject.stage}</div>}
                 </div>
@@ -464,13 +536,13 @@ export default function ProjectsPage() {
                 </div>
               )}
               <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 16, borderTop: '0.5px solid rgba(200,194,187,0.09)' }}>
-                {modalProject.stage === 'Invoicing' && !modalProject.archived && (
+                {modalProject.stage === 'Awaiting Confirmation' && !modalProject.archived && (
                   <button onClick={() => archiveProject(modalProject.id, true)} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(210,175,80,0.3)', color: 'rgba(210,175,80,0.8)', background: 'rgba(210,175,80,0.06)', cursor: 'pointer', fontFamily: 'inherit' }}>📦 Archive project</button>
                 )}
                 {modalProject.archived && (
                   <button onClick={() => archiveProject(modalProject.id, false)} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(100,200,130,0.3)', color: 'rgba(100,200,130,0.8)', background: 'rgba(100,200,130,0.06)', cursor: 'pointer', fontFamily: 'inherit' }}>↩ Unarchive</button>
                 )}
-                {!modalProject.archived && modalProject.stage !== 'Invoicing' && <div />}
+                {!modalProject.archived && modalProject.stage !== 'Awaiting Confirmation' && <div />}
                 <button onClick={async () => { await saveModalProject(); setModalProject(null); setModalEditing(false); router.push('/portal/studio/projects') }} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>← Back to projects</button>
               </div>
             </div>
@@ -504,9 +576,9 @@ export default function ProjectsPage() {
             <div style={{ padding: 24 }}>
               <div style={{ marginBottom: 24 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-                  {['Pre-Production','Shooting','Post-Production','Revisions','Invoicing'].map((stage, idx) => {
-                    const SC: Record<string,string> = {'Pre-Production':'rgba(100,150,220,0.9)','Shooting':'rgba(210,175,80,0.9)','Post-Production':'rgba(160,100,220,0.9)','Revisions':'rgba(220,120,60,0.9)','Invoicing':'rgba(100,200,130,0.9)'}
-                    const stageIdx = ['Pre-Production','Shooting','Post-Production','Revisions','Invoicing'].indexOf(modalProject.stage)
+                  {['Pre-Production','Shooting','Post-Production','Revisions','Awaiting Confirmation'].map((stage, idx) => {
+                    const SC: Record<string,string> = {'Pre-Production':'rgba(100,150,220,0.9)','Shooting':'rgba(210,175,80,0.9)','Post-Production':'rgba(160,100,220,0.9)','Revisions':'rgba(220,120,60,0.9)','Awaiting Confirmation':'rgba(100,200,130,0.9)'}
+                    const stageIdx = ['Pre-Production','Shooting','Post-Production','Revisions','Awaiting Confirmation'].indexOf(modalProject.stage)
                     const isDone = idx < stageIdx; const isCurrent = idx === stageIdx
                     return (
                       <div key={stage} onClick={() => setModalProject(p => p ? { ...p, stage, progress: STAGE_PROGRESS[stage] } : p)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, cursor: 'pointer', flex: 1 }}>
@@ -522,7 +594,7 @@ export default function ProjectsPage() {
                 </div>
                 <input type="range" min="0" max="100" value={modalProject.progress} onChange={e => {
                   const val = parseInt(e.target.value)
-                  const stage = val >= 100 ? 'Invoicing' : val >= 85 ? 'Revisions' : val >= 65 ? 'Post-Production' : val >= 35 ? 'Shooting' : 'Pre-Production'
+                  const stage = val >= 100 ? 'Awaiting Confirmation' : val >= 85 ? 'Revisions' : val >= 65 ? 'Post-Production' : val >= 35 ? 'Shooting' : 'Pre-Production'
                   setModalProject(p => p ? { ...p, progress: val, stage } : p)
                 }} style={{ width: '100%', accentColor: '#C8C2BB', cursor: 'pointer' }} />
               </div>
@@ -541,7 +613,7 @@ export default function ProjectsPage() {
                   <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>Stage</div>
                   {modalEditing ? (
                     <select value={modalProject.stage} onChange={e => setModalProject(p => p ? { ...p, stage: e.target.value, progress: STAGE_PROGRESS[e.target.value] } : p)} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '8px 10px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }}>
-                      {['Pre-Production','Shooting','Post-Production','Revisions','Invoicing'].map(s => <option key={s}>{s}</option>)}
+                      {['Pre-Production','Shooting','Post-Production','Revisions','Awaiting Confirmation'].map(s => <option key={s}>{s}</option>)}
                     </select>
                   ) : <div style={{ fontSize: 13, color: '#C8C2BB' }}>{modalProject.stage}</div>}
                 </div>
@@ -608,13 +680,13 @@ export default function ProjectsPage() {
                 </div>
               )}
               <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 16, borderTop: '0.5px solid rgba(200,194,187,0.09)' }}>
-                {modalProject.stage === 'Invoicing' && !modalProject.archived && (
+                {modalProject.stage === 'Awaiting Confirmation' && !modalProject.archived && (
                   <button onClick={() => archiveProject(modalProject.id, true)} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(210,175,80,0.3)', color: 'rgba(210,175,80,0.8)', background: 'rgba(210,175,80,0.06)', cursor: 'pointer', fontFamily: 'inherit' }}>📦 Archive project</button>
                 )}
                 {modalProject.archived && (
                   <button onClick={() => archiveProject(modalProject.id, false)} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(100,200,130,0.3)', color: 'rgba(100,200,130,0.8)', background: 'rgba(100,200,130,0.06)', cursor: 'pointer', fontFamily: 'inherit' }}>↩ Unarchive</button>
                 )}
-                {!modalProject.archived && modalProject.stage !== 'Invoicing' && <div />}
+                {!modalProject.archived && modalProject.stage !== 'Awaiting Confirmation' && <div />}
                 <button onClick={async () => { await saveModalProject(); setModalProject(null); setModalEditing(false); router.push('/portal/studio/projects') }} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>← Back to projects</button>
               </div>
             </div>
