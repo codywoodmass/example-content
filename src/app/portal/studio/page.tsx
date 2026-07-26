@@ -16,6 +16,7 @@ export default function StudioPortal() {
   const [modalSaved, setModalSaved] = useState(false)
   const [upcomingShoots, setUpcomingShoots] = useState<any[]>([])
   const [recentDeliveries, setRecentDeliveries] = useState<any[]>([])
+  const [scheduleProjects, setScheduleProjects] = useState<any[]>([])
 
   const [scheduleModal, setScheduleModal] = useState(false)
   const [selectedBooking, setSelectedBooking] = useState<any>(null)
@@ -85,13 +86,14 @@ export default function StudioPortal() {
     if (projects) {
       const now = new Date()
       const in14 = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000)
-      setDashProjects(projects.filter((p: any) => p.stage !== 'Awaiting Confirmation' || p.progress < 100))
+      setDashProjects(projects.filter((p: any) => !p.archived))
       setUpcomingShoots(projects.filter((p: any) => {
         if (!p.shoot_date) return false
         const d = new Date(p.shoot_date)
         return d >= now && d <= in14
       }).sort((a: any, b: any) => new Date(a.shoot_date).getTime() - new Date(b.shoot_date).getTime()))
       setRecentDeliveries(projects.filter((p: any) => p.stage === 'Awaiting Confirmation' && p.progress === 100).slice(0, 3))
+      setScheduleProjects(projects.filter((p: any) => !p.archived))
     }
   }
 
@@ -250,8 +252,6 @@ export default function StudioPortal() {
           <div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 28px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', background: '#14181F', position: 'sticky', top: 0, zIndex: 10 }}>
               <div>
-                <div style={{ fontSize: 22, fontWeight: 800, color: '#fff', letterSpacing: '-0.02em', textTransform: 'uppercase', fontFamily: 'Inter, sans-serif', fontStyle: 'italic' }}>Studio Dashboard</div>
-                <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', marginTop: 2, letterSpacing: '0.04em' }}>{new Date().toLocaleDateString('en-NZ', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</div>
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
                 {bookingCount > 0 && (
@@ -269,7 +269,7 @@ export default function StudioPortal() {
                   { label: 'Active projects', value: dashProjects.length, sub: dashProjects.filter((p: any) => p.stage === 'Shooting').length + ' shooting this week' },
                   { label: 'Pending requests', value: bookingCount, sub: bookingCount > 0 ? 'Awaiting review' : 'All clear', alert: bookingCount > 0 },
                   { label: 'In post-production', value: dashProjects.filter((p: any) => p.stage === 'Post-Production' || p.stage === 'Revisions').length, sub: 'Editing & revisions' },
-                  { label: 'Ready to invoice', value: dashProjects.filter((p: any) => p.stage === 'Awaiting Confirmation').length, sub: 'Completed projects' },
+                  { label: 'Ready to invoice', value: dashProjects.filter((p: any) => p.stage === 'Awaiting Confirmation').length, sub: (() => { const now = new Date(); const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0); const days = Math.ceil((lastDay.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)); return days === 0 ? 'Last day of month!' : `${days} day${days !== 1 ? 's' : ''} until end of month` })(), alert: dashProjects.filter((p: any) => p.stage === 'Awaiting Confirmation').length > 0 },
                 ].map(({ label, value, sub, alert }: any) => (
                   <div key={label} style={{ background: '#1A1F28', border: '0.5px solid ' + (alert ? 'rgba(210,90,90,0.3)' : 'rgba(200,194,187,0.09)'), borderRadius: 7, padding: '18px 20px' }}>
                     <div style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 8 }}>{label}</div>
@@ -334,15 +334,31 @@ export default function StudioPortal() {
                   })()}
                   {recentDeliveries.length > 0 && (
                     <div style={{ marginTop: 20 }}>
-                      <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 14 }}>Recent deliveries</div>
-                      <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, overflow: 'hidden' }}>
-                        {recentDeliveries.map((p: any, i: number) => (
-                          <div key={p.id} onClick={() => { setModalProject(p); setModalEditing(false) }} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '13px 18px', borderBottom: i < recentDeliveries.length-1 ? '0.5px solid rgba(200,194,187,0.06)' : 'none', cursor: 'pointer' }}>
-                            <div style={{ flex: 1 }}>
-                              <div style={{ fontSize: 13, fontWeight: 500, color: '#C8C2BB', marginBottom: 3 }}>{p.title}</div>
-                              <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>{p.client}</div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                        <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)' }}>Recent deliveries</div>
+                        <span style={{ fontSize: 11, color: 'rgba(200,194,187,0.3)' }}>scroll →</span>
+                      </div>
+                      <div style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 8 }}>
+                        {recentDeliveries.map((p: any) => (
+                          <div key={p.id} onClick={() => { setModalProject(p); setModalEditing(false) }} style={{ flexShrink: 0, width: 200, background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, overflow: 'hidden', cursor: 'pointer' }}>
+                            <div style={{ height: 90, background: 'rgba(100,200,130,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', borderBottom: '0.5px solid rgba(200,194,187,0.06)' }}>
+                              {p.drive_url ? (
+                                <a href={p.drive_url} target="_blank" rel="noopener noreferrer" onClick={(e: any) => e.stopPropagation()} style={{ fontSize: 11, color: 'rgba(100,200,130,0.7)', textDecoration: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5 }}>
+                                  <span style={{ fontSize: 22 }}>📁</span>
+                                  <span style={{ fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Open Drive</span>
+                                </a>
+                              ) : (
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5 }}>
+                                  <span style={{ fontSize: 22, opacity: 0.25 }}>📁</span>
+                                  <span style={{ fontSize: 9, color: 'rgba(200,194,187,0.25)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>No folder</span>
+                                </div>
+                              )}
                             </div>
-                            <span style={{ fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '3px 8px', borderRadius: 2, background: 'rgba(100,200,130,0.15)', color: 'rgba(100,200,130,0.9)', border: '0.5px solid rgba(100,200,130,0.3)' }}>Delivered</span>
+                            <div style={{ padding: '11px 13px' }}>
+                              <div style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB', marginBottom: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.title}</div>
+                              <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', marginBottom: 8 }}>{p.client}</div>
+                              <span style={{ fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '2px 7px', borderRadius: 2, background: 'rgba(100,200,130,0.15)', color: 'rgba(100,200,130,0.9)', border: '0.5px solid rgba(100,200,130,0.3)' }}>Delivered</span>
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -350,27 +366,6 @@ export default function StudioPortal() {
                   )}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-                  <div>
-                    <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 14 }}>Upcoming shoots — next 14 days</div>
-                    <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, overflow: 'hidden' }}>
-                      {upcomingShoots.length === 0 && <div style={{ padding: '20px', textAlign: 'center', color: 'rgba(200,194,187,0.25)', fontSize: 12 }}>No shoots scheduled</div>}
-                      {upcomingShoots.map((p: any, i: number) => {
-                        const d = new Date(p.shoot_date)
-                        return (
-                          <div key={p.id} onClick={() => { setModalProject(p); setModalEditing(false) }} style={{ display: 'flex', gap: 14, padding: '13px 16px', borderBottom: i < upcomingShoots.length-1 ? '0.5px solid rgba(200,194,187,0.06)' : 'none', cursor: 'pointer', alignItems: 'center' }}>
-                            <div style={{ width: 38, height: 38, borderRadius: 5, background: 'rgba(200,194,187,0.06)', border: '0.5px solid rgba(200,194,187,0.1)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                              <div style={{ fontSize: 14, fontWeight: 600, color: '#C8C2BB', lineHeight: 1 }}>{d.getDate()}</div>
-                              <div style={{ fontSize: 9, color: 'rgba(200,194,187,0.4)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{d.toLocaleDateString('en-NZ',{month:'short'})}</div>
-                            </div>
-                            <div style={{ flex: 1 }}>
-                              <div style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>{p.title}</div>
-                              <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>{p.client}{p.address ? ' · ' + p.address.split(',')[0] : ''}</div>
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
                   <div>
                     <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 14 }}>Booking requests</div>
                     <div style={{ background: bookingCount > 0 ? 'rgba(210,90,90,0.06)' : '#1A1F28', border: '0.5px solid ' + (bookingCount > 0 ? 'rgba(210,90,90,0.25)' : 'rgba(200,194,187,0.09)'), borderRadius: 7, padding: '16px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -381,9 +376,65 @@ export default function StudioPortal() {
                       {bookingCount > 0 && <button onClick={() => setActiveView('bookings')} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, border: '0.5px solid rgba(210,90,90,0.4)', color: 'rgba(210,90,90,0.9)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Review →</button>}
                     </div>
                   </div>
-                  <div style={{ padding: '12px 16px', background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <div style={{ width: 7, height: 7, borderRadius: '50%', background: 'rgba(100,200,130,0.8)', flexShrink: 0 }} />
-                    <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>Logged in as {user?.email} · Database connected</div>
+                  <div>
+                    <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 14 }}>4 week calendar</div>
+                    <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, padding: 12 }}>
+                      {(() => {
+                        const today = new Date(); today.setHours(0,0,0,0)
+                        const startOfWeek = new Date(today)
+                        const dow = today.getDay() === 0 ? 6 : today.getDay() - 1
+                        startOfWeek.setDate(today.getDate() - dow)
+                        const weeks = Array.from({length: 4}, (_: any, wi: number) => Array.from({length: 7}, (_: any, di: number) => { const d = new Date(startOfWeek); d.setDate(startOfWeek.getDate() + wi * 7 + di); return d }))
+                        const eventsByDate: Record<string, {type: string, project: any}[]> = {}
+                        const addEvent = (date: string | null, type: string, project: any) => {
+                          if (!date) return
+                          if (!eventsByDate[date]) eventsByDate[date] = []
+                          eventsByDate[date].push({ type, project })
+                        }
+                        dashProjects.forEach((p: any) => {
+                          addEvent(p.shoot_date, 'shoot', p)
+                          addEvent(p.draft_due, 'draft', p)
+                          addEvent(p.delivery_due, 'delivery', p)
+                        })
+                        const typeColors: Record<string, string> = { shoot: 'rgba(210,175,80,0.9)', draft: 'rgba(100,150,220,0.9)', delivery: 'rgba(100,200,130,0.9)' }
+                        return (
+                          <div>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2, marginBottom: 4 }}>
+                              {['M','T','W','T','F','S','S'].map((d: string, i: number) => <div key={i} style={{ fontSize: 9, textAlign: 'center', color: 'rgba(200,194,187,0.3)' }}>{d}</div>)}
+                            </div>
+                            {weeks.map((week: any, wi: number) => (
+                              <div key={wi} style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2, marginBottom: 2 }}>
+                                {week.map((day: any, di: number) => {
+                                  const key = day.toISOString().split('T')[0]
+                                  const events = eventsByDate[key] || []
+                                  const isToday = day.toDateString() === new Date().toDateString()
+                                  const isPast = day < today
+                                  const hasEvents = events.length > 0
+                                  return (
+                                    <div key={di} onClick={() => hasEvents && setModalProject(events[0].project)} style={{ height: 44, borderRadius: 3, background: hasEvents ? 'rgba(200,194,187,0.04)' : 'transparent', border: '0.5px solid ' + (isToday ? 'rgba(200,194,187,0.5)' : hasEvents ? 'rgba(200,194,187,0.12)' : 'rgba(200,194,187,0.05)'), padding: '3px 4px', cursor: hasEvents ? 'pointer' : 'default', display: 'flex', flexDirection: 'column' }}>
+                                      <div style={{ fontSize: 9, fontWeight: isToday ? 700 : 400, color: isToday ? '#fff' : isPast ? 'rgba(200,194,187,0.18)' : 'rgba(200,194,187,0.45)', lineHeight: 1 }}>{day.getDate()}</div>
+                                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 2, marginTop: 3 }}>
+                                        {events.slice(0, 4).map((ev: any, ei: number) => (
+                                          <div key={ei} style={{ width: 5, height: 5, borderRadius: '50%', background: typeColors[ev.type] || '#C8C2BB' }} />
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            ))}
+                            <div style={{ display: 'flex', gap: 12, marginTop: 8, paddingTop: 8, borderTop: '0.5px solid rgba(200,194,187,0.07)' }}>
+                              {[['rgba(210,175,80,0.9)', 'Shoot'], ['rgba(100,150,220,0.9)', 'Brief/Draft'], ['rgba(100,200,130,0.9)', 'Delivery']].map(([color, label]) => (
+                                <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                                  <div style={{ width: 6, height: 6, borderRadius: '50%', background: color }} />
+                                  <span style={{ fontSize: 9, color: 'rgba(200,194,187,0.4)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{label}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )
+                      })()}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -429,41 +480,97 @@ export default function StudioPortal() {
             </div>
           </div>
         )}
-
         {/* ===== SCHEDULE ===== */}
-        {activeView === 'schedule' && (
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 28px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', background: '#14181F' }}>
-              <div><div style={{ fontSize: 14, fontWeight: 500, color: '#fff' }}>Shoot Schedule</div><div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>June 2026 · 6 shoots this month</div></div>
-              <button onClick={() => setActiveView('dashboard')} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>← Dashboard</button>
-            </div>
-            <div style={{ padding: 28 }}>
-              <div style={s.panel}>
-                {[
-                  { day: '17', month: 'Jun', title: 'Mission Heights — Full Property Highlights', meta: '7:30am – 12:00pm · Taradale · JD + SK', status: 'Confirmed', sc: 'rgba(100,200,130,0.85)', sb: 'rgba(30,70,45,0.5)', client: 'Bayleys HB' },
-                  { day: '19', month: 'Jun', title: 'Black Barn — Brand Film Day 1', meta: '9:00am – 5:00pm · Havelock North · JD', status: 'Pending', sc: 'rgba(210,175,80,0.85)', sb: 'rgba(65,52,18,0.5)', client: 'Black Barn Retreats' },
-                  { day: '20', month: 'Jun', title: '14 Clifton Rd — Twilight Add-on', meta: '5:30pm – 7:30pm · Havelock North · SK + MT', status: 'Confirmed', sc: 'rgba(100,200,130,0.85)', sb: 'rgba(30,70,45,0.5)', client: 'Blackwell Properties' },
-                  { day: '28', month: 'Jun', title: 'Orchard Lane — Aerial + Walkthrough', meta: '7:00am – 1:00pm · Napier · JD + MT', status: 'Requested', sc: 'rgba(200,194,187,0.85)', sb: 'rgba(200,194,187,0.1)', client: 'Blackwell Properties' },
-                ].map((sh, i) => (
-                  <div key={i} style={{ display: 'flex', gap: 12, padding: '14px 18px', borderBottom: i < 3 ? '0.5px solid rgba(200,194,187,0.06)' : 'none' }}>
-                    <div style={{ width: 38, textAlign: 'center', background: 'rgba(61,71,86,0.3)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '5px 3px', flexShrink: 0 }}>
-                      <div style={{ fontSize: 15, fontWeight: 500, color: '#fff' }}>{sh.day}</div>
-                      <div style={{ fontSize: 9, color: 'rgba(200,194,187,0.4)' }}>{sh.month}</div>
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 13, fontWeight: 500, color: '#C8C2BB' }}>{sh.title}</div>
-                      <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>{sh.meta}</div>
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 5, flexShrink: 0 }}>
-                      {pill(sh.status, sh.sc, sh.sb)}
-                      <span style={{ fontSize: 10, color: 'rgba(200,194,187,0.4)' }}>{sh.client}</span>
-                    </div>
+        {activeView === 'schedule' && (() => {
+          const now = new Date()
+          const preProd = scheduleProjects
+            .filter((p: any) => p.stage === 'Pre-Production')
+            .sort((a: any, b: any) => {
+              const aDate = a.draft_due || a.shoot_date || '9999'
+              const bDate = b.draft_due || b.shoot_date || '9999'
+              return aDate < bDate ? -1 : 1
+            })
+          const upcomingShoots = scheduleProjects
+            .filter((p: any) => p.shoot_date && new Date(p.shoot_date) >= now)
+            .sort((a: any, b: any) => new Date(a.shoot_date).getTime() - new Date(b.shoot_date).getTime())
+
+          function ProjectRow({ p, i, total }: { p: any; i: number; total: number }) {
+            const STAGE_C: Record<string,any> = {
+              'Pre-Production': {color:'rgba(100,150,220,0.9)',bg:'rgba(25,45,80,0.4)'},
+              'Shooting': {color:'rgba(210,175,80,0.9)',bg:'rgba(65,52,18,0.4)'},
+              'Post-Production': {color:'rgba(160,100,220,0.9)',bg:'rgba(50,25,80,0.4)'},
+              'Revisions': {color:'rgba(220,120,60,0.9)',bg:'rgba(80,35,15,0.4)'},
+              'Awaiting Confirmation': {color:'rgba(100,200,130,0.9)',bg:'rgba(30,70,45,0.4)'},
+            }
+            const sc = STAGE_C[p.stage] || {color:'#C8C2BB',bg:'rgba(200,194,187,0.1)'}
+            return (
+              <div onClick={() => { setModalProject(p); setModalEditing(false) }} style={{ display: 'flex', gap: 14, padding: '13px 18px', borderBottom: i < total - 1 ? '0.5px solid rgba(200,194,187,0.06)' : 'none', cursor: 'pointer', alignItems: 'center' }}>
+                {p.shoot_date ? (
+                  <div style={{ width: 42, flexShrink: 0, textAlign: 'center', background: 'rgba(61,71,86,0.3)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 5, padding: '6px 4px' }}>
+                    <div style={{ fontSize: 16, fontWeight: 600, color: '#fff', lineHeight: 1 }}>{new Date(p.shoot_date + 'T12:00:00').getDate()}</div>
+                    <div style={{ fontSize: 9, color: 'rgba(200,194,187,0.4)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{new Date(p.shoot_date + 'T12:00:00').toLocaleDateString('en-NZ',{month:'short'})}</div>
                   </div>
-                ))}
+                ) : (
+                  <div style={{ width: 42, flexShrink: 0, textAlign: 'center', background: 'rgba(61,71,86,0.15)', border: '0.5px solid rgba(200,194,187,0.06)', borderRadius: 5, padding: '6px 4px' }}>
+                    <div style={{ fontSize: 9, color: 'rgba(200,194,187,0.25)', textTransform: 'uppercase' }}>No date</div>
+                  </div>
+                )}
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: '#C8C2BB', marginBottom: 3 }}>{p.title}</div>
+                  <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>
+                    {p.client}
+                    {p.address ? ' · ' + p.address.split(',')[0] : ''}
+                    {p.draft_due ? ' · Brief due: ' + new Date(p.draft_due + 'T12:00:00').toLocaleDateString('en-NZ',{day:'numeric',month:'short'}) : ''}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                  <div style={{ width: 60, height: 3, background: 'rgba(200,194,187,0.07)', borderRadius: 2 }}>
+                    <div style={{ height: '100%', width: p.progress + '%', background: '#C8C2BB', opacity: 0.5, borderRadius: 2 }} />
+                  </div>
+                  <span style={{ fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '3px 8px', borderRadius: 2, background: sc.bg, color: sc.color, whiteSpace: 'nowrap' }}>{p.stage}</span>
+                </div>
+              </div>
+            )
+          }
+
+          return (
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 28px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', background: '#14181F', position: 'sticky', top: 0, zIndex: 10 }}>
+                <div>
+                  <div style={{ fontSize: 22, fontWeight: 800, color: '#fff', letterSpacing: '-0.02em', textTransform: 'uppercase', fontStyle: 'italic' }}>Shoot Schedule</div>
+                  <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', marginTop: 2 }}>{upcomingShoots.length} upcoming shoot{upcomingShoots.length !== 1 ? 's' : ''} · {preProd.length} in pre-production</div>
+                </div>
+                <button onClick={() => setActiveView('dashboard')} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>← Dashboard</button>
+              </div>
+              <div style={{ padding: 28, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                    <div style={{ width: 7, height: 7, borderRadius: '50%', background: 'rgba(100,150,220,0.9)' }} />
+                    <span style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)' }}>Pre-production</span>
+                    <span style={{ fontSize: 11, color: 'rgba(200,194,187,0.25)', marginLeft: 4 }}>sorted by brief due then shoot date</span>
+                  </div>
+                  <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, overflow: 'hidden' }}>
+                    {preProd.length === 0 ? (
+                      <div style={{ padding: '28px 18px', textAlign: 'center', color: 'rgba(200,194,187,0.25)', fontSize: 12 }}>No projects in pre-production</div>
+                    ) : preProd.map((p: any, i: number) => <ProjectRow key={p.id} p={p} i={i} total={preProd.length} />)}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                    <div style={{ width: 7, height: 7, borderRadius: '50%', background: 'rgba(210,175,80,0.9)' }} />
+                    <span style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)' }}>Upcoming shoots</span>
+                    <span style={{ fontSize: 11, color: 'rgba(200,194,187,0.25)', marginLeft: 4 }}>sorted by shoot date</span>
+                  </div>
+                  <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, overflow: 'hidden' }}>
+                    {upcomingShoots.length === 0 ? (
+                      <div style={{ padding: '28px 18px', textAlign: 'center', color: 'rgba(200,194,187,0.25)', fontSize: 12 }}>No upcoming shoots scheduled</div>
+                    ) : upcomingShoots.map((p: any, i: number) => <ProjectRow key={p.id} p={p} i={i} total={upcomingShoots.length} />)}
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          )
+        })()}
 
         {/* ===== BOOKINGS ===== */}
         {activeView === 'bookings' && (

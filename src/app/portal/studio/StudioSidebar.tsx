@@ -39,11 +39,8 @@ export default function StudioSidebar({ active, onViewChange }: { active?: strin
         <img src="/images/Pale_logo_EX.png" alt="Example Content" style={{ height: 44, objectFit: 'contain', maxWidth: 160 }} />
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 16px', borderBottom: '0.5px solid rgba(200,194,187,0.09)' }}>
-        <div style={{ width: 30, height: 30, borderRadius: '50%', background: '#3D4756', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 500, flexShrink: 0, color: '#C8C2BB' }}>JD</div>
-        <div>
-          <div style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>Jordan D.</div>
-          <div style={{ fontSize: 10, color: 'rgba(200,194,187,0.4)' }}>Director</div>
-        </div>
+        <img src="/images/Cody.jpg" alt="Cody" style={{ width: 30, height: 30, borderRadius: '50%', objectFit: 'cover', objectPosition: 'top', flexShrink: 0 }} />
+        <div style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>Cody Woodmass</div>
       </div>
       <nav style={{ padding: '12px 10px', flex: 1, overflowY: 'auto' }}>
         {NAV.map(group => (
