@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import StudioSidebar from '../StudioSidebar'
+import { supabase } from '@/lib/supabase'
 
 export default function BriefPage() {
   const [address, setAddress] = useState('')
@@ -10,10 +11,33 @@ export default function BriefPage() {
   const [propertyType, setPropertyType] = useState('Luxury residential')
   const [shootDate, setShootDate] = useState('')
   const [briefNotes, setBriefNotes] = useState('')
+  const [savedBriefs, setSavedBriefs] = useState<any[]>([])
+  const [loadingBriefs, setLoadingBriefs] = useState(true)
+  const [expandedBrief, setExpandedBrief] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [brief, setBrief] = useState<any>(null)
   const debounceRef = useRef<any>(null)
+
+  useEffect(() => { loadSavedBriefs() }, [])
+
+  async function loadSavedBriefs() {
+    setLoadingBriefs(true)
+    const { data } = await supabase.from('property_briefs').select('*').order('created_at', { ascending: false })
+    if (data) setSavedBriefs(data)
+    setLoadingBriefs(false)
+  }
+
+  async function saveBrief(briefData: any, addr: string) {
+    await supabase.from('property_briefs').insert([{
+      address: addr,
+      property_data: briefData.property,
+      weather: briefData.weather,
+      mapbox_image_url: briefData.mapboxImageUrl,
+      shoot_date: shootDate,
+    }])
+    loadSavedBriefs()
+  }
 
   const inp: React.CSSProperties = { background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }
   const lbl: React.CSSProperties = { fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)', marginBottom: 6, display: 'block' }
@@ -61,6 +85,7 @@ export default function BriefPage() {
       const data = await res.json()
       if (data.error) { setError(data.error); setLoading(false); return }
       setBrief(data)
+      await saveBrief(data, address || addressInput)
     } catch (e: any) {
       if (e.name === 'AbortError') {
         setError('Request timed out. Please try again.')
@@ -195,6 +220,60 @@ export default function BriefPage() {
               <button onClick={() => setBrief(null)} style={{ fontSize: 11, color: 'rgba(200,194,187,0.3)', background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left' }}>↻ Generate new brief</button>
             </div>
           )}
+          {/* SAVED BRIEFS */}
+          <div style={{ marginTop: 32 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+              <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)' }}>Saved property briefs</div>
+              <span style={{ fontSize: 11, color: 'rgba(200,194,187,0.35)' }}>{savedBriefs.length} brief{savedBriefs.length !== 1 ? 's' : ''}</span>
+            </div>
+            {loadingBriefs && <div style={{ fontSize: 12, color: 'rgba(200,194,187,0.3)' }}>Loading...</div>}
+            {!loadingBriefs && savedBriefs.length === 0 && <div style={{ fontSize: 12, color: 'rgba(200,194,187,0.25)', padding: '20px 0' }}>No saved briefs yet — generate one above</div>}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {savedBriefs.map(b => {
+                const isExpanded = expandedBrief === b.id
+                const p = b.property_data || {}
+                return (
+                  <div key={b.id} style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, overflow: 'hidden' }}>
+                    <div onClick={() => setExpandedBrief(isExpanded ? null : b.id)} style={{ padding: '14px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 500, color: '#C8C2BB', marginBottom: 3 }}>{b.address}</div>
+                        <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>
+                          {new Date(b.created_at).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })}
+                          {b.shoot_date ? ` · Shoot: ${new Date(b.shoot_date + 'T12:00:00').toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' })}` : ''}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        {b.weather && <span style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>{b.weather.condition} · {b.weather.minTemp}°–{b.weather.maxTemp}°C</span>}
+                        <span style={{ fontSize: 12, color: 'rgba(200,194,187,0.3)', transform: isExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>▾</span>
+                      </div>
+                    </div>
+                    {isExpanded && (
+                      <div style={{ padding: '0 18px 18px', borderTop: '0.5px solid rgba(200,194,187,0.06)' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10, marginTop: 14, marginBottom: 14 }}>
+                          {[['Bedrooms', p.bedrooms], ['Bathrooms', p.bathrooms], ['Garage', p.garageSpaces], ['Floor', p.floorSize], ['Land', p.landSize]].map(([label, value]) => (
+                            <div key={label as string} style={{ background: 'rgba(61,71,86,0.3)', borderRadius: 5, padding: '10px 12px' }}>
+                              <div style={{ fontSize: 9, color: 'rgba(200,194,187,0.35)', marginBottom: 4 }}>{label}</div>
+                              <div style={{ fontSize: 13, fontWeight: 500, color: '#fff' }}>{value || '—'}</div>
+                            </div>
+                          ))}
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 14 }}>
+                          {[['RV', p.rateableValue], ['Last sale', p.lastSalePrice], ['Sale year', p.lastSaleDate]].map(([label, value]) => (
+                            <div key={label as string} style={{ background: 'rgba(61,71,86,0.2)', borderRadius: 5, padding: '10px 12px' }}>
+                              <div style={{ fontSize: 9, color: 'rgba(200,194,187,0.35)', marginBottom: 4 }}>{label}</div>
+                              <div style={{ fontSize: 12, color: '#C8C2BB' }}>{value || '—'}</div>
+                            </div>
+                          ))}
+                        </div>
+                        {p.description && <div style={{ fontSize: 12, color: 'rgba(200,194,187,0.5)', lineHeight: 1.7, marginBottom: 14 }}>{p.description}</div>}
+                        {b.mapbox_image_url && <div style={{ borderRadius: 6, overflow: 'hidden', marginBottom: 14 }}><img src={b.mapbox_image_url} alt="Satellite" style={{ width: '100%', display: 'block' }} /></div>}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
         </div>
       </div>
     </main>

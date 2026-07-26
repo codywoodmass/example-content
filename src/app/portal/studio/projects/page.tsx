@@ -57,6 +57,8 @@ export default function ProjectsPage() {
   const [modalEditing, setModalEditing] = useState(false)
   const [modalSaving, setModalSaving] = useState(false)
   const [modalSaved, setModalSaved] = useState(false)
+  const [briefLoading, setBriefLoading] = useState(false)
+  const [briefGenerated, setBriefGenerated] = useState(false)
   const [showArchived, setShowArchived] = useState(false)
   const [dragOverStage, setDragOverStage] = useState<string | null>(null)
   const [sortBy, setSortBy] = useState<string>('created_at')
@@ -123,10 +125,64 @@ export default function ProjectsPage() {
     setModalSaving(false)
   }
 
+  async function generateProjectBrief(project: Project) {
+    if (!project.address) return
+    setBriefLoading(true)
+    setBriefGenerated(false)
+    try {
+      const res = await fetch('/api/property-brief', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address: project.address, propertyType: 'Luxury residential', shootDate: project.shoot_date }),
+      })
+      const data = await res.json()
+      if (!data.error) {
+        await supabase.from('property_briefs').insert([{
+          project_id: project.id,
+          address: project.address,
+          property_data: data.property,
+          weather: data.weather,
+          mapbox_image_url: data.mapboxImageUrl,
+          shoot_date: project.shoot_date,
+        }])
+        setBriefGenerated(true)
+        setTimeout(() => setBriefGenerated(false), 3000)
+      }
+    } catch (e) { console.error(e) }
+    setBriefLoading(false)
+  }
+
   async function archiveProject(id: string, archived: boolean) {
     await supabase.from('projects1').update({ archived }).eq('id', id)
     setProjects(p => p.map(proj => proj.id === id ? { ...proj, archived } : proj))
     setModalProject(null)
+  }
+
+  async function generateProjectBrief(project: Project) {
+    if (!project.address) return
+    setBriefLoading(true)
+    setBriefGenerated(false)
+    try {
+      const res = await fetch('/api/property-brief', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address: project.address, propertyType: 'Luxury residential', shootDate: project.shoot_date }),
+      })
+      const data = await res.json()
+      if (!data.error) {
+        await supabase.from('property_briefs').insert([{
+          project_id: project.id,
+          address: project.address,
+          property_data: data.property,
+          weather: data.weather,
+          mapbox_image_url: data.mapboxImageUrl,
+          shoot_date: project.shoot_date,
+        }])
+        setBriefGenerated(true)
+        setTimeout(() => setBriefGenerated(false), 3000)
+      }
+    } catch (e) { console.error(e) }
+    setBriefLoading(false)
   }
 
   async function archiveProject(id: string, archived: boolean) {
@@ -536,13 +592,19 @@ export default function ProjectsPage() {
                 </div>
               )}
               <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 16, borderTop: '0.5px solid rgba(200,194,187,0.09)' }}>
+                <div style={{ display: 'flex', gap: 8 }}>
+                {modalProject.category === 'Property' && modalProject.address && (
+                  <button onClick={() => generateProjectBrief(modalProject)} disabled={briefLoading} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: `0.5px solid ${briefGenerated ? 'rgba(100,200,130,0.3)' : 'rgba(200,194,187,0.2)'}`, color: briefGenerated ? 'rgba(100,200,130,0.8)' : 'rgba(200,194,187,0.5)', background: briefGenerated ? 'rgba(100,200,130,0.06)' : 'transparent', cursor: briefLoading ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>
+                    {briefLoading ? '✦ Researching...' : briefGenerated ? '✓ Brief saved' : '✦ Generate brief'}
+                  </button>
+                )}
                 {modalProject.stage === 'Awaiting Confirmation' && !modalProject.archived && (
-                  <button onClick={() => archiveProject(modalProject.id, true)} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(210,175,80,0.3)', color: 'rgba(210,175,80,0.8)', background: 'rgba(210,175,80,0.06)', cursor: 'pointer', fontFamily: 'inherit' }}>📦 Archive project</button>
+                  <button onClick={() => archiveProject(modalProject.id, true)} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(210,175,80,0.3)', color: 'rgba(210,175,80,0.8)', background: 'rgba(210,175,80,0.06)', cursor: 'pointer', fontFamily: 'inherit' }}>📦 Archive</button>
                 )}
                 {modalProject.archived && (
                   <button onClick={() => archiveProject(modalProject.id, false)} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(100,200,130,0.3)', color: 'rgba(100,200,130,0.8)', background: 'rgba(100,200,130,0.06)', cursor: 'pointer', fontFamily: 'inherit' }}>↩ Unarchive</button>
                 )}
-                {!modalProject.archived && modalProject.stage !== 'Awaiting Confirmation' && <div />}
+              </div>
                 <button onClick={async () => { await saveModalProject(); setModalProject(null); setModalEditing(false); router.push('/portal/studio/projects') }} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>← Back to projects</button>
               </div>
             </div>
@@ -680,13 +742,19 @@ export default function ProjectsPage() {
                 </div>
               )}
               <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 16, borderTop: '0.5px solid rgba(200,194,187,0.09)' }}>
+                <div style={{ display: 'flex', gap: 8 }}>
+                {modalProject.category === 'Property' && modalProject.address && (
+                  <button onClick={() => generateProjectBrief(modalProject)} disabled={briefLoading} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: `0.5px solid ${briefGenerated ? 'rgba(100,200,130,0.3)' : 'rgba(200,194,187,0.2)'}`, color: briefGenerated ? 'rgba(100,200,130,0.8)' : 'rgba(200,194,187,0.5)', background: briefGenerated ? 'rgba(100,200,130,0.06)' : 'transparent', cursor: briefLoading ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>
+                    {briefLoading ? '✦ Researching...' : briefGenerated ? '✓ Brief saved' : '✦ Generate brief'}
+                  </button>
+                )}
                 {modalProject.stage === 'Awaiting Confirmation' && !modalProject.archived && (
-                  <button onClick={() => archiveProject(modalProject.id, true)} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(210,175,80,0.3)', color: 'rgba(210,175,80,0.8)', background: 'rgba(210,175,80,0.06)', cursor: 'pointer', fontFamily: 'inherit' }}>📦 Archive project</button>
+                  <button onClick={() => archiveProject(modalProject.id, true)} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(210,175,80,0.3)', color: 'rgba(210,175,80,0.8)', background: 'rgba(210,175,80,0.06)', cursor: 'pointer', fontFamily: 'inherit' }}>📦 Archive</button>
                 )}
                 {modalProject.archived && (
                   <button onClick={() => archiveProject(modalProject.id, false)} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(100,200,130,0.3)', color: 'rgba(100,200,130,0.8)', background: 'rgba(100,200,130,0.06)', cursor: 'pointer', fontFamily: 'inherit' }}>↩ Unarchive</button>
                 )}
-                {!modalProject.archived && modalProject.stage !== 'Awaiting Confirmation' && <div />}
+              </div>
                 <button onClick={async () => { await saveModalProject(); setModalProject(null); setModalEditing(false); router.push('/portal/studio/projects') }} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>← Back to projects</button>
               </div>
             </div>
