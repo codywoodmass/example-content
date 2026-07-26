@@ -162,32 +162,6 @@ export default function ProjectsPage() {
     setModalProject(null)
   }
 
-  async function generateProjectBrief(project: Project) {
-    if (!project.address) return
-    setBriefLoading(true)
-    setBriefGenerated(false)
-    try {
-      const res = await fetch('/api/property-brief', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address: project.address, propertyType: 'Luxury residential', shootDate: project.shoot_date }),
-      })
-      const data = await res.json()
-      if (!data.error) {
-        await supabase.from('property_briefs').insert([{
-          project_id: project.id,
-          address: project.address,
-          property_data: data.property,
-          weather: data.weather,
-          mapbox_image_url: data.mapboxImageUrl,
-          shoot_date: project.shoot_date,
-        }])
-        setBriefGenerated(true)
-        setTimeout(() => setBriefGenerated(false), 3000)
-      }
-    } catch (e) { console.error(e) }
-    setBriefLoading(false)
-  }
 
   async function archiveProject(id: string, archived: boolean) {
     await supabase.from('projects1').update({ archived }).eq('id', id)
