@@ -592,7 +592,6 @@ export default function ClientPortal() {
                         await supabase.from('bookings1').insert([{
                           client_id: user?.id,
                           client_name: clientContactName || user?.email,
-                          client_email: user?.email,
                           category: selectedCat,
                           shoot_package: selectedShoot?.name || '',
                           deliverables: selectedDel?.name || '',
