@@ -147,7 +147,6 @@ export default function StudioPortal() {
       title: booking.address || booking.shoot_package || 'New project',
       client: booking.client_name || booking.client_email || '',
       contact: booking.client_name || "",
-      contact: '',
       email: booking.client_email || '',
       category: booking.category === 'property' ? 'Property' : 'Commercial',
       address: booking.address || '',
