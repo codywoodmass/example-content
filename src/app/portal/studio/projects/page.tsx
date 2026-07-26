@@ -161,11 +161,6 @@ export default function ProjectsPage() {
     setProjects(p => p.map(proj => proj.id === id ? { ...proj, archived } : proj))
     setModalProject(null)
   }
-
-
-  async function archiveProject(id: string, archived: boolean) {
-    await supabase.from('projects1').update({ archived }).eq('id', id)
-    setProjects(p => p.map(proj => proj.id === id ? { ...proj, archived } : proj))
     setModalProject(null)
   }
 
