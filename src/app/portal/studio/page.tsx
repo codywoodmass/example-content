@@ -9,6 +9,9 @@ export default function StudioPortal() {
   const [user, setUser] = useState<any>(null)
   const [bookings, setBookings] = useState<any[]>([])
   const [bookingCount, setBookingCount] = useState(0)
+  const [changeRequests, setChangeRequests] = useState<any[]>([])
+  const [changeRequestCount, setChangeRequestCount] = useState(0)
+  const [respondingToCR, setRespondingToCR] = useState<any>(null)
   const [dashProjects, setDashProjects] = useState<any[]>([])
   const [modalProject, setModalProject] = useState<any>(null)
   const [modalEditing, setModalEditing] = useState(false)
@@ -21,6 +24,9 @@ export default function StudioPortal() {
   const [scheduleModal, setScheduleModal] = useState(false)
   const [selectedBooking, setSelectedBooking] = useState<any>(null)
   const [shootDate, setShootDate] = useState("")
+  const [shootTime, setShootTime] = useState("08:00")
+  const [calendarView, setCalendarView] = useState(false)
+  const [hoveredDate, setHoveredDate] = useState<string | null>(null)
   const [startTime, setStartTime] = useState("07:30")
   const [endTime, setEndTime] = useState("12:00")
   const [calendarConnected, setCalendarConnected] = useState(false)
@@ -83,6 +89,8 @@ export default function StudioPortal() {
       setBookingCount(data.length)
     }
     const { data: projects } = await supabase.from('projects1').select('*').order('created_at', { ascending: false })
+    const { data: crs } = await supabase.from('change_requests').select('*').eq('status', 'pending').order('created_at', { ascending: false })
+    if (crs) { setChangeRequests(crs); setChangeRequestCount(crs.length) }
     if (projects) {
       const now = new Date()
       const in14 = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000)
@@ -151,7 +159,7 @@ export default function StudioPortal() {
       category: booking.category === 'property' ? 'Property' : 'Commercial',
       address: booking.address || '',
       stage: 'Pre-Production',
-      shoot_date: booking.preferred_date || null,
+      shoot_date: shootDate || booking.preferred_date || null,
       draft_due: booking.draft_due || null,
       delivery_due: booking.delivery_due || null,
       progress: 0,
@@ -173,6 +181,17 @@ export default function StudioPortal() {
       if (booking.deliverables) deliverables.push({ id: '2', name: booking.deliverables, done: false })
       if (booking.addons) booking.addons.split(', ').filter(Boolean).forEach((a: string, i: number) => deliverables.push({ id: String(i + 3), name: a, done: false }))
       if (deliverables.length > 0) localStorage.setItem(`deliverables_${data.id}`, JSON.stringify(deliverables))
+    }
+    // Send notification to client
+    if (data?.id) {
+      await supabase.from('notifications').insert([{
+        user_email: booking.client_email,
+        type: 'booking_confirmed',
+        title: 'Shoot confirmed!',
+        message: 'Your booking for ' + (booking.address || booking.shoot_package || 'your shoot') + ' has been confirmed.' + (shootDate ? ' Shoot date: ' + new Date(shootDate + 'T12:00:00').toLocaleDateString('en-NZ',{weekday:'long',day:'numeric',month:'long',year:'numeric'}) : ''),
+        project_id: data.id,
+        read: false,
+      }])
     }
     loadBookings()
     return data
@@ -222,7 +241,7 @@ export default function StudioPortal() {
     { label: 'Work', items: [
       { id: 'projects', label: 'Projects' },
       { id: 'schedule', label: 'Shoot Schedule' },
-      { id: 'bookings', label: 'Booking Requests', badge: bookingCount > 0 ? String(bookingCount) : undefined },
+      { id: 'bookings', label: 'Booking Requests', badge: (bookingCount + changeRequestCount) > 0 ? String(bookingCount + changeRequestCount) : undefined },
       { id: 'brief', label: 'Property Brief' },
     ]},
     { label: 'Team', items: [
@@ -253,9 +272,9 @@ export default function StudioPortal() {
               <div>
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
-                {bookingCount > 0 && (
+                {(bookingCount + changeRequestCount) > 0 && (
                   <button onClick={() => setActiveView('bookings')} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, border: '0.5px solid rgba(210,90,90,0.4)', color: 'rgba(210,90,90,0.9)', background: 'rgba(210,90,90,0.08)', cursor: 'pointer', fontFamily: 'inherit' }}>
-                    {bookingCount} new request{bookingCount !== 1 ? 's' : ''}
+                    {bookingCount + changeRequestCount} new {bookingCount > 0 && changeRequestCount > 0 ? 'notifications' : bookingCount > 0 ? 'request' + (bookingCount !== 1 ? 's' : '') : 'change' + (changeRequestCount !== 1 ? 's' : '')}
                   </button>
                 )}
                 <button onClick={() => router.push('/portal/studio/projects')} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>+ New project</button>
@@ -284,7 +303,7 @@ export default function StudioPortal() {
                     <button onClick={() => router.push('/portal/studio/projects')} style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>View all →</button>
                   </div>
                   {(() => {
-                    const SC: Record<string,any> = {'Pre-Production':{color:'rgba(100,150,220,0.9)',bg:'rgba(25,45,80,0.4)'},'Shooting':{color:'rgba(210,175,80,0.9)',bg:'rgba(65,52,18,0.4)'},'Post-Production':{color:'rgba(160,100,220,0.9)',bg:'rgba(50,25,80,0.4)'},'Revisions':{color:'rgba(220,120,60,0.9)',bg:'rgba(80,35,15,0.4)'},'Awaiting Confirmation':{color:'rgba(100,200,130,0.9)',bg:'rgba(30,70,45,0.4)'}}
+                    const SC: Record<string,any> = {'Pre-Production':{color:'rgba(100,150,220,0.9)',bg:'rgba(25,45,80,0.4)'},'Shooting':{color:'rgba(210,175,80,0.9)',bg:'rgba(65,52,18,0.4)'},'Post-Production':{color:'rgba(210,90,90,0.9)',bg:'rgba(50,25,80,0.4)'},'Revisions':{color:'rgba(220,120,60,0.9)',bg:'rgba(80,35,15,0.4)'},'Awaiting Confirmation':{color:'rgba(100,200,130,0.9)',bg:'rgba(30,70,45,0.4)'}}
                     const now = new Date()
                     const in14 = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000)
                     const recentBookings = [...dashProjects].filter(p => p.from_booking).sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0,5)
@@ -314,7 +333,7 @@ export default function StudioPortal() {
                         {[
                           { label: 'Recent bookings', projects: recentBookings, color: 'rgba(100,150,220,0.9)' },
                           { label: 'Approaching delivery', projects: nearDelivery, color: 'rgba(220,120,60,0.9)' },
-                          { label: 'Post-production', projects: postProd, color: 'rgba(160,100,220,0.9)' },
+                          { label: 'Post-production', projects: postProd, color: 'rgba(210,90,90,0.9)' },
                         ].map(({ label, projects, color }) => (
                           <div key={label}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
@@ -369,10 +388,15 @@ export default function StudioPortal() {
                     <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 14 }}>Booking requests</div>
                     <div style={{ background: bookingCount > 0 ? 'rgba(210,90,90,0.06)' : '#1A1F28', border: '0.5px solid ' + (bookingCount > 0 ? 'rgba(210,90,90,0.25)' : 'rgba(200,194,187,0.09)'), borderRadius: 7, padding: '16px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <div>
-                        <div style={{ fontSize: 20, fontWeight: 600, color: bookingCount > 0 ? 'rgba(210,90,90,0.9)' : '#C8C2BB' }}>{bookingCount}</div>
-                        <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', marginTop: 2 }}>{bookingCount === 0 ? 'No pending requests' : 'Pending request' + (bookingCount !== 1 ? 's' : '')}</div>
+                        <div style={{ fontSize: 20, fontWeight: 600, color: (bookingCount + changeRequestCount) > 0 ? 'rgba(210,90,90,0.9)' : '#C8C2BB' }}>{bookingCount + changeRequestCount}</div>
+                        <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', marginTop: 2 }}>
+                          {bookingCount > 0 && <span>{bookingCount} booking request{bookingCount !== 1 ? 's' : ''}</span>}
+                          {bookingCount > 0 && changeRequestCount > 0 && <span> · </span>}
+                          {changeRequestCount > 0 && <span style={{ color: 'rgba(210,90,90,0.8)' }}>{changeRequestCount} change request{changeRequestCount !== 1 ? 's' : ''}</span>}
+                          {bookingCount === 0 && changeRequestCount === 0 && <span>No pending requests</span>}
+                        </div>
                       </div>
-                      {bookingCount > 0 && <button onClick={() => setActiveView('bookings')} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, border: '0.5px solid rgba(210,90,90,0.4)', color: 'rgba(210,90,90,0.9)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Review →</button>}
+                      {(bookingCount + changeRequestCount) > 0 && <button onClick={() => setActiveView('bookings')} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, border: '0.5px solid rgba(210,90,90,0.4)', color: 'rgba(210,90,90,0.9)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Review →</button>}
                     </div>
                   </div>
                   <div>
@@ -497,7 +521,7 @@ export default function StudioPortal() {
             const STAGE_C: Record<string,any> = {
               'Pre-Production': {color:'rgba(100,150,220,0.9)',bg:'rgba(25,45,80,0.4)'},
               'Shooting': {color:'rgba(210,175,80,0.9)',bg:'rgba(65,52,18,0.4)'},
-              'Post-Production': {color:'rgba(160,100,220,0.9)',bg:'rgba(50,25,80,0.4)'},
+              'Post-Production': {color:'rgba(210,90,90,0.9)',bg:'rgba(50,25,80,0.4)'},
               'Revisions': {color:'rgba(220,120,60,0.9)',bg:'rgba(80,35,15,0.4)'},
               'Awaiting Confirmation': {color:'rgba(100,200,130,0.9)',bg:'rgba(30,70,45,0.4)'},
             }
@@ -651,6 +675,41 @@ export default function StudioPortal() {
           </div>
         )}
 
+        {/* ===== CHANGE REQUESTS (part of bookings view) ===== */}
+        {activeView === 'bookings' && changeRequests.length > 0 && (
+          <div style={{ padding: '0 28px 28px' }}>
+            <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 12 }}>Client change requests</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {changeRequests.map((cr: any) => (
+                <div key={cr.id} style={{ background: '#1A1F28', border: '0.5px solid rgba(160,100,220,0.25)', borderRadius: 7, padding: '18px 22px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 500, color: '#C8C2BB', marginBottom: 3 }}>{cr.project_title || 'Project'}</div>
+                      <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>{cr.client_name} · {new Date(cr.created_at).toLocaleDateString('en-NZ',{day:'numeric',month:'short',year:'numeric'})}</div>
+                    </div>
+                    <span style={{ fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '3px 8px', borderRadius: 2, background: 'rgba(210,90,90,0.15)', color: 'rgba(210,90,90,0.9)', border: '0.5px solid rgba(160,100,220,0.3)' }}>Change request</span>
+                  </div>
+                  <div style={{ fontSize: 13, color: 'rgba(200,194,187,0.7)', lineHeight: 1.7, background: 'rgba(210,90,90,0.05)', borderRadius: 5, padding: '10px 14px', marginBottom: 12, border: '0.5px solid rgba(160,100,220,0.1)' }}>{cr.message}</div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    {cr.type === 'cancellation' ? (
+                      <>
+                        <button onClick={async () => { if (!confirm('Accept cancellation and archive this project?')) return; if (cr.project_id) await supabase.from('projects1').update({ archived: true }).eq('id', cr.project_id); await supabase.from('change_requests').update({ status: 'resolved' }).eq('id', cr.id); await supabase.from('notifications').insert([{ user_email: cr.client_email, type: 'cancellation_accepted', title: 'Booking cancelled', message: 'Your cancellation request for ' + cr.project_title + ' has been accepted.', project_id: cr.project_id, read: false }]); setChangeRequests((p) => p.filter((r) => r.id !== cr.id)); setChangeRequestCount((c) => c - 1) }} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, background: 'rgba(210,90,90,0.15)', color: 'rgba(210,90,90,0.9)', border: '0.5px solid rgba(210,90,90,0.3)', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>Accept cancellation</button>
+                        <button onClick={async () => { await supabase.from('change_requests').update({ status: 'resolved' }).eq('id', cr.id); await supabase.from('notifications').insert([{ user_email: cr.client_email, type: 'cancellation_declined', title: 'Cancellation declined', message: 'Your cancellation request for ' + cr.project_title + ' has been declined. Please contact us to discuss.', project_id: cr.project_id, read: false }]); setChangeRequests((p) => p.filter((r) => r.id !== cr.id)); setChangeRequestCount((c) => c - 1) }} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Decline</button>
+                      </>
+                    ) : (
+                      <>
+                        <button onClick={async () => { await supabase.from('change_requests').update({ status: 'resolved' }).eq('id', cr.id); setChangeRequests((p) => p.filter((r) => r.id !== cr.id)); setChangeRequestCount((c) => c - 1) }} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>Mark resolved</button>
+                        <button onClick={() => { setRespondingToCR(cr); setShootDate(''); setStartTime('08:00'); setEndTime('17:00'); setScheduleModal(true) }} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, border: '0.5px solid rgba(210,90,90,0.3)', color: 'rgba(210,90,90,0.8)', background: 'rgba(210,90,90,0.06)', cursor: 'pointer', fontFamily: 'inherit' }}>Schedule new date</button>
+                      </>
+                    )}
+                    {cr.project_id && <button onClick={() => router.push('/portal/studio/projects?open=' + cr.project_id)} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>View project</button>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* ===== EQUIPMENT ===== */}
         {activeView === 'equipment' && (
           <div>
@@ -754,12 +813,12 @@ export default function StudioPortal() {
       </div>
 
       {/* SCHEDULE MODAL */}
-      {scheduleModal && selectedBooking && (
+      {scheduleModal && (selectedBooking || respondingToCR) && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 10, padding: 28, width: 480, maxWidth: '95vw' }}>
-            <div style={{ fontSize: 14, fontWeight: 500, color: '#fff', marginBottom: 6 }}>Schedule shoot</div>
+            <div style={{ fontSize: 14, fontWeight: 500, color: '#fff', marginBottom: 6 }}>{respondingToCR ? 'Reschedule shoot' : 'Schedule shoot'}</div>
             <div style={{ fontSize: 12, color: 'rgba(200,194,187,0.4)', marginBottom: 20, lineHeight: 1.6 }}>
-              {selectedBooking.address || selectedBooking.shoot_package} · {selectedBooking.client_name || selectedBooking.client_email}
+              {respondingToCR ? (respondingToCR.project_title + ' · ' + respondingToCR.client_name) : (selectedBooking?.address || selectedBooking?.shoot_package) + ' · ' + (selectedBooking?.client_name || selectedBooking?.client_email)}
             </div>
 
             {eventLink ? (
@@ -771,8 +830,65 @@ export default function StudioPortal() {
               <>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, marginBottom: 16 }}>
                   <div style={{ gridColumn: 'span 3' }}>
-                    <label style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)', marginBottom: 6, display: 'block' }}>Shoot date</label>
-                    <input type="date" value={shootDate} onChange={e => setShootDate(e.target.value)} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }} />
+                    <label style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)', marginBottom: 6, display: 'block' }}>Shoot date {shootDate && '— ' + new Date(shootDate + 'T12:00:00').toLocaleDateString('en-NZ',{weekday:'long',day:'numeric',month:'long'})}</label>
+                    {(() => {
+                      const today = new Date(); today.setHours(0,0,0,0)
+                      const viewMonth = new Date(today.getFullYear(), today.getMonth(), 1)
+                      const startDay = viewMonth.getDay() === 0 ? 6 : viewMonth.getDay() - 1
+                      const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate()
+                      const shootsByDate: Record<string, any[]> = {}
+                      dashProjects.forEach((p: any) => {
+                        if (p.shoot_date) {
+                          if (!shootsByDate[p.shoot_date]) shootsByDate[p.shoot_date] = []
+                          shootsByDate[p.shoot_date].push(p)
+                        }
+                      })
+                      const shootDatesSet = new Set(Object.keys(shootsByDate))
+                      const cells = []
+                      for (let i = 0; i < startDay; i++) cells.push(null)
+                      for (let d = 1; d <= daysInMonth; d++) cells.push(d)
+                      const days = ['M','T','W','T','F','S','S']
+                      return (
+                        <div style={{ background: 'rgba(200,194,187,0.03)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 6, padding: 12, marginBottom: 10 }}>
+                          <div style={{ fontSize: 11, fontWeight: 500, color: '#C8C2BB', marginBottom: 8, textAlign: 'center' }}>{viewMonth.toLocaleDateString('en-NZ',{month:'long',year:'numeric'})}</div>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 3, marginBottom: 4 }}>
+                            {days.map((d,i) => <div key={i} style={{ fontSize: 9, textAlign: 'center', color: 'rgba(200,194,187,0.3)' }}>{d}</div>)}
+                          </div>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 3 }}>
+                            {cells.map((d, i) => {
+                              if (!d) return <div key={i} />
+                              const dateStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`
+                              const hasShoot = shootDatesSet.has(dateStr)
+                              const isSelected = shootDate === dateStr
+                              const isPast = new Date(dateStr) < today
+                              return (
+                                <div key={i} style={{ position: 'relative' }} onMouseEnter={() => hasShoot && setHoveredDate(dateStr)} onMouseLeave={() => setHoveredDate(null)}>
+                                  <div onClick={() => !isPast && setShootDate(dateStr)} style={{ height: 30, borderRadius: 4, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: isPast ? 'default' : 'pointer', background: isSelected ? '#C8C2BB' : hasShoot ? 'rgba(210,175,80,0.12)' : 'transparent', border: '0.5px solid ' + (isSelected ? '#C8C2BB' : hasShoot ? 'rgba(210,175,80,0.35)' : 'rgba(200,194,187,0.06)') }}>
+                                    <span style={{ fontSize: 11, fontWeight: isSelected ? 700 : 400, color: isSelected ? '#111' : isPast ? 'rgba(200,194,187,0.2)' : '#C8C2BB' }}>{d}</span>
+                                    {hasShoot && !isSelected && <div style={{ width: 4, height: 4, borderRadius: '50%', background: 'rgba(210,175,80,0.9)', marginTop: 1 }} />}
+                                  </div>
+                                  {hasShoot && hoveredDate === dateStr && (
+                                    <div style={{ position: 'absolute', bottom: '105%', left: '50%', transform: 'translateX(-50%)', background: '#14181F', border: '0.5px solid rgba(210,175,80,0.3)', borderRadius: 6, padding: '10px 12px', zIndex: 100, width: 200, boxShadow: '0 4px 20px rgba(0,0,0,0.4)' }}>
+                                      <div style={{ fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(210,175,80,0.7)', marginBottom: 6 }}>Shoot booked</div>
+                                      {(shootsByDate[dateStr] || []).map((proj: any, pi: number) => (
+                                        <div key={pi} style={{ marginBottom: pi < (shootsByDate[dateStr] || []).length - 1 ? 8 : 0 }}>
+                                          <div style={{ fontSize: 11, fontWeight: 500, color: '#C8C2BB', marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{proj.title}</div>
+                                          <div style={{ fontSize: 10, color: 'rgba(200,194,187,0.5)' }}>{proj.client}</div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              )
+                            })}
+                          </div>
+                          <div style={{ display: 'flex', gap: 12, marginTop: 8, paddingTop: 8, borderTop: '0.5px solid rgba(200,194,187,0.07)' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}><div style={{ width: 6, height: 6, borderRadius: '50%', background: 'rgba(210,175,80,0.9)' }} /><span style={{ fontSize: 9, color: 'rgba(200,194,187,0.4)' }}>Shoot booked</span></div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}><div style={{ width: 12, height: 12, borderRadius: 2, background: '#C8C2BB' }} /><span style={{ fontSize: 9, color: 'rgba(200,194,187,0.4)' }}>Selected</span></div>
+                          </div>
+                        </div>
+                      )
+                    })()}
                   </div>
                   <div>
                     <label style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)', marginBottom: 6, display: 'block' }}>Start time</label>
@@ -797,7 +913,7 @@ export default function StudioPortal() {
                 <div style={{ background: 'rgba(61,71,86,0.2)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 5, padding: '12px 14px', marginBottom: 20, fontSize: 11, color: 'rgba(200,194,187,0.5)', lineHeight: 1.6 }}>
                   <div style={{ fontWeight: 500, color: '#C8C2BB', marginBottom: 4 }}>Calendar invite will be sent to:</div>
                   <div>• cody@examplecontent.co.nz (Example Content)</div>
-                  <div>• {selectedBooking.client_email} (Client)</div>
+                  <div>• {selectedBooking?.client_email || respondingToCR?.client_email} (Client)</div>
                 </div>
 
                 {!calendarConnected && (
@@ -810,17 +926,41 @@ export default function StudioPortal() {
             )}
 
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
-              <button onClick={() => { setScheduleModal(false); setEventLink('') }} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>
+              <button onClick={() => { setScheduleModal(false); setEventLink(''); setRespondingToCR(null) }} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>
                 {eventLink ? 'Close' : 'Cancel'}
               </button>
               {!eventLink && (
                 <div style={{ display: 'flex', gap: 8 }}>
-                  <button onClick={async () => { const proj = await confirmBooking(selectedBooking); setScheduleModal(false); setEventLink(''); if (proj?.id) router.push('/portal/studio/projects/' + proj.id) }} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>
-                    Confirm without calendar
+                  <button onClick={async () => {
+                    if (respondingToCR && shootDate) {
+                      if (respondingToCR.project_id) {
+                        await supabase.from('projects1').update({ shoot_date: shootDate, general_notes: (respondingToCR.general_notes || '') + '\n\n[RESCHEDULED ' + new Date().toLocaleDateString('en-NZ') + '] New date: ' + new Date(shootDate + 'T12:00:00').toLocaleDateString('en-NZ',{weekday:'long',day:'numeric',month:'long',year:'numeric'}) + ' at ' + startTime }).eq('id', respondingToCR.project_id)
+                      }
+                      await supabase.from('change_requests').update({ status: 'resolved' }).eq('id', respondingToCR.id)
+                      setChangeRequests((p: any[]) => p.filter((r: any) => r.id !== respondingToCR.id))
+                      setChangeRequestCount((c: number) => c - 1)
+                      // Notify client of rescheduled date
+      await supabase.from('notifications').insert([{
+        user_email: respondingToCR.client_email,
+        type: 'change_confirmed',
+        title: 'Shoot rescheduled',
+        message: 'Your change request for ' + respondingToCR.project_title + ' has been confirmed. New shoot date: ' + new Date(shootDate + 'T12:00:00').toLocaleDateString('en-NZ',{weekday:'long',day:'numeric',month:'long',year:'numeric'}) + ' at ' + startTime,
+        project_id: respondingToCR.project_id || null,
+        read: false,
+      }])
+      setRespondingToCR(null); setScheduleModal(false); setShootDate('')
+                    } else {
+                      const proj = await confirmBooking(selectedBooking)
+                      if (proj?.id && shootDate) { await supabase.from('projects1').update({ general_notes: (selectedBooking?.notes || '') + '\n\nShoot confirmed: ' + new Date(shootDate + 'T12:00:00').toLocaleDateString('en-NZ',{weekday:'long',day:'numeric',month:'long',year:'numeric'}) + ' at ' + startTime }).eq('id', proj.id) }
+                      setScheduleModal(false); setEventLink('')
+                      if (proj?.id) router.push('/portal/studio/projects/' + proj.id)
+                    }
+                  }} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>
+                    {respondingToCR ? 'Confirm new date' : 'Confirm without calendar'}
                   </button>
-                  <button onClick={() => createCalendarEvent(selectedBooking)} disabled={creatingEvent || !shootDate} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, background: creatingEvent || !shootDate ? 'rgba(200,194,187,0.1)' : '#C8C2BB', color: creatingEvent || !shootDate ? 'rgba(200,194,187,0.3)' : '#111', border: 'none', cursor: creatingEvent || !shootDate ? 'not-allowed' : 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>
+                  {!respondingToCR && <button onClick={() => createCalendarEvent(selectedBooking)} disabled={creatingEvent || !shootDate} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, background: creatingEvent || !shootDate ? 'rgba(200,194,187,0.1)' : '#C8C2BB', color: creatingEvent || !shootDate ? 'rgba(200,194,187,0.3)' : '#111', border: 'none', cursor: creatingEvent || !shootDate ? 'not-allowed' : 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>
                     {creatingEvent ? 'Creating event...' : '📅 Confirm & add to calendar'}
-                  </button>
+                  </button>}
                 </div>
               )}
             </div>
@@ -855,7 +995,7 @@ export default function StudioPortal() {
               <div style={{ marginBottom: 24 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
                   {['Pre-Production','Shooting','Post-Production','Revisions','Awaiting Confirmation'].map((stage, idx) => {
-                    const SC: Record<string,string> = {'Pre-Production':'rgba(100,150,220,0.9)','Shooting':'rgba(210,175,80,0.9)','Post-Production':'rgba(160,100,220,0.9)','Revisions':'rgba(220,120,60,0.9)','Awaiting Confirmation':'rgba(100,200,130,0.9)'}
+                    const SC: Record<string,string> = {'Pre-Production':'rgba(100,150,220,0.9)','Shooting':'rgba(210,175,80,0.9)','Post-Production':'rgba(210,90,90,0.9)','Revisions':'rgba(220,120,60,0.9)','Awaiting Confirmation':'rgba(100,200,130,0.9)'}
                     const stageIdx = ['Pre-Production','Shooting','Post-Production','Revisions','Awaiting Confirmation'].indexOf(modalProject.stage)
                     const isDone = idx < stageIdx; const isCurrent = idx === stageIdx
                     return (
@@ -992,7 +1132,7 @@ export default function StudioPortal() {
               <div style={{ marginBottom: 24 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
                   {['Pre-Production','Shooting','Post-Production','Revisions','Awaiting Confirmation'].map((stage, idx) => {
-                    const SC: Record<string,string> = {'Pre-Production':'rgba(100,150,220,0.9)','Shooting':'rgba(210,175,80,0.9)','Post-Production':'rgba(160,100,220,0.9)','Revisions':'rgba(220,120,60,0.9)','Awaiting Confirmation':'rgba(100,200,130,0.9)'}
+                    const SC: Record<string,string> = {'Pre-Production':'rgba(100,150,220,0.9)','Shooting':'rgba(210,175,80,0.9)','Post-Production':'rgba(210,90,90,0.9)','Revisions':'rgba(220,120,60,0.9)','Awaiting Confirmation':'rgba(100,200,130,0.9)'}
                     const stageIdx = ['Pre-Production','Shooting','Post-Production','Revisions','Awaiting Confirmation'].indexOf(modalProject.stage)
                     const isDone = idx < stageIdx; const isCurrent = idx === stageIdx
                     return (

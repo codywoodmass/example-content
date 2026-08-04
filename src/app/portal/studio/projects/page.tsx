@@ -1,6 +1,6 @@
 'use client'
 import StudioSidebar from '../StudioSidebar'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 
@@ -57,9 +57,36 @@ export default function ProjectsPage() {
   const [modalEditing, setModalEditing] = useState(true)
   const [modalSaving, setModalSaving] = useState(false)
   const [modalSaved, setModalSaved] = useState(false)
+  const [autoSaveTimer, setAutoSaveTimer] = useState<any>(null)
+
+  function triggerAutoSave(updatedProject: any) {
+    if (autoSaveTimer) clearTimeout(autoSaveTimer)
+    const timer = setTimeout(async () => {
+      if (!updatedProject) return
+      await supabase.from('projects1').update({
+        title: updatedProject.title, client: updatedProject.client, email: updatedProject.email,
+        category: updatedProject.category, address: updatedProject.address, stage: updatedProject.stage,
+        shoot_date: updatedProject.shoot_date || null, draft_due: updatedProject.draft_due || null,
+        delivery_due: updatedProject.delivery_due || null, drive_url: updatedProject.drive_url,
+        progress: updatedProject.progress, editor_notes: updatedProject.editor_notes,
+      }).eq('id', updatedProject.id)
+      setProjects(p => p.map(proj => proj.id === updatedProject.id ? { ...proj, ...updatedProject } : proj))
+      setModalSaved(true)
+      setTimeout(() => setModalSaved(false), 2000)
+    }, 1000)
+    setAutoSaveTimer(timer)
+  }
   const [modalFullscreen, setModalFullscreen] = useState(false)
   const [showBriefDoc, setShowBriefDoc] = useState(false)
+
+  useEffect(() => {
+    if (showBriefDoc && briefEditorRef.current) {
+      briefEditorRef.current.innerHTML = briefDocContent
+      briefEditorRef.current.focus()
+    }
+  }, [showBriefDoc])
   const [briefDocContent, setBriefDocContent] = useState('')
+  const briefEditorRef = useRef<HTMLDivElement>(null)
   const [briefLoading, setBriefLoading] = useState(false)
   const [briefGenerated, setBriefGenerated] = useState(false)
   const [showArchived, setShowArchived] = useState(false)
@@ -156,11 +183,48 @@ export default function ProjectsPage() {
     setBriefLoading(false)
   }
 
+
+  async function deliverProject(project: Project) {
+    if (!project.drive_url) return
+    if (!confirm('Mark this project as delivered and notify the client?')) return
+    
+    // Update project stage to Awaiting Confirmation and progress to 100
+    await supabase.from('projects1').update({
+      stage: 'Awaiting Confirmation',
+      progress: 100,
+    }).eq('id', project.id)
+
+    // Send notification to client
+    await supabase.from('notifications').insert([{
+      user_email: project.email,
+      type: 'content_delivered',
+      title: 'Your content is ready',
+      message: 'Your content for ' + (project.title || project.address || 'your project') + ' has been delivered. Click to view your files in Google Drive.',
+      project_id: project.id,
+      read: false,
+    }])
+
+    // Update local state
+    setModalProject(p => p ? { ...p, stage: 'Awaiting Confirmation', progress: 100 } : p)
+    setProjects(p => p.map(proj => proj.id === project.id ? { ...proj, stage: 'Awaiting Confirmation', progress: 100 } : proj))
+    setModalSaved(true)
+    setTimeout(() => setModalSaved(false), 2000)
+  }
+
+  async function deleteProject(project: Project) {
+    const isFromBooking = project.from_booking
+    const msg = isFromBooking
+      ? 'This project was created from a client booking. Deleting it will remove it from your system but will NOT automatically remove any Google Calendar events. Are you sure you want to delete this project?'
+      : 'Are you sure you want to permanently delete this project? This cannot be undone.'
+    if (!confirm(msg)) return
+    await supabase.from('projects1').delete().eq('id', project.id)
+    setProjects(p => p.filter(proj => proj.id !== project.id))
+    setModalProject(null)
+  }
+
   async function archiveProject(id: string, archived: boolean) {
     await supabase.from('projects1').update({ archived }).eq('id', id)
     setProjects(p => p.map(proj => proj.id === id ? { ...proj, archived } : proj))
-    setModalProject(null)
-  }
     setModalProject(null)
   }
 
@@ -458,8 +522,12 @@ export default function ProjectsPage() {
                 <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', marginTop: 2 }}>{modalProject.client}</div>
               </div>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <button onClick={saveModalProject} disabled={modalSaving} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '6px 12px', borderRadius: 3, background: modalSaved ? 'rgba(100,200,130,0.2)' : '#C8C2BB', color: modalSaved ? 'rgba(100,200,130,0.9)' : '#111', border: modalSaved ? '0.5px solid rgba(100,200,130,0.4)' : 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>{modalSaving ? 'Saving...' : modalSaved ? '✓ Saved' : 'Save'}</button>
-                <button onClick={async () => { await saveModalProject(); setModalProject(null); setModalEditing(false) }} style={{ fontSize: 20, color: 'rgba(200,194,187,0.4)', background: 'transparent', border: 'none', cursor: 'pointer', lineHeight: 1, padding: '0 4px' }}>×</button>
+                {modalSaved && <span style={{ fontSize: 11, color: 'rgba(100,200,130,0.8)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>✓ Saved</span>}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <button onClick={() => { setShowBriefDoc(true); setBriefDocContent(modalProject.general_notes && modalProject.general_notes.startsWith('<') ? modalProject.general_notes : '<h1>' + modalProject.title + '</h1><h2>Project Overview</h2><p></p><hr/><h2>Creative Direction</h2><p></p><hr/><h2>Key Messages</h2><ul><li></li></ul><hr/><h2>Target Audience</h2><p></p><hr/><h2>Audio / Music</h2><p></p><hr/><h2>Deliverables</h2><ul><li></li></ul><hr/><h2>Additional Notes</h2><p></p>') }} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '6px 12px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.4)', background: 'rgba(200,194,187,0.06)', cursor: 'pointer', fontFamily: 'inherit' }}>Brief</button>
+                  <button onClick={() => deleteProject(modalProject)} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '6px 12px', borderRadius: 3, border: '0.5px solid rgba(210,90,90,0.3)', color: 'rgba(210,90,90,0.7)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Delete</button>
+                  <button onClick={async () => { await saveModalProject(); setModalProject(null); setModalEditing(false) }} style={{ fontSize: 20, color: 'rgba(200,194,187,0.4)', background: 'transparent', border: 'none', cursor: 'pointer', lineHeight: 1, padding: '0 4px' }}>×</button>
+                </div>
               </div>
             </div>
             <div style={{ padding: 24 }}>
@@ -495,13 +563,13 @@ export default function ProjectsPage() {
                 ].map(({ label, key }) => (
                   <div key={key} style={{ gridColumn: key === 'address' ? 'span 2' : 'span 1' }}>
                     <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>{label}</div>
-                    {modalEditing ? <input value={modalProject[key] || ''} onChange={e => setModalProject(p => p ? { ...p, [key]: e.target.value } : p)} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '8px 10px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }} /> : <div style={{ fontSize: 13, color: '#C8C2BB' }}>{modalProject[key] || '—'}</div>}
+                    {modalEditing ? <input value={modalProject[key] || ''} onChange={e => setModalProject(p => { const u = p ? { ...p, [key]: e.target.value } : p; if (u) triggerAutoSave(u); return u })} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '8px 10px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }} /> : <div style={{ fontSize: 13, color: '#C8C2BB' }}>{modalProject[key] || '—'}</div>}
                   </div>
                 ))}
                 <div>
                   <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>Stage</div>
                   {modalEditing ? (
-                    <select value={modalProject.stage} onChange={e => setModalProject(p => p ? { ...p, stage: e.target.value, progress: STAGE_PROGRESS[e.target.value] } : p)} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '8px 10px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }}>
+                    <select value={modalProject.stage} onChange={e => setModalProject(p => { const u = p ? { ...p, stage: e.target.value, progress: STAGE_PROGRESS[e.target.value] } : p; if (u) triggerAutoSave(u); return u })} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '8px 10px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }}>
                       {['Pre-Production','Shooting','Post-Production','Revisions','Awaiting Confirmation'].map(s => <option key={s}>{s}</option>)}
                     </select>
                   ) : <div style={{ fontSize: 13, color: '#C8C2BB' }}>{modalProject.stage}</div>}
@@ -511,7 +579,7 @@ export default function ProjectsPage() {
                 {[{ label: 'Shoot date', key: 'shoot_date' as const }, { label: 'Draft due', key: 'draft_due' as const }, { label: 'Delivery date', key: 'delivery_due' as const }].map(({ label, key }) => (
                   <div key={key}>
                     <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>{label}</div>
-                    {modalEditing ? <input type="date" value={modalProject[key] || ''} onChange={e => setModalProject(p => p ? { ...p, [key]: e.target.value } : p)} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '8px 10px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }} /> : <div style={{ fontSize: 13, color: '#C8C2BB' }}>{modalProject[key] ? new Date(modalProject[key]).toLocaleDateString('en-NZ',{day:'numeric',month:'short',year:'numeric'}) : '—'}</div>}
+                    {modalEditing ? <input type="date" value={modalProject[key] || ''} onChange={e => setModalProject(p => { const u = p ? { ...p, [key]: e.target.value } : p; if (u) triggerAutoSave(u); return u })} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '8px 10px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }} /> : <div style={{ fontSize: 13, color: '#C8C2BB' }}>{modalProject[key] ? new Date(modalProject[key]).toLocaleDateString('en-NZ',{day:'numeric',month:'short',year:'numeric'}) : '—'}</div>}
                   </div>
                 ))}
               </div>
@@ -550,34 +618,37 @@ export default function ProjectsPage() {
               )}
               <div style={{ marginBottom: 20 }}>
                 <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>Google Drive</div>
-                {modalEditing ? <input value={modalProject.drive_url || ''} onChange={e => setModalProject(p => p ? { ...p, drive_url: e.target.value } : p)} placeholder="https://drive.google.com/drive/folders/..." style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '8px 10px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }} /> : modalProject.drive_url ? <a href={modalProject.drive_url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13, color: 'rgba(100,150,220,0.8)', textDecoration: 'none' }}>📁 Open project folder →</a> : <div style={{ fontSize: 13, color: 'rgba(200,194,187,0.25)' }}>No folder linked</div>}
+                {modalEditing ? <input value={modalProject.drive_url || ''} onChange={e => setModalProject(p => { const u = p ? { ...p, drive_url: e.target.value } : p; if (u) triggerAutoSave(u); return u })} placeholder="https://drive.google.com/drive/folders/..." style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '8px 10px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }} /> : modalProject.drive_url ? <a href={modalProject.drive_url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13, color: 'rgba(100,150,220,0.8)', textDecoration: 'none' }}>📁 Open project folder →</a> : <div style={{ fontSize: 13, color: 'rgba(200,194,187,0.25)' }}>No folder linked</div>}
               </div>
               <div style={{ marginBottom: 20 }}>
                 <div style={{ marginBottom: 14 }}>
                   <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>Notes</div>
-                  <textarea value={modalProject.general_notes || ''} onChange={e => setModalProject(p => p ? { ...p, general_notes: e.target.value } : p)} style={{ width: '100%', background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.08)', borderRadius: 4, padding: '10px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', lineHeight: 1.7, resize: 'vertical' as const, minHeight: 80 }} placeholder="General notes..." />
+                  <textarea value={modalProject.general_notes || ''} onChange={e => setModalProject(p => { const u = p ? { ...p, general_notes: e.target.value } : p; if (u) triggerAutoSave(u); return u })} style={{ width: '100%', background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.08)', borderRadius: 4, padding: '10px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', lineHeight: 1.7, resize: 'vertical' as const, minHeight: 80 }} placeholder="General notes..." />
                 </div>
                 <div>
                   <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>Editor notes</div>
-                  <textarea value={modalProject.editor_notes || ''} onChange={e => setModalProject(p => p ? { ...p, editor_notes: e.target.value } : p)} style={{ width: '100%', background: 'rgba(100,150,220,0.03)', border: '0.5px solid rgba(100,150,220,0.12)', borderRadius: 4, padding: '10px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', lineHeight: 1.7, resize: 'vertical' as const, minHeight: 80 }} placeholder="Editor notes..." />
+                  <textarea value={modalProject.editor_notes || ''} onChange={e => setModalProject(p => { const u = p ? { ...p, editor_notes: e.target.value } : p; if (u) triggerAutoSave(u); return u })} style={{ width: '100%', background: 'rgba(100,150,220,0.03)', border: '0.5px solid rgba(100,150,220,0.12)', borderRadius: 4, padding: '10px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', lineHeight: 1.7, resize: 'vertical' as const, minHeight: 80 }} placeholder="Editor notes..." />
                 </div>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 16, borderTop: '0.5px solid rgba(200,194,187,0.09)' }}>
                 <div style={{ display: 'flex', gap: 8 }}>
-                <button onClick={() => { setShowBriefDoc(true); if (!briefDocContent) setBriefDocContent('# ' + modalProject.title + '\n\n## Brief\n\n') }} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'rgba(200,194,187,0.08)', cursor: 'pointer', fontFamily: 'inherit' }}>✦ Brief</button>
+                {modalProject.drive_url && (
+                  <button onClick={() => deliverProject(modalProject)} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(100,200,130,0.4)', color: modalProject.stage === 'Awaiting Confirmation' ? 'rgba(100,200,130,0.4)' : 'rgba(100,200,130,0.9)', background: modalProject.stage === 'Awaiting Confirmation' ? 'transparent' : 'rgba(100,200,130,0.08)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>
+                    {modalProject.stage === 'Awaiting Confirmation' ? 'Redeliver to client' : 'Deliver to client'}
+                  </button>
+                )}
                 {modalProject.category === 'Property' && modalProject.address && (
                   <button onClick={() => generateProjectBrief(modalProject)} disabled={briefLoading} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: `0.5px solid ${briefGenerated ? 'rgba(100,200,130,0.3)' : 'rgba(200,194,187,0.2)'}`, color: briefGenerated ? 'rgba(100,200,130,0.8)' : 'rgba(200,194,187,0.5)', background: briefGenerated ? 'rgba(100,200,130,0.06)' : 'transparent', cursor: briefLoading ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>
-                    {briefLoading ? '✦ Researching...' : briefGenerated ? '✓ Brief saved' : '✦ Generate brief'}
+                    {briefLoading ? 'Researching...' : briefGenerated ? 'Brief saved' : 'Generate brief'}
                   </button>
                 )}
                 {modalProject.stage === 'Awaiting Confirmation' && !modalProject.archived && (
-                  <button onClick={() => archiveProject(modalProject.id, true)} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(210,175,80,0.3)', color: 'rgba(210,175,80,0.8)', background: 'rgba(210,175,80,0.06)', cursor: 'pointer', fontFamily: 'inherit' }}>📦 Archive</button>
+                  <button onClick={async () => { archiveProject(modalProject.id, true) }} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(210,175,80,0.3)', color: 'rgba(210,175,80,0.8)', background: 'rgba(210,175,80,0.06)', cursor: 'pointer', fontFamily: 'inherit' }}>Send invoice & archive</button>
                 )}
                 {modalProject.archived && (
-                  <button onClick={() => archiveProject(modalProject.id, false)} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(100,200,130,0.3)', color: 'rgba(100,200,130,0.8)', background: 'rgba(100,200,130,0.06)', cursor: 'pointer', fontFamily: 'inherit' }}>↩ Unarchive</button>
+                  <button onClick={() => archiveProject(modalProject.id, false)} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(100,200,130,0.3)', color: 'rgba(100,200,130,0.8)', background: 'rgba(100,200,130,0.06)', cursor: 'pointer', fontFamily: 'inherit' }}>Unarchive</button>
                 )}
               </div>
-                <button onClick={async () => { await saveModalProject(); setModalProject(null); setModalEditing(false); setModalFullscreen(false); router.push('/portal/studio/projects') }} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>← Back to projects</button>
               </div>
             </div>
           </div>
@@ -595,34 +666,73 @@ export default function ProjectsPage() {
                 <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', marginTop: 2 }}>Freeform document</div>
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
-                <button onClick={async () => { await supabase.from('projects1').update({ general_notes: briefDocContent }).eq('id', modalProject.id); setShowBriefDoc(false) }} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '6px 14px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>Save & close</button>
+                <button onClick={async () => { const html = briefEditorRef.current?.innerHTML || briefDocContent; await supabase.from('projects1').update({ general_notes: html }).eq('id', modalProject.id); setBriefDocContent(html); setShowBriefDoc(false) }} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '6px 14px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>Save & close</button>
                 <button onClick={() => setShowBriefDoc(false)} style={{ fontSize: 18, color: 'rgba(200,194,187,0.4)', background: 'transparent', border: 'none', cursor: 'pointer', lineHeight: 1 }}>×</button>
               </div>
             </div>
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: 24, overflow: 'hidden' }}>
-              <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' as const }}>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '16px 24px', overflow: 'hidden' }}>
+              {/* TOOLBAR */}
+              <div style={{ display: 'flex', gap: 4, marginBottom: 12, flexWrap: 'wrap' as const, alignItems: 'center', padding: '8px 12px', background: 'rgba(200,194,187,0.04)', borderRadius: 6, border: '0.5px solid rgba(200,194,187,0.09)' }}>
+                <select onChange={e => { document.execCommand('formatBlock', false, e.target.value); e.target.value = 'p' }} style={{ fontSize: 11, background: 'transparent', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 3, padding: '3px 8px', color: 'rgba(200,194,187,0.6)', cursor: 'pointer', fontFamily: 'inherit', outline: 'none' }}>
+                  <option value="p">Paragraph</option>
+                  <option value="h1">Heading 1</option>
+                  <option value="h2">Heading 2</option>
+                  <option value="h3">Heading 3</option>
+                  <option value="h4">Heading 4</option>
+                </select>
+                <select onChange={e => { document.execCommand('fontName', false, e.target.value) }} style={{ fontSize: 11, background: 'transparent', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 3, padding: '3px 8px', color: 'rgba(200,194,187,0.6)', cursor: 'pointer', fontFamily: 'inherit', outline: 'none' }}>
+                  <option value="Inter, sans-serif">Sans</option>
+                  <option value="Georgia, serif">Serif</option>
+                  <option value="ui-monospace, monospace">Mono</option>
+                </select>
+                <div style={{ width: 1, height: 20, background: 'rgba(200,194,187,0.12)', margin: '0 4px' }} />
                 {[
-                  { label: 'H1', text: '\n# ' },
-                  { label: 'H2', text: '\n## ' },
-                  { label: 'H3', text: '\n### ' },
-                  { label: '— List', text: '\n- ' },
-                  { label: '✓ Task', text: '\n- [ ] ' },
-                  { label: '─ Divider', text: '\n\n---\n\n' },
-                  { label: 'Bold', text: '**bold**' },
-                ].map(({ label, text }) => (
-                  <button key={label} onClick={() => setBriefDocContent((c: string) => c + text)} style={{ fontSize: 10, padding: '4px 10px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.15)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>{label}</button>
+                  { label: 'B', cmd: 'bold', style: { fontWeight: 700 } },
+                  { label: 'I', cmd: 'italic', style: { fontStyle: 'italic' } },
+                  { label: 'U', cmd: 'underline', style: { textDecoration: 'underline' } },
+                ].map(({ label, cmd, style }) => (
+                  <button key={cmd} onMouseDown={e => { e.preventDefault(); document.execCommand(cmd) }} style={{ fontSize: 12, padding: '3px 9px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.15)', color: 'rgba(200,194,187,0.6)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit', ...style }}>{label}</button>
                 ))}
+                <div style={{ width: 1, height: 20, background: 'rgba(200,194,187,0.12)', margin: '0 4px' }} />
+                {[
+                  { label: '• List', cmd: 'insertUnorderedList' },
+                  { label: '1. List', cmd: 'insertOrderedList' },
+                ].map(({ label, cmd }) => (
+                  <button key={cmd} onMouseDown={e => { e.preventDefault(); document.execCommand(cmd) }} style={{ fontSize: 11, padding: '3px 9px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.15)', color: 'rgba(200,194,187,0.6)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>{label}</button>
+                ))}
+                <div style={{ width: 1, height: 20, background: 'rgba(200,194,187,0.12)', margin: '0 4px' }} />
+                <button onMouseDown={e => { e.preventDefault(); document.execCommand('insertHorizontalRule') }} style={{ fontSize: 11, padding: '3px 9px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.15)', color: 'rgba(200,194,187,0.6)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>─ Rule</button>
+                <button onMouseDown={e => { e.preventDefault(); document.execCommand('removeFormat') }} style={{ fontSize: 11, padding: '3px 9px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.15)', color: 'rgba(200,194,187,0.6)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>✕ Clear</button>
               </div>
-              <textarea
-                value={briefDocContent}
-                onChange={e => setBriefDocContent(e.target.value)}
-                style={{ flex: 1, background: 'rgba(200,194,187,0.02)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 6, padding: '16px 20px', fontSize: 13, color: '#C8C2BB', fontFamily: 'ui-monospace, monospace', lineHeight: 1.8, resize: 'none', outline: 'none' }}
-                placeholder="Start writing your brief..."
+              {/* EDITOR */}
+              <style>{`
+                .brief-editor h1 { font-size: 26px; font-weight: 800; color: #fff; margin: 24px 0 8px; letter-spacing: -0.02em; text-transform: uppercase; }
+                .brief-editor h2 { font-size: 18px; font-weight: 700; color: #C8C2BB; margin: 20px 0 6px; letter-spacing: -0.01em; }
+                .brief-editor h3 { font-size: 14px; font-weight: 600; color: rgba(200,194,187,0.8); margin: 16px 0 4px; }
+                .brief-editor h4 { font-size: 12px; font-weight: 600; color: rgba(200,194,187,0.6); margin: 12px 0 4px; text-transform: uppercase; letter-spacing: 0.08em; }
+                .brief-editor p { margin: 4px 0; color: rgba(200,194,187,0.7); line-height: 1.8; font-size: 13px; }
+                .brief-editor ul { margin: 6px 0 6px 20px; padding: 0; }
+                .brief-editor ol { margin: 6px 0 6px 20px; padding: 0; }
+                .brief-editor li { color: rgba(200,194,187,0.7); line-height: 1.8; font-size: 13px; margin: 2px 0; }
+                .brief-editor hr { border: none; border-top: 0.5px solid rgba(200,194,187,0.12); margin: 20px 0; }
+                .brief-editor b, .brief-editor strong { color: #C8C2BB; font-weight: 600; }
+                .brief-editor i, .brief-editor em { color: rgba(200,194,187,0.7); }
+                .brief-editor u { text-decoration-color: rgba(200,194,187,0.4); }
+                .brief-editor:focus { outline: none; }
+                .brief-editor:empty:before { content: 'Start writing your brief...'; color: rgba(200,194,187,0.2); }
+              `}</style>
+              <div
+                ref={briefEditorRef}
+                contentEditable
+                suppressContentEditableWarning
+                className="brief-editor"
+                onInput={e => setBriefDocContent((e.target as HTMLDivElement).innerHTML)}
+                style={{ flex: 1, background: 'rgba(200,194,187,0.02)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 6, padding: '24px 32px', fontSize: 13, color: '#C8C2BB', fontFamily: 'Inter, sans-serif', lineHeight: 1.8, outline: 'none', overflowY: 'auto' as const, minHeight: 200 }}
               />
             </div>
             <div style={{ padding: '12px 24px', borderTop: '0.5px solid rgba(200,194,187,0.09)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
-              <span style={{ fontSize: 11, color: 'rgba(200,194,187,0.25)' }}>{briefDocContent.length} characters</span>
-              <button onClick={() => navigator.clipboard.writeText(briefDocContent)} style={{ fontSize: 10, color: 'rgba(200,194,187,0.35)', background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>Copy to clipboard</button>
+              <span style={{ fontSize: 11, color: 'rgba(200,194,187,0.25)' }}>Rich text editor</span>
+              <button onClick={() => navigator.clipboard.writeText((document.querySelector('[contenteditable]') as HTMLElement)?.innerText || '')} style={{ fontSize: 10, color: 'rgba(200,194,187,0.35)', background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>Copy plain text</button>
             </div>
           </div>
         </div>
