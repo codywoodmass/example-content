@@ -2,6 +2,7 @@
 import StudioSidebar from '../StudioSidebar'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { Suspense } from 'react'
 import { supabase } from '@/lib/supabase'
 
 function formatDate(dateStr: string | null | undefined): string {
@@ -27,6 +28,7 @@ const STAGE_COLORS: Record<string, { color: string; bg: string; border: string }
 
 type Project = {
   id: string
+  created_at: string
   title: string
   client: string
   contact: string
@@ -36,15 +38,24 @@ type Project = {
   stage: string
   shoot_date: string
   draft_due: string
+  brief_due: string
   delivery_due: string
   drive_url: string
   progress: number
   from_booking: boolean
   general_notes: string
   editor_notes: string
+  archived: boolean
+  deliverables: string
+  reference_url: string
+  supplied_info: string
+  shoot_window_start: string
+  shoot_window_end: string
+  form_booking: boolean
+  notes: string
 }
 
-export default function ProjectsPage() {
+function ProjectsPageInner() {
   const router = useRouter()
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
@@ -251,7 +262,7 @@ export default function ProjectsPage() {
     if (!error && data) {
       setProjects(p => [data, ...p])
       setShowNewModal(false)
-      setNewForm({ title: '', client: '', contact: '', email: '', category: 'Property', stage: 'Pre-Production', shoot_date: '', draft_due: '', delivery_due: '', address: '' })
+      setNewForm({ title: '', client: '', contact: '', email: '', category: 'Property', stage: 'Pre-Production', brief_due: '', shoot_window_start: '', shoot_window_end: '', shoot_date: '', draft_due: '', delivery_due: '', address: '', reference_url: '', supplied_info: '' })
       router.push(`/portal/studio/projects/${data.id}`)
     }
     setSaving(false)
@@ -740,4 +751,7 @@ export default function ProjectsPage() {
       </div>
     </main>
   )
+}
+export default function ProjectsPage() {
+  return <Suspense fallback={<div style={{background:'#0E1014',minHeight:'100vh'}}/>}><ProjectsPageInner /></Suspense>
 }
