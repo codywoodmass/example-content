@@ -7,6 +7,8 @@ export default function LoginPage() {
   const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [resetSent, setResetSent] = useState(false)
+  const [resetLoading, setResetLoading] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [mode, setMode] = useState<'client' | 'studio'>('client')
@@ -99,7 +101,15 @@ export default function LoginPage() {
           </button>
 
           <div style={{ textAlign: 'center', marginTop: 8 }}>
-            <a href="#" style={{ fontSize: 12, color: 'rgba(200,194,187,0.35)', textDecoration: 'none' }}>Forgot your password?</a>
+            <button onClick={async () => {
+                if (!email) { alert('Enter your email address first'); return }
+                setResetLoading(true)
+                await supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + '/reset-password' })
+                setResetSent(true)
+                setResetLoading(false)
+              }} style={{ fontSize: 12, color: 'rgba(200,194,187,0.35)', background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit', padding: 0 }}>
+                {resetLoading ? 'Sending...' : resetSent ? 'Reset email sent!' : 'Forgot your password?'}
+              </button>
           </div>
         </form>
 
