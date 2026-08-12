@@ -43,7 +43,6 @@ const DEFAULT_EQUIPMENT: EquipmentItem[] = [
 const DEFAULT_SLIDES: SlideItem[] = [
   { id: 'cover', type: 'cover', label: 'Cover' },
   { id: 'brief', type: 'brief', label: 'The Scope' },
-  { id: 'deliverables', type: 'deliverables', label: 'Deliverables' },
   { id: 'team', type: 'team', label: 'The Team' },
   { id: 'moodboard', type: 'moodboard', label: 'Moodboard' },
   { id: 'investment', type: 'investment', label: 'Investment' },
@@ -78,6 +77,11 @@ export default function PitchDeckPage() {
   const [shootDays, setShootDays] = useState(2)
   const [shootDates, setShootDates] = useState('15-16 Jul 2026')
   const [locations, setLocations] = useState('Elephant Hill Estate, Te Mata Peak')
+  const [locationList, setLocationList] = useState<string[]>([])
+  const [locationInput, setLocationInput] = useState('')
+  const [locationSuggestions, setLocationSuggestions] = useState<any[]>([])
+  const [showLocationSuggestions, setShowLocationSuggestions] = useState(false)
+  const [locationDebounce, setLocationDebounce] = useState<any>(null)
   const [deliveryEstimate, setDeliveryEstimate] = useState('10-14 business days')
   const [extraHours, setExtraHours] = useState(0)
   const [deliverables, setDeliverables] = useState<DeliverableItem[]>([
@@ -118,18 +122,149 @@ export default function PitchDeckPage() {
   const [tcNotes, setTcNotes] = useState('')
   const [shootHours, setShootHours] = useState(2)
   const [editHours, setEditHours] = useState(0)
+  const [preProdHours, setPreProdHours] = useState(0)
+  const [travelKm, setTravelKm] = useState(0)
   const [preProdFee, setPreProdFee] = useState(0)
   const [travelFee, setTravelFee] = useState(0)
   const [showPreProd, setShowPreProd] = useState(false)
   const [showTravel, setShowTravel] = useState(false)
+  // Editable rates
+  const [rateFilming, setRateFilming] = useState(175)
+  const [rateEditing, setRateEditing] = useState(100)
+  const [ratePreProd, setRatePreProd] = useState(50)
+  const [rateTravelKm, setRateTravelKm] = useState(1.17)
+  // Dates
+  const [shootStartTime, setShootStartTime] = useState('08:00')
+  const [shootEndTime, setShootEndTime] = useState('17:00')
+  const [draftDue, setDraftDue] = useState('')
+  const [finalsDue, setFinalsDue] = useState('')
+  // Brief status
+  const [briefId, setBriefId] = useState<string | null>(null)
+  const [briefStatus, setBriefStatus] = useState<'draft' | 'sent' | 'approved'>('draft')
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+
+  // Auto-calculate fees when rates/hours change
+  const calcFilming = shootHours * rateFilming
+  const calcEditing = editHours * rateEditing
+  const calcPreProd = preProdHours * ratePreProd
+  const calcTravel = travelKm * rateTravelKm
 
   const [moodboardImages, setMoodboardImages] = useState<string[]>([])
   const [moodboardUploading, setMoodboardUploading] = useState(false)
 
+  async function searchLocations(query: string) {
+    if (!query || query.length < 3) { setLocationSuggestions([]); return }
+    try {
+      const res = await fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?country=NZ&access_token=${process.env.NEXT_PUBLIC_MAPBOX_TOKEN}&limit=5`)
+      const data = await res.json()
+      setLocationSuggestions(data.features || [])
+      setShowLocationSuggestions(true)
+    } catch (e) { setLocationSuggestions([]) }
+  }
+
+  function handleLocationInput(val: string) {
+    setLocationInput(val)
+    if (locationDebounce) clearTimeout(locationDebounce)
+    setLocationDebounce(setTimeout(() => searchLocations(val), 350))
+  }
+
+  function addLocation(placeName: string) {
+    if (!locationList.includes(placeName)) {
+      const newList = [...locationList, placeName]
+      setLocationList(newList)
+      setLocations(newList.join(', '))
+    }
+    setLocationInput('')
+    setLocationSuggestions([])
+    setShowLocationSuggestions(false)
+  }
+
+  function removeLocation(loc: string) {
+    const newList = locationList.filter(l => l !== loc)
+    setLocationList(newList)
+    setLocations(newList.join(', '))
+  }
+
+  async function saveBrief() {
+    setSaving(true)
+    const briefData = {
+      clientName, contactName, clientEmail, projectName, category, jobType,
+      jobDescription, jobDeliverables, projectGoals, tone, references,
+      shootDuration, shootDays, shootDates, shootStartTime, shootEndTime,
+      draftDue, finalsDue, locations, deliveryEstimate,
+      deliverables, crew: crew.filter(c => c.selected), equipment: equipment.filter(e => e.selected),
+      shootHours, editHours, preProdHours, travelKm,
+      rateFilming, rateEditing, ratePreProd, rateTravelKm,
+      calcFilming, calcEditing, calcPreProd, calcTravel,
+      moodboardImages, pricingNotes, tcNotes, template,
+    }
+    if (briefId) {
+      await supabase.from('briefs').update({ data: briefData, client_name: clientName, client_email: clientEmail, project_name: projectName }).eq('id', briefId)
+    } else {
+      const { data } = await supabase.from('briefs').insert([{ client_name: clientName, client_email: clientEmail, project_name: projectName, status: 'draft', data: briefData }]).select().single()
+      if (data) setBriefId(data.id)
+    }
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2000)
+    setSaving(false)
+  }
+
+  async function sendBriefToClient() {
+    await saveBrief()
+    if (!briefId) return
+    await supabase.from('briefs').update({ status: 'sent' }).eq('id', briefId)
+    setBriefStatus('sent')
+    // Add notification for client
+    await supabase.from('notifications').insert([{
+      user_email: clientEmail,
+      type: 'brief_ready',
+      title: 'Your production brief is ready',
+      message: 'Your brief for ' + projectName + ' is ready to review and approve.',
+      read: false,
+    }])
+    alert('Brief sent to ' + clientEmail)
+  }
+
+  async function convertToProject() {
+    if (!confirm('Convert this brief to a project?')) return
+    const { data } = await supabase.from('projects1').insert([{
+      title: projectName,
+      client: clientName,
+      email: clientEmail,
+      category: category === 'Commercial' ? 'Commercial' : 'Property',
+      stage: 'Pre-Production',
+      progress: 10,
+      shoot_date: shootDates || null,
+      draft_due: draftDue || null,
+      delivery_due: finalsDue || null,
+      from_booking: false,
+      general_notes: jobDescription,
+      deliverables: 'PACKAGE: ' + jobType + '\nDELIVERABLES: ' + jobDeliverables,
+    }]).select().single()
+    if (data) {
+      if (briefId) await supabase.from('briefs').update({ project_id: data.id, status: 'approved' }).eq('id', briefId)
+      alert('Project created successfully!')
+    }
+  }
+
+  // Auto-save when in brief/deck view
+  useEffect(() => {
+    if (view !== 'brief' && view !== 'deck') return
+    const timer = setTimeout(() => {
+      if (clientName && projectName) saveBrief()
+    }, 2000)
+    return () => clearTimeout(timer)
+  }, [clientName, contactName, clientEmail, projectName, category, jobType, jobDescription,
+      projectGoals, tone, references, shootDuration, shootDays, shootDates, shootStartTime,
+      shootEndTime, draftDue, finalsDue, locations, deliverables, crew, equipment,
+      shootHours, editHours, preProdHours, travelKm, rateFilming, rateEditing,
+      ratePreProd, rateTravelKm, pricingNotes, tcNotes, moodboardImages])
+
   const t = TEMPLATES[template]
   const inp: React.CSSProperties = { background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }
   const lbl: React.CSSProperties = { fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)', marginBottom: 6, display: 'block' }
-  const panelS: React.CSSProperties = { background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, marginBottom: 14, overflow: 'hidden' }
+  const panelS: React.CSSProperties = { background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, marginBottom: 14 }
   const btnP: React.CSSProperties = { fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }
   const btnG: React.CSSProperties = { fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }
 
@@ -182,10 +317,10 @@ export default function PitchDeckPage() {
   const hireEq = selEq.filter(e => e.hire)
 
   const SHOOT_RATES: Record<string, number> = { hourly: 175, halfday: 700, fullday: 1400, multiday: 1400 }
-  const shootFee = shootDuration === 'hourly' ? shootHours * 175 : shootDuration === 'halfday' ? 700 : shootDuration === 'fullday' ? 1400 : shootDays * 1400
-  const editFee = editHours * 100
+  const shootFee = shootHours * rateFilming
+  const editFee = editHours * rateEditing
   const hireTotal = hireEq.reduce((s: number, e: any) => s + e.hireRate * e.days, 0)
-  const subtotal = shootFee + editFee + (showPreProd ? preProdFee : 0) + (showTravel ? travelFee : 0) + hireTotal
+  const subtotal = shootFee + editFee + (showPreProd ? calcPreProd : 0) + (showTravel ? calcTravel : 0) + hireTotal
   const gst = Math.round(subtotal * 0.15)
   const total = subtotal + gst
 
@@ -253,18 +388,24 @@ export default function PitchDeckPage() {
           </div>
           <div>
             <div style={{ fontSize: scale * 5.5, letterSpacing: '0.16em', textTransform: 'uppercase', color: t.muted, marginBottom: scale * 4, fontWeight: 600 }}>Deliverables</div>
-            {jobDeliverables.split('\n').filter(Boolean).map((line: string, i: number) => (
-              <div key={i} style={{ display: 'flex', gap: scale * 5, fontSize: scale * 7, color: t.text, lineHeight: 1.7 }}>
-                <span style={{ color: t.muted }}>—</span>{line}
-              </div>
-            ))}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: scale * 4 }}>
+              {deliverables.map((d: any, i: number) => (
+                <div key={i} style={{ borderBottom: `0.5px solid ${t.border}`, paddingBottom: scale * 4 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: scale * 2 }}>
+                    <div style={{ fontSize: scale * 7, color: t.text, fontWeight: 500 }}>{d.quantity}x {d.name}</div>
+                    {d.duration && <div style={{ fontSize: scale * 6, color: t.accent, background: 'rgba(200,194,187,0.08)', padding: `${scale}px ${scale*4}px`, borderRadius: scale, border: `0.5px solid ${t.border}` }}>{d.duration}</div>}
+                  </div>
+                  {d.formats && d.formats.length > 0 && (
+                    <div style={{ display: 'flex', gap: scale * 2, flexWrap: 'wrap' }}>
+                      {d.formats.map((fmt: string, fi: number) => (
+                        <span key={fi} style={{ fontSize: scale * 5, color: t.muted, background: 'rgba(200,194,187,0.05)', padding: `${scale}px ${scale*3}px`, borderRadius: scale, border: `0.5px solid ${t.border}` }}>{fmt}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
-        <div style={{ height: 0.5, background: t.border, marginBottom: scale * 8 }} />
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: scale * 8 }}>
-          {projectGoals && <div><div style={{ fontSize: scale * 5.5, letterSpacing: '0.16em', textTransform: 'uppercase', color: t.muted, marginBottom: scale * 3, fontWeight: 600 }}>OUR APPROACH</div><div style={{ fontSize: scale * 6.5, color: t.text, lineHeight: 1.6 }}>{projectGoals}</div></div>}
-          {tone && <div><div style={{ fontSize: scale * 5.5, letterSpacing: '0.16em', textTransform: 'uppercase', color: t.muted, marginBottom: scale * 3, fontWeight: 600 }}>Tone & mood</div><div style={{ fontSize: scale * 6.5, color: t.text, lineHeight: 1.6 }}>{tone}</div></div>}
-          {references && <div><div style={{ fontSize: scale * 5.5, letterSpacing: '0.16em', textTransform: 'uppercase', color: t.muted, marginBottom: scale * 3, fontWeight: 600 }}>References</div><div style={{ fontSize: scale * 6.5, color: t.text, lineHeight: 1.6 }}>{references}</div></div>}
         </div>
         {footer}
       </div>
@@ -371,16 +512,16 @@ export default function PitchDeckPage() {
               <span style={{ fontSize: scale * 7, color: t.accent, fontWeight: 600 }}>${editFee.toLocaleString()}</span>
             </div>
           )}
-          {showPreProd && preProdFee > 0 && (
+          {showPreProd && calcPreProd > 0 && (
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: `${scale*3}px 0`, borderBottom: `0.5px solid ${t.border}` }}>
-              <span style={{ fontSize: scale * 7, color: t.accentDim }}>Pre-production</span>
-              <span style={{ fontSize: scale * 7, color: t.accent, fontWeight: 600 }}>${preProdFee.toLocaleString()}</span>
+              <span style={{ fontSize: scale * 7, color: t.accentDim }}>Pre-production — {preProdHours}hrs</span>
+              <span style={{ fontSize: scale * 7, color: t.accent, fontWeight: 600 }}>${calcPreProd.toLocaleString()}</span>
             </div>
           )}
-          {showTravel && travelFee > 0 && (
+          {showTravel && calcTravel > 0 && (
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: `${scale*3}px 0`, borderBottom: `0.5px solid ${t.border}` }}>
               <span style={{ fontSize: scale * 7, color: t.accentDim }}>Travel & expenses</span>
-              <span style={{ fontSize: scale * 7, color: t.accent, fontWeight: 600 }}>${travelFee.toLocaleString()}</span>
+              <span style={{ fontSize: scale * 7, color: t.accent, fontWeight: 600 }}>${calcTravel.toFixed(2)}</span>
             </div>
           )}
           {hireEq.map(e => (
@@ -437,14 +578,18 @@ export default function PitchDeckPage() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {view === 'deck' && <>
             <button style={{ ...btnG, display: 'flex', alignItems: 'center', gap: 6 }} onClick={() => {
-              const printData = { slides, template, clientName, contactName, clientEmail, logoUrl, projectName, category, jobType, jobDescription, jobDeliverables, projectGoals, tone, references, shootDuration, shootDays, shootDates, locations, deliveryEstimate, extraHours, deliverables, crew, equipment, pricingNotes, showDeposit, tcNotes, moodboardImages }
-              localStorage.setItem('pitch_print_data', JSON.stringify(printData))
+              const printData = { slides, template, clientName, contactName, clientEmail, logoUrl, projectName, category, jobType, jobDescription, jobDeliverables, projectGoals, tone, references, shootDuration, shootDays, shootDates, shootStartTime, shootEndTime, draftDue, finalsDue, locations, deliveryEstimate, extraHours, deliverables, crew: crew.filter((c:any) => c.selected), equipment: equipment.filter((e:any) => e.selected), pricingNotes, showDeposit, tcNotes, moodboardImages, shootHours, editHours, preProdHours, travelKm, rateFilming, rateEditing, ratePreProd, rateTravelKm, calcFilming, calcEditing, calcPreProd, calcTravel, shootFee, editFee, subtotal, gst, total, showPreProd, showTravel }
               window.open('/portal/studio/pitches/print', '_blank')
-            }}>↓ PDF</button>
-            <button style={btnP} onClick={() => setSendModal(true)}>Send to client</button>
+            }}>PDF</button>
+            <button style={btnG} onClick={saveBrief}>{saving ? 'Saving...' : saved ? 'Saved' : 'Save'}</button>
+            <button style={btnG} onClick={sendBriefToClient}>Send to client</button>
+            <button style={btnP} onClick={convertToProject}>Convert to project</button>
           </>}
-          {view === 'brief' && <button style={btnP} onClick={() => { setView('deck'); setActiveSlide(0) }}>Preview deck →</button>}
-          {view === 'list' && <button style={btnP} onClick={() => setView('template')}>+ New deck</button>}
+          {view === 'brief' && <>
+            <button style={btnG} onClick={saveBrief}>{saving ? 'Saving...' : saved ? 'Saved' : 'Save draft'}</button>
+            <button style={btnP} onClick={() => { setView('deck'); setActiveSlide(0) }}>Preview brief</button>
+          </>}
+          {view === 'list' && <button style={btnP} onClick={() => setView('template')}>+ New brief</button>}
         </div>
       </div>
 
@@ -521,20 +666,10 @@ export default function PitchDeckPage() {
             <div style={{ padding: 18 }}>
               <div style={{ marginBottom: 14 }}><label style={lbl}>Job type</label><input style={inp} value={jobType} onChange={e => setJobType(e.target.value)} placeholder="e.g. Brand Film, Event Coverage, Architectural Video" /></div>
               <div style={{ marginBottom: 14 }}><label style={lbl}>Job description</label><textarea style={{ ...inp, resize: 'vertical' as const, lineHeight: 1.65 }} rows={3} value={jobDescription} onChange={e => setJobDescription(e.target.value)} /></div>
-              <div><label style={lbl}>Key deliverables (one per line)</label><textarea style={{ ...inp, resize: 'vertical' as const, lineHeight: 1.65 }} rows={4} value={jobDeliverables} onChange={e => setJobDeliverables(e.target.value)} placeholder="1x Hero Brand Film (2-3 min)&#10;4x Social Reels&#10;1x BTS Cut" /></div>
+              
             </div>
           </div>
 
-          <div style={panelS}>
-            <div style={{ padding: '13px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>Creative direction</div>
-            <div style={{ padding: 18 }}>
-              <div style={{ marginBottom: 14 }}><label style={lbl}>Project goals</label><textarea style={{ ...inp, resize: 'vertical' as const, lineHeight: 1.65 }} rows={2} value={projectGoals} onChange={e => setProjectGoals(e.target.value)} /></div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-                <div><label style={lbl}>Tone & mood</label><input style={inp} value={tone} onChange={e => setTone(e.target.value)} /></div>
-                <div><label style={lbl}>References</label><input style={inp} value={references} onChange={e => setReferences(e.target.value)} placeholder="Films, brands, visual styles..." /></div>
-              </div>
-            </div>
-          </div>
 
           <div style={panelS}>
             <div style={{ padding: '13px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>Shoot details</div>
@@ -546,12 +681,47 @@ export default function PitchDeckPage() {
                   ))}
                 </div>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, overflow: 'visible' }}>
                 {shootDuration === 'multiday' && <div><label style={lbl}>Days</label><input style={inp} type="number" min="2" value={shootDays} onChange={e => setShootDays(parseInt(e.target.value)||2)} /></div>}
                 <div><label style={lbl}>Additional hours</label><input style={inp} type="number" min="0" value={extraHours} onChange={e => setExtraHours(parseInt(e.target.value)||0)} /></div>
-                <div><label style={lbl}>Shoot dates</label><input style={inp} value={shootDates} onChange={e => setShootDates(e.target.value)} /></div>
-                <div><label style={lbl}>Locations</label><input style={inp} value={locations} onChange={e => setLocations(e.target.value)} /></div>
-                <div><label style={lbl}>Delivery estimate</label><input style={inp} value={deliveryEstimate} onChange={e => setDeliveryEstimate(e.target.value)} /></div>
+                <div><label style={lbl}>Shoot date</label><input style={inp} type="date" value={shootDates} onChange={e => setShootDates(e.target.value)} /></div>
+                <div><label style={lbl}>Start time</label>
+                  <select style={inp} value={shootStartTime} onChange={e => setShootStartTime(e.target.value)}>
+                    {['06:00','06:30','07:00','07:30','08:00','08:30','09:00','09:30','10:00','10:30','11:00','11:30','12:00','13:00','14:00','15:00','16:00','17:00','18:00'].map(t => <option key={t}>{t}</option>)}
+                  </select>
+                </div>
+                <div><label style={lbl}>End time</label>
+                  <select style={inp} value={shootEndTime} onChange={e => setShootEndTime(e.target.value)}>
+                    {['08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00'].map(t => <option key={t}>{t}</option>)}
+                  </select>
+                </div>
+                <div><label style={lbl}>Draft due</label><input style={inp} type="date" value={draftDue} onChange={e => setDraftDue(e.target.value)} /></div>
+                <div><label style={lbl}>Finals due</label><input style={inp} type="date" value={finalsDue} onChange={e => setFinalsDue(e.target.value)} /></div>
+                <div style={{ gridColumn: 'span 2', position: 'relative', zIndex: 30 }}>
+                  <label style={lbl}>Locations</label>
+                  <div style={{ position: 'relative' }}>
+                    <input style={inp} value={locationInput} onChange={e => handleLocationInput(e.target.value)} onBlur={() => setTimeout(() => setShowLocationSuggestions(false), 200)} placeholder="Search and add locations..." />
+                    {showLocationSuggestions && locationSuggestions.length > 0 && (
+                      <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, zIndex: 50, overflow: 'hidden', marginTop: 4 }}>
+                        {locationSuggestions.map((s: any, i: number) => (
+                          <div key={i} onClick={() => addLocation(s.place_name)} style={{ padding: '9px 14px', cursor: 'pointer', borderBottom: i < locationSuggestions.length - 1 ? '0.5px solid rgba(200,194,187,0.06)' : 'none', fontSize: 12, color: '#C8C2BB' }} onMouseEnter={e => (e.currentTarget.style.background = 'rgba(200,194,187,0.05)')} onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                            {s.place_name}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  {locationList.length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+                      {locationList.map((loc, i) => (
+                        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(200,194,187,0.08)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 3, padding: '4px 10px', fontSize: 11, color: '#C8C2BB' }}>
+                          <span>{loc.split(',')[0]}</span>
+                          <button onClick={() => removeLocation(loc)} style={{ background: 'transparent', border: 'none', color: 'rgba(200,194,187,0.4)', cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: 0 }}>×</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -728,7 +898,7 @@ export default function PitchDeckPage() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                   <div><label style={lbl}>Job type</label><input style={inp} value={jobType} onChange={e => setJobType(e.target.value)} /></div>
                   <div><label style={lbl}>Description</label><textarea style={{ ...inp, resize: 'vertical' as const, lineHeight: 1.6 }} rows={3} value={jobDescription} onChange={e => setJobDescription(e.target.value)} /></div>
-                  <div><label style={lbl}>Key deliverables (one per line)</label><textarea style={{ ...inp, resize: 'vertical' as const, lineHeight: 1.6 }} rows={4} value={jobDeliverables} onChange={e => setJobDeliverables(e.target.value)} /></div>
+
                 </div>
               )}
               {currentSlide?.type === 'creative' && (
@@ -780,32 +950,47 @@ export default function PitchDeckPage() {
               )}
               {currentSlide?.type === 'investment' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 4 }}>Shoot fee</div>
-                  {shootDuration === 'hourly' && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <input style={{ ...inp, width: 55, padding: '5px 8px' }} type="number" min="2" value={shootHours} onChange={e => setShootHours(parseInt(e.target.value)||2)} />
-                      <span style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>hrs × $175 = <strong style={{ color: '#C8C2BB' }}>${(shootHours*175).toLocaleString()}</strong></span>
+                  {/* RATES EDITOR */}
+                  <div style={{ background: 'rgba(200,194,187,0.03)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 5, padding: '10px 12px', marginBottom: 8 }}>
+                    <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 8 }}>Editable rates</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                      {[
+                        { label: 'Filming ($/hr)', val: rateFilming, set: setRateFilming },
+                        { label: 'Editing ($/hr)', val: rateEditing, set: setRateEditing },
+                        { label: 'Pre-prod ($/hr)', val: ratePreProd, set: setRatePreProd },
+                        { label: 'Travel ($/km)', val: rateTravelKm, set: setRateTravelKm, step: 0.01 },
+                      ].map(({ label, val, set, step }: any) => (
+                        <div key={label}>
+                          <div style={{ fontSize: 9, color: 'rgba(200,194,187,0.35)', marginBottom: 3 }}>{label}</div>
+                          <input style={{ ...inp, padding: '4px 8px', fontSize: 11 }} type="number" step={step || 1} value={val} onChange={e => set(parseFloat(e.target.value) || 0)} />
+                        </div>
+                      ))}
                     </div>
-                  )}
+                  </div>
+                  <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 4 }}>Shoot fee</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <input style={{ ...inp, width: 55, padding: '5px 8px' }} type="number" min="0" value={shootHours} onChange={e => setShootHours(parseInt(e.target.value)||0)} />
+                    <span style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>hrs × ${rateFilming} = <strong style={{ color: '#C8C2BB' }}>${calcFilming.toLocaleString()}</strong></span>
+                  </div>
                   {shootDuration !== 'hourly' && <div style={{ fontSize: 12, color: '#C8C2BB' }}>${shootFee.toLocaleString()}</div>}
                   <div style={{ borderTop: '0.5px solid rgba(200,194,187,0.09)', paddingTop: 8 }}>
                     <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 6 }}>Editing hours</div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <input style={{ ...inp, width: 55, padding: '5px 8px' }} type="number" min="0" value={editHours} onChange={e => setEditHours(parseInt(e.target.value)||0)} />
-                      <span style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>hrs × $100 = <strong style={{ color: '#C8C2BB' }}>${(editHours*100).toLocaleString()}</strong></span>
+                      <span style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>hrs × ${rateEditing} = <strong style={{ color: '#C8C2BB' }}>${calcEditing.toLocaleString()}</strong></span>
                     </div>
                   </div>
                   <div style={{ borderTop: '0.5px solid rgba(200,194,187,0.09)', paddingTop: 8 }}>
                     <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 11, color: 'rgba(200,194,187,0.55)', marginBottom: showPreProd ? 6 : 0 }}>
                       <input type="checkbox" checked={showPreProd} onChange={e => setShowPreProd(e.target.checked)} style={{ accentColor: '#C8C2BB' }} />Pre-production
                     </label>
-                    {showPreProd && <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>$</span><input style={{ ...inp, flex: 1, padding: '5px 8px' }} type="number" min="0" value={preProdFee} onChange={e => setPreProdFee(parseFloat(e.target.value)||0)} placeholder="0" /></div>}
+                    {showPreProd && <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><input style={{ ...inp, width: 55, padding: '5px 8px' }} type="number" min="0" value={preProdHours} onChange={e => setPreProdHours(parseInt(e.target.value)||0)} /><span style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>hrs × ${ratePreProd} = <strong style={{ color: '#C8C2BB' }}>${calcPreProd.toLocaleString()}</strong></span></div>}
                   </div>
                   <div style={{ borderTop: '0.5px solid rgba(200,194,187,0.09)', paddingTop: 8 }}>
                     <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 11, color: 'rgba(200,194,187,0.55)', marginBottom: showTravel ? 6 : 0 }}>
                       <input type="checkbox" checked={showTravel} onChange={e => setShowTravel(e.target.checked)} style={{ accentColor: '#C8C2BB' }} />Travel & expenses
                     </label>
-                    {showTravel && <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>$</span><input style={{ ...inp, flex: 1, padding: '5px 8px' }} type="number" min="0" value={travelFee} onChange={e => setTravelFee(parseFloat(e.target.value)||0)} placeholder="0" /></div>}
+                    {showTravel && <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><input style={{ ...inp, width: 55, padding: '5px 8px' }} type="number" min="0" value={travelKm} onChange={e => setTravelKm(parseInt(e.target.value)||0)} /><span style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>km × ${rateTravelKm} = <strong style={{ color: '#C8C2BB' }}>${calcTravel.toFixed(2)}</strong></span></div>}
                   </div>
                   {hireEq.length > 0 && (
                     <div style={{ borderTop: '0.5px solid rgba(200,194,187,0.09)', paddingTop: 8 }}>
@@ -866,7 +1051,7 @@ export default function PitchDeckPage() {
             <div style={{ marginBottom: 18 }}><label style={lbl}>Personal note (optional)</label><textarea style={{ ...inp, resize: 'none' as const, lineHeight: 1.6 }} rows={3} placeholder={`Hi ${contactName||'there'}, please find our proposal for ${projectName} attached.`} /></div>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
               <button onClick={() => {
-                    const printData = { slides, template, clientName, contactName, clientEmail, logoUrl, projectName, category, jobType, jobDescription, jobDeliverables, projectGoals, tone, references, shootDuration, shootDays, shootDates, locations, deliveryEstimate, extraHours, deliverables, crew, equipment, pricingNotes, showDeposit, tcNotes, moodboardImages }
+                    const printData = { slides, template, clientName, contactName, clientEmail, logoUrl, projectName, category, jobType, jobDescription, jobDeliverables, projectGoals, tone, references, shootDuration, shootDays, shootDates, shootStartTime, shootEndTime, draftDue, finalsDue, locations, deliveryEstimate, extraHours, deliverables, crew: crew.filter((c:any) => c.selected), equipment: equipment.filter((e:any) => e.selected), pricingNotes, showDeposit, tcNotes, moodboardImages, shootHours, editHours, preProdHours, travelKm, rateFilming, rateEditing, ratePreProd, rateTravelKm, calcFilming, calcEditing, calcPreProd, calcTravel, shootFee, editFee, subtotal, gst, total, showPreProd, showTravel }
                     localStorage.setItem('pitch_print_data', JSON.stringify(printData))
                     window.open('/portal/studio/pitches/print', '_blank')
                   }} style={{ ...btnG, display: 'flex', alignItems: 'center', gap: 6 }}>↓ Save as PDF</button>

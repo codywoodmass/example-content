@@ -23,7 +23,7 @@ export default function PitchPrintPage() {
     </div>
   )
 
-  const { slides, template, clientName, projectName, category, shootDates, shootDuration, shootDays, jobType, jobDescription, jobDeliverables, projectGoals, tone, references, deliverables, crew, equipment, pricingNotes, showDeposit, tcNotes, moodboardImages, deliveryEstimate, extraHours } = data
+  const { slides, template, clientName, projectName, category, shootDates, shootStartTime, shootEndTime, draftDue, finalsDue, shootDuration, shootDays, jobType, jobDescription, jobDeliverables, projectGoals, tone, references, deliverables, crew, equipment, pricingNotes, showDeposit, tcNotes, moodboardImages, deliveryEstimate, extraHours, shootHours, editHours, preProdHours, travelKm, rateFilming, rateEditing, ratePreProd, rateTravelKm, shootFee, editFee, calcPreProd, calcTravel, subtotal, gst, total, showPreProd, showTravel } = data
 
   const DURATION_LABELS: Record<string, string> = {
     hourly: 'Hourly (2hr min)', halfday: 'Half day (4hrs)',
@@ -204,25 +204,19 @@ export default function PitchPrintPage() {
         {label('Investment')}
         <div style={{ fontSize: HS * 0.55, fontWeight: HW, color: t.accent, lineHeight: 1.0, letterSpacing: '-0.02em', marginBottom: 32 }}>PRICING</div>
         <div style={{ flex: 1 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '16px 0', borderBottom: `0.5px solid ${t.border}` }}>
-            <span style={{ fontSize: 16, color: t.accentDim }}>{DURATION_LABELS[shootDuration] || shootDuration}{shootDuration === 'multiday' ? ` ×${shootDays}` : ''}{extraHours > 0 ? ` + ${extraHours}hrs` : ''}</span>
-            <span style={{ fontSize: 16, color: t.accent, fontWeight: 700 }}>TBC</span>
+          {shootFee > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', padding: '14px 0', borderBottom: `0.5px solid ${t.border}` }}><span style={{ fontSize: 15, color: t.accentDim }}>Filming &mdash; {shootHours}hrs</span><span style={{ fontSize: 15, color: t.accent, fontWeight: 700 }}>{'$'+(shootFee||0).toLocaleString()}</span></div>}
+          {editFee > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', padding: '14px 0', borderBottom: `0.5px solid ${t.border}` }}><span style={{ fontSize: 15, color: t.accentDim }}>Editing &mdash; {editHours}hrs</span><span style={{ fontSize: 15, color: t.accent, fontWeight: 700 }}>{'$'+(editFee||0).toLocaleString()}</span></div>}
+          {showPreProd && calcPreProd > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', padding: '14px 0', borderBottom: `0.5px solid ${t.border}` }}><span style={{ fontSize: 15, color: t.accentDim }}>Pre-production &mdash; {preProdHours}hrs</span><span style={{ fontSize: 15, color: t.accent, fontWeight: 700 }}>{'$'+(calcPreProd||0).toLocaleString()}</span></div>}
+          {showTravel && calcTravel > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', padding: '14px 0', borderBottom: `0.5px solid ${t.border}` }}><span style={{ fontSize: 15, color: t.accentDim }}>Travel &mdash; {travelKm}km</span><span style={{ fontSize: 15, color: t.accent, fontWeight: 700 }}>{'$'+(calcTravel||0).toFixed(2)}</span></div>}
+          {(equipment||[]).filter((e:any)=>e.hire).map((e:any,i:number)=><div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '14px 0', borderBottom: `0.5px solid ${t.border}` }}><span style={{ fontSize: 15, color: t.accentDim }}>{e.name} hire x{e.days}</span><span style={{ fontSize: 15, color: t.accent, fontWeight: 700 }}>{'$'+(e.hireRate*e.days).toLocaleString()}</span></div>)}
+          <div style={{ marginTop: 20, borderTop: `1px solid ${t.border}`, paddingTop: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}><span style={{ fontSize: 14, color: t.muted }}>Subtotal</span><span style={{ fontSize: 14, color: t.accent }}>{'$'+(subtotal||0).toLocaleString()}</span></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}><span style={{ fontSize: 14, color: t.muted }}>GST (15%)</span><span style={{ fontSize: 14, color: t.accent }}>{'$'+(gst||0).toLocaleString()}</span></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: 18, fontWeight: 700, color: t.accent }}>Total inc. GST</span><span style={{ fontSize: 22, fontWeight: 900, color: t.accent }}>{'$'+(total||0).toLocaleString()}</span></div>
           </div>
-          {(deliverables || []).map((d: any, i: number) => (
-            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '16px 0', borderBottom: `0.5px solid ${t.border}` }}>
-              <span style={{ fontSize: 16, color: t.accentDim }}>{d.name}{d.quantity > 1 ? ` ×${d.quantity}` : ''}</span>
-              <span style={{ fontSize: 16, color: t.accent, fontWeight: 700 }}>Included</span>
-            </div>
-          ))}
-          {(equipment || []).filter((e: any) => e.selected && e.hire).map((e: any, i: number) => (
-            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '16px 0', borderBottom: `0.5px solid ${t.border}` }}>
-              <span style={{ fontSize: 16, color: t.accentDim }}>{e.name} hire ×{e.days}</span>
-              <span style={{ fontSize: 16, color: t.accent, fontWeight: 700 }}>${(e.hireRate * e.days).toLocaleString()}</span>
-            </div>
-          ))}
           {pricingNotes && <div style={{ fontSize: 14, color: t.muted, marginTop: 16 }}>{pricingNotes}</div>}
         </div>
-        {showDeposit && <div style={{ padding: '16px 20px', background: t.surfaceAlt, fontSize: 14, color: t.muted }}>50% deposit required to confirm. Balance due on delivery.</div>}
+        {showDeposit && <div style={{ padding: '16px 20px', background: t.surfaceAlt, fontSize: 14, color: t.muted, marginTop: 16 }}>50% deposit required to confirm. Balance due on delivery.</div>}
         {footer(idx)}
       </div>
     )
