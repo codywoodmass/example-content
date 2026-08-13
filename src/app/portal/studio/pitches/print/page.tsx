@@ -23,7 +23,7 @@ export default function PitchPrintPage() {
     </div>
   )
 
-  const { slides, template, clientName, projectName, category, shootDates, shootStartTime, shootEndTime, draftDue, finalsDue, shootDuration, shootDays, jobType, jobDescription, jobDeliverables, projectGoals, tone, references, deliverables, crew, equipment, pricingNotes, showDeposit, tcNotes, moodboardImages, deliveryEstimate, extraHours, shootHours, editHours, preProdHours, travelKm, rateFilming, rateEditing, ratePreProd, rateTravelKm, shootFee, editFee, calcPreProd, calcTravel, subtotal, gst, total, showPreProd, showTravel } = data
+  const { slides, template, clientName, projectName, category, shootDates, shootStartTime, shootEndTime, draftDue, finalsDue, locations, shootDuration, shootDays, jobType, jobDescription, jobDeliverables, projectGoals, tone, references, deliverables, crew, equipment, pricingNotes, showDeposit, tcNotes, moodboardImages, deliveryEstimate, extraHours, shootHours, editHours, preProdHours, travelKm, rateFilming, rateEditing, ratePreProd, rateTravelKm, shootFee, editFee, calcPreProd, calcTravel, subtotal, gst, total, showPreProd, showTravel, shotLists } = data
 
   const DURATION_LABELS: Record<string, string> = {
     hourly: 'Hourly (2hr min)', halfday: 'Half day (4hrs)',
@@ -72,27 +72,23 @@ export default function PitchPrintPage() {
   const rule = () => <div style={{ height: 0.5, background: t.border, margin: '28px 0' }} />
 
   function renderSlide(slide: any, idx: number) {
-    const isAlt = ['brief', 'team', 'terms'].includes(slide.type)
-    const base = isAlt ? altSlideStyle : slideStyle
+    const base = idx % 2 === 0 ? slideStyle : altSlideStyle
 
     if (slide.type === 'cover') return (
-      <div key={idx} style={base}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 80 }}>
-          <div>
-            <div style={{ fontSize: 13, letterSpacing: '0.28em', textTransform: 'uppercase', color: t.muted, fontWeight: 700, marginBottom: 6 }}>EXAMPLE CONTENT</div>
-            <div style={{ fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase', color: t.muted, opacity: 0.6 }}>Ever Changing · Always Leading</div>
-          </div>
+      <div key={idx} style={{ ...base, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
+        <div style={{ marginBottom: 48 }}>
+          <img src="/images/Pale_logo_EX.png" alt="Example Content" style={{ height: 70, objectFit: 'contain', opacity: 0.9 }} />
         </div>
-        <div style={{ flex: 1 }}>
-          {label('Prepared for')}
-          <div style={{ fontSize: HS * 0.9, fontWeight: HW, color: t.accent, lineHeight: 1.0, letterSpacing: '-0.02em', marginBottom: 16 }}>{(clientName || '').toUpperCase()}</div>
-          <div style={{ fontSize: 28, color: t.accentDim, marginBottom: 32 }}>{projectName}</div>
-          {rule()}
-          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-            {category && <span style={{ fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', padding: '6px 18px', background: t.accent, color: t.bg, fontWeight: 700 }}>{category}</span>}
-            {shootDates && <span style={{ fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '6px 18px', border: `0.5px solid ${t.border}`, color: t.accentDim }}>{shootDates}</span>}
-            <span style={{ fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '6px 18px', border: `0.5px solid ${t.border}`, color: t.accentDim }}>{DURATION_LABELS[shootDuration] || shootDuration}{shootDuration === 'multiday' ? ` ×${shootDays}` : ''}</span>
-          </div>
+        <div style={{ height: 0.5, background: t.border, width: 80, marginBottom: 48 }} />
+        <div style={{ marginBottom: 12, fontSize: 11, letterSpacing: '0.2em', textTransform: 'uppercase', color: t.muted }}>Production Brief &mdash; Prepared for</div>
+        <div style={{ fontSize: HS * 0.85, fontWeight: HW, color: t.accent, lineHeight: 1.0, letterSpacing: '-0.02em', marginBottom: 16 }}>{(clientName || '').toUpperCase()}</div>
+        <div style={{ fontSize: 22, color: t.accentDim, marginBottom: 48 }}>{projectName}</div>
+        <div style={{ height: 0.5, background: t.border, width: 80, marginBottom: 48 }} />
+        <div style={{ display: 'flex', gap: 48, justifyContent: 'center', flexWrap: 'wrap' }}>
+          {shootDates && <div><div style={{ fontSize: 9, letterSpacing: '0.2em', textTransform: 'uppercase', color: t.muted, marginBottom: 6 }}>Shoot Date</div><div style={{ fontSize: 14, color: t.accent, fontWeight: 600 }}>{shootDates}{shootStartTime ? ' at ' + shootStartTime : ''}</div></div>}
+          {draftDue && <div><div style={{ fontSize: 9, letterSpacing: '0.2em', textTransform: 'uppercase', color: t.muted, marginBottom: 6 }}>Draft Due</div><div style={{ fontSize: 14, color: t.accent, fontWeight: 600 }}>{draftDue}</div></div>}
+          {finalsDue && <div><div style={{ fontSize: 9, letterSpacing: '0.2em', textTransform: 'uppercase', color: t.muted, marginBottom: 6 }}>Finals Due</div><div style={{ fontSize: 14, color: t.accent, fontWeight: 600 }}>{finalsDue}</div></div>}
+          {locations && <div><div style={{ fontSize: 9, letterSpacing: '0.2em', textTransform: 'uppercase', color: t.muted, marginBottom: 6 }}>Location</div><div style={{ fontSize: 14, color: t.accent, fontWeight: 600 }}>{locations.split(',')[0]}</div></div>}
         </div>
         {footer(idx)}
       </div>
@@ -103,30 +99,45 @@ export default function PitchPrintPage() {
         {label('The Scope')}
         <div style={{ fontSize: HS * 0.55, fontWeight: HW, color: t.accent, lineHeight: 1.0, letterSpacing: '-0.02em', marginBottom: 28 }}>{(jobType || 'Job Type').toUpperCase()}</div>
         {rule()}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 48, flex: 1 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 48, marginBottom: 32 }}>
           <div>
             <div style={{ fontSize: 11, letterSpacing: '0.18em', textTransform: 'uppercase', color: t.muted, marginBottom: 16, fontWeight: 700 }}>Overview</div>
-            <div style={{ fontSize: 15, color: t.text, lineHeight: 1.7 }}>{jobDescription}</div>
+            <div style={{ fontSize: 14, color: t.text, lineHeight: 1.75 }}>{jobDescription}</div>
           </div>
           <div>
             <div style={{ fontSize: 11, letterSpacing: '0.18em', textTransform: 'uppercase', color: t.muted, marginBottom: 16, fontWeight: 700 }}>Deliverables</div>
-            {(jobDeliverables || '').split('\n').filter(Boolean).map((line: string, i: number) => (
-              <div key={i} style={{ display: 'flex', gap: 12, fontSize: 15, color: t.text, lineHeight: 1.7 }}>
-                <span style={{ color: t.muted }}>—</span>{line}
-              </div>
-            ))}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {(deliverables || []).map((d: any, i: number) => (
+                <div key={i} style={{ borderBottom: `0.5px solid ${t.border}`, paddingBottom: 10 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                    <div style={{ fontSize: 14, color: t.text, fontWeight: 500 }}>{d.quantity}x {d.name}</div>
+                    {d.duration && <div style={{ fontSize: 11, color: t.accent, background: 'rgba(200,194,187,0.08)', padding: '2px 10px', borderRadius: 2, border: `0.5px solid ${t.border}` }}>{d.duration}</div>}
+                  </div>
+                  {d.formats && d.formats.length > 0 && (
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      {d.formats.map((fmt: string, fi: number) => (
+                        <span key={fi} style={{ fontSize: 10, color: t.muted, background: 'rgba(200,194,187,0.04)', padding: '2px 8px', borderRadius: 2, border: `0.5px solid ${t.border}` }}>{fmt}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
-        <div style={{ marginTop: 32, display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 32 }}>
-          {projectGoals && <div><div style={{ fontSize: 11, letterSpacing: '0.18em', textTransform: 'uppercase', color: t.muted, marginBottom: 10, fontWeight: 700 }}>Our approach</div><div style={{ fontSize: 13, color: t.text, lineHeight: 1.6 }}>{projectGoals}</div></div>}
-          {tone && <div><div style={{ fontSize: 11, letterSpacing: '0.18em', textTransform: 'uppercase', color: t.muted, marginBottom: 10, fontWeight: 700 }}>Tone & mood</div><div style={{ fontSize: 13, color: t.text, lineHeight: 1.6 }}>{tone}</div></div>}
-          {references && <div><div style={{ fontSize: 11, letterSpacing: '0.18em', textTransform: 'uppercase', color: t.muted, marginBottom: 10, fontWeight: 700 }}>References</div><div style={{ fontSize: 13, color: t.text, lineHeight: 1.6 }}>{references}</div></div>}
+        {rule()}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 24 }}>
+          {shootDates && <div><div style={{ fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', color: t.muted, marginBottom: 6 }}>Shoot Date</div><div style={{ fontSize: 13, color: t.accent, fontWeight: 600 }}>{shootDates}</div></div>}
+          {(shootStartTime || shootEndTime) && <div><div style={{ fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', color: t.muted, marginBottom: 6 }}>Time</div><div style={{ fontSize: 13, color: t.accent, fontWeight: 600 }}>{shootStartTime}{shootEndTime ? ' – ' + shootEndTime : ''}</div></div>}
+          {draftDue && <div><div style={{ fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', color: t.muted, marginBottom: 6 }}>Draft Due</div><div style={{ fontSize: 13, color: t.accent, fontWeight: 600 }}>{draftDue}</div></div>}
+          {finalsDue && <div><div style={{ fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', color: t.muted, marginBottom: 6 }}>Finals Due</div><div style={{ fontSize: 13, color: t.accent, fontWeight: 600 }}>{finalsDue}</div></div>}
+          {locations && <div style={{ gridColumn: 'span 4' }}><div style={{ fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', color: t.muted, marginBottom: 6 }}>Location(s)</div><div style={{ fontSize: 13, color: t.accent, fontWeight: 600 }}>{locations}</div></div>}
         </div>
         {footer(idx)}
       </div>
     )
 
-    if (slide.type === 'deliverables') return (
+   if (slide.type === 'deliverables') return (
       <div key={idx} style={base}>
         {label('Scope & Deliverables')}
         <div style={{ fontSize: HS * 0.55, fontWeight: HW, color: t.accent, lineHeight: 1.0, letterSpacing: '-0.02em', marginBottom: 32 }}>WHAT YOU RECEIVE</div>
@@ -221,6 +232,30 @@ export default function PitchPrintPage() {
       </div>
     )
 
+    if (slide.type === 'shotlist') {
+      const sl = (shotLists || {})[slide.id] || { deliverableId: '', shots: [] }
+      const deliv = (deliverables || []).find((d: any) => d.id === sl.deliverableId)
+      return (
+        <div key={idx} style={base}>
+          {label('Shot List')}
+          <div style={{ fontSize: HS * 0.55, fontWeight: HW, color: t.accent, lineHeight: 1.0, letterSpacing: '-0.02em', marginBottom: 28 }}>{deliv ? deliv.name.toUpperCase() : 'SHOT LIST'}</div>
+          <div style={{ height: 0.5, background: t.border, marginBottom: 28 }} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 0, flex: 1 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: 0, marginBottom: 12 }}>
+              <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: t.muted, fontWeight: 700 }}>Time</div>
+              <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: t.muted, fontWeight: 700 }}>Shot</div>
+            </div>
+            {(sl.shots || []).map((shot: any, i: number) => (
+              <div key={i} style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: 0, padding: '14px 0', borderTop: `0.5px solid ${t.border}` }}>
+                <div style={{ fontSize: 14, color: t.muted }}>{shot.time || '—'}</div>
+                <div style={{ fontSize: 15, color: t.text, lineHeight: 1.6 }}>{shot.description}</div>
+              </div>
+            ))}
+          </div>
+          {footer(idx)}
+        </div>
+      )
+    }
     if (slide.type === 'terms') return (
       <div key={idx} style={base}>
         {label('Terms & Conditions')}

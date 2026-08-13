@@ -152,6 +152,13 @@ export default function PitchDeckPage() {
 
   const [moodboardImages, setMoodboardImages] = useState<string[]>([])
   const [moodboardUploading, setMoodboardUploading] = useState(false)
+  const [shotLists, setShotLists] = useState<Record<string, { deliverableId: string; shots: { time: string; description: string }[] }>>({})
+  const [clients, setClients] = useState<any[]>([])
+  const [savedBriefs, setSavedBriefs] = useState<any[]>([])
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; brief: any } | null>(null)
+  const [deleteConfirm, setDeleteConfirm] = useState<any>(null)
+  const [showBriefMenu, setShowBriefMenu] = useState(false)
+  const [showRightPanel, setShowRightPanel] = useState(true)
 
   async function searchLocations(query: string) {
     if (!query || query.length < 3) { setLocationSuggestions([]); return }
