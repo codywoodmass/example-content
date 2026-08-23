@@ -27,6 +27,7 @@ export default function ClientsPage() {
   const [selectedClient, setSelectedClient] = useState<Client | null>(null)
   const [clientBookings, setClientBookings] = useState<any[]>([])
   const [clientProjects, setClientProjects] = useState<any[]>([])
+  const [clientBriefs, setClientBriefs] = useState<any[]>([])
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [newForm, setNewForm] = useState({ name: '', email: '', phone: '', company: '', category: 'Property', notes: '' })
@@ -47,6 +48,8 @@ export default function ClientsPage() {
     setSelectedClient(client)
     const { data: bookings } = await supabase.from('bookings1').select('*').eq('client_email', client.email).order('created_at', { ascending: false })
     const { data: projects } = await supabase.from('projects1').select('*').eq('email', client.email).order('created_at', { ascending: false })
+    const { data: briefs } = await supabase.from('briefs').select('*').eq('client_email', client.email).order('created_at', { ascending: false })
+    if (briefs) setClientBriefs(briefs)
     if (bookings) setClientBookings(bookings)
     if (projects) setClientProjects(projects)
   }
@@ -224,6 +227,27 @@ export default function ClientsPage() {
                         </div>
                         <span style={{ fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '3px 8px', borderRadius: 2, background: sc.bg, color: sc.color }}>{p.stage}</span>
                       </div>
+                    </div>
+                  )
+                })}
+              </div>
+              <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, overflow: 'hidden', marginBottom: 16 }}>
+                <div style={{ padding: '13px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>Briefs</span>
+                  <span style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>{clientBriefs.length} brief{clientBriefs.length !== 1 ? 's' : ''}</span>
+                </div>
+                {clientBriefs.length === 0 ? (
+                  <div style={{ padding: '20px 18px', fontSize: 12, color: 'rgba(200,194,187,0.25)' }}>No briefs yet</div>
+                ) : clientBriefs.map((b: any, i: number) => {
+                  const statusColors: Record<string,{c:string,bg:string}> = { draft:{c:'rgba(200,194,187,0.5)',bg:'rgba(200,194,187,0.1)'}, sent:{c:'rgba(100,150,220,0.9)',bg:'rgba(25,45,80,0.4)'}, approved:{c:'rgba(100,200,130,0.9)',bg:'rgba(30,70,45,0.4)'} }
+                  const sc = statusColors[b.status] || statusColors.draft
+                  return (
+                    <div key={b.id} onClick={() => router.push('/portal/studio/pitches')} style={{ padding:'12px 18px', borderBottom: i < clientBriefs.length-1 ? '0.5px solid rgba(200,194,187,0.06)':'none', display:'flex', justifyContent:'space-between', alignItems:'center', cursor:'pointer' }}>
+                      <div>
+                        <div style={{ fontSize:12, fontWeight:500, color:'#C8C2BB', marginBottom:2 }}>{b.project_name || 'Untitled'}</div>
+                        <div style={{ fontSize:11, color:'rgba(200,194,187,0.4)' }}>{new Date(b.created_at).toLocaleDateString('en-NZ',{day:'numeric',month:'short',year:'numeric'})}</div>
+                      </div>
+                      <span style={{ fontSize:9, letterSpacing:'0.08em', textTransform:'uppercase', padding:'3px 8px', borderRadius:2, background:sc.bg, color:sc.c }}>{b.status}</span>
                     </div>
                   )
                 })}

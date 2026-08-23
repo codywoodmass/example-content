@@ -1,7 +1,143 @@
 'use client'
+import React from 'react'
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
+
+function DriveThumb({ project, onClick }: { project: any; onClick: () => void }) {
+  const [firstFile, setFirstFile] = React.useState<any>(null)
+  const [loading, setLoading] = React.useState(true)
+
+  React.useEffect(() => {
+    if (!project.drive_url) { setLoading(false); return }
+    fetch(`/api/drive?url=${encodeURIComponent(project.drive_url)}`)
+      .then(r => r.json())
+      .then(data => { 
+        const files = data.files || []
+        setFirstFile(files[0] || null)
+        setLoading(false) 
+      })
+      .catch(() => setLoading(false))
+  }, [project.drive_url])
+
+  const isVideo = (mime: string) => mime?.includes('video')
+
+  return (
+    <div onClick={onClick} style={{ flexShrink:0, width:220, background:'#1A1F28', border:'0.5px solid rgba(200,194,187,0.09)', borderRadius:7, overflow:'hidden', cursor:'pointer' }} onMouseEnter={e=>(e.currentTarget.style.borderColor='rgba(200,194,187,0.2)')} onMouseLeave={e=>(e.currentTarget.style.borderColor='rgba(200,194,187,0.09)')}>
+      <div style={{ height:124, background:'#0E1014', position:'relative', overflow:'hidden' }}>
+        {loading ? (
+          <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', color:'rgba(200,194,187,0.2)', fontSize:11 }}>Loading...</div>
+        ) : firstFile ? (
+          isVideo(firstFile.mimeType) ? (
+            <div style={{ width:'100%', height:'100%', position:'relative', overflow:'hidden', background:'#0a0c10', display:'flex', alignItems:'center', justifyContent:'center' }}>
+              <img src={`https://drive.google.com/thumbnail?id=${firstFile.id}&sz=w400`} alt={project.title} style={{ width:'100%', height:'100%', objectFit:'cover', opacity:0.8 }} onError={e=>{(e.target as HTMLImageElement).style.display='none'}} />
+              <div style={{ position:'absolute', width:36, height:36, borderRadius:'50%', background:'rgba(0,0,0,0.7)', display:'flex', alignItems:'center', justifyContent:'center', border:'1.5px solid rgba(200,194,187,0.4)' }}><span style={{ fontSize:14, marginLeft:3 }}>▶</span></div>
+            </div>
+          ) : (
+            <img src={`https://lh3.googleusercontent.com/d/${firstFile.id}`} alt={project.title} style={{ width:'100%', height:'100%', objectFit:'cover' }} onError={e=>{(e.target as HTMLImageElement).style.display='none'}} />
+          )
+        ) : (
+          <div style={{ width:'100%', height:'100%', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:6 }}>
+            <span style={{ fontSize:28, opacity:0.25 }}>📁</span>
+            <span style={{ fontSize:10, color:'rgba(200,194,187,0.25)', letterSpacing:'0.08em', textTransform:'uppercase' }}>Coming soon</span>
+          </div>
+        )}
+      </div>
+      <div style={{ padding:'12px 14px' }}>
+        <div style={{ fontSize:12, fontWeight:500, color:'#C8C2BB', marginBottom:3, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{project.title}</div>
+        <div style={{ fontSize:11, color:'rgba(200,194,187,0.4)', marginBottom:8 }}>{project.delivery_due ? new Date(project.delivery_due+'T12:00:00').toLocaleDateString('en-NZ',{day:'numeric',month:'short',year:'numeric'}) : ''}</div>
+        <span style={{ fontSize:9, letterSpacing:'0.08em', textTransform:'uppercase', padding:'2px 7px', borderRadius:2, background:'rgba(100,200,130,0.15)', color:'rgba(100,200,130,0.9)', border:'0.5px solid rgba(100,200,130,0.3)' }}>Delivered</span>
+      </div>
+    </div>
+  )
+}
+
+function DriveFolder({ project }: { project: any }) {
+  const [files, setFiles] = React.useState<any[]>([])
+  const [loading, setLoading] = React.useState(true)
+  const [previewFile, setPreviewFile] = React.useState<any>(null)
+
+  React.useEffect(() => {
+    if (!project.drive_url) return
+    fetch(`/api/drive?url=${encodeURIComponent(project.drive_url)}`)
+      .then(r => r.json())
+      .then(data => { setFiles(data.files || []); setLoading(false) })
+      .catch(() => setLoading(false))
+  }, [project.drive_url])
+
+  const isVideo = (mime: string) => mime?.includes('video')
+  const isImage = (mime: string) => mime?.includes('image')
+
+  if (loading) return <div style={{ marginBottom:32 }}><div style={{ fontSize:10, letterSpacing:'0.16em', textTransform:'uppercase', color:'rgba(200,194,187,0.28)', marginBottom:14 }}>{project.title}</div><div style={{ color:'rgba(200,194,187,0.2)', fontSize:12, padding:'20px 0' }}>Loading files...</div></div>
+  if (files.length === 0) return null
+
+  return (
+    <div style={{ marginBottom:40 }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:14 }}>
+        <div style={{ fontSize:10, letterSpacing:'0.16em', textTransform:'uppercase', color:'rgba(200,194,187,0.28)' }}>{project.title}</div>
+        <a href={project.drive_url} target="_blank" rel="noopener noreferrer" style={{ fontSize:10, color:'rgba(200,194,187,0.35)', textDecoration:'none', letterSpacing:'0.08em', textTransform:'uppercase' }}>Open in Drive →</a>
+      </div>
+      <div style={{ background:'#1A1F28', border:'0.5px solid rgba(200,194,187,0.09)', borderRadius:7, overflow:'hidden', marginBottom:8, padding:'14px 18px' }}>
+        <div style={{ fontSize:13, fontWeight:500, color:'#C8C2BB', marginBottom:4 }}>{project.title}</div>
+        <div style={{ display:'flex', gap:16 }}>
+          {project.shoot_date && <div style={{ fontSize:11, color:'rgba(200,194,187,0.4)' }}>Shoot: {new Date(project.shoot_date+'T12:00:00').toLocaleDateString('en-NZ',{day:'numeric',month:'short',year:'numeric'})}</div>}
+          {project.address && <div style={{ fontSize:11, color:'rgba(200,194,187,0.4)' }}>{project.address.split(',')[0]}</div>}
+          <div style={{ fontSize:11, color:'rgba(100,200,130,0.7)' }}>{files.length} file{files.length!==1?'s':''}</div>
+        </div>
+      </div>
+      <div style={{ display:'flex', flexWrap:'wrap', alignItems:'flex-start', gap:14 }}>
+        {files.map((file: any) => (
+          <div key={file.id} style={{ background:'#1A1F28', border:'0.5px solid rgba(200,194,187,0.09)', borderRadius:7, overflow:'hidden', cursor:'pointer', width: file.videoMediaMetadata && parseInt(file.videoMediaMetadata.height) > parseInt(file.videoMediaMetadata.width) ? 'calc(33% - 10px)' : 'calc(50% - 7px)' }} onClick={() => setPreviewFile(file)}>
+            <div style={{ aspectRatio: file.videoMediaMetadata && parseInt(file.videoMediaMetadata.height) > parseInt(file.videoMediaMetadata.width) ? '9/16' : '16/9', background:'#0E1014', position:'relative', overflow:'hidden', display:'flex', alignItems:'center', justifyContent:'center' }}>
+              {isVideo(file.mimeType) ? (
+                <div style={{ width:'100%', height:'100%', position:'relative', overflow:'hidden', background:'#0a0c10' }} onClick={e => e.stopPropagation()}>
+                  {file.videoMediaMetadata && parseInt(file.videoMediaMetadata.height) > parseInt(file.videoMediaMetadata.width) ? (
+                <iframe src={`https://drive.google.com/file/d/${file.id}/preview`} style={{ width:'56%', height:'calc(100% + 220px)', border:'none', marginTop:'-110px', marginBottom:'-110px' }} allow="autoplay; fullscreen" allowFullScreen />
+              ) : (
+                <iframe src={`https://drive.google.com/file/d/${file.id}/preview`} style={{ width:'100%', height:'calc(100% + 220px)', border:'none', marginTop:'-110px', marginBottom:'-110px' }} allow="autoplay; fullscreen" allowFullScreen />
+              )}
+                </div>
+              ) : isImage(file.mimeType) ? (
+                <img src={`https://lh3.googleusercontent.com/d/${file.id}`} alt={file.name} style={{ width:'100%', height:'100%', objectFit:'cover' }} onError={e => { const t=e.target as HTMLImageElement; t.src=`https://drive.google.com/thumbnail?id=${file.id}&sz=w800`; t.onerror=()=>{t.style.display='none'} }} />
+              ) : (
+                <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:32 }}>📄</div>
+              )}
+              <span style={{ position:'absolute', top:8, left:8, fontSize:9, letterSpacing:'0.12em', textTransform:'uppercase', background:'rgba(0,0,0,0.6)', color:'#C8C2BB', padding:'3px 8px', borderRadius:2 }}>{isVideo(file.mimeType) ? 'Video' : isImage(file.mimeType) ? 'Photo' : 'File'}</span>
+              {file.videoMediaMetadata && parseInt(file.videoMediaMetadata.height) > parseInt(file.videoMediaMetadata.width) && <span style={{ position:'absolute', top:8, right:8, fontSize:9, letterSpacing:'0.12em', textTransform:'uppercase', background:'rgba(0,0,0,0.6)', color:'rgba(200,194,187,0.7)', padding:'3px 8px', borderRadius:2 }}>Vertical</span>}
+            </div>
+            <div style={{ padding:'10px 14px 6px' }}>
+              <div style={{ fontSize:12, fontWeight:500, color:'#C8C2BB', marginBottom:3, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{file.name}</div>
+              {file.size && <div style={{ fontSize:10, color:'rgba(200,194,187,0.35)' }}>{(parseInt(file.size)/1024/1024).toFixed(1)} MB</div>}
+            </div>
+            <div style={{ display:'flex', gap:6, padding:'6px 14px 12px' }}>
+              <button onClick={e => { e.stopPropagation(); setPreviewFile(file) }} style={{ fontSize:10, letterSpacing:'0.08em', textTransform:'uppercase', padding:'5px 10px', borderRadius:3, border:'0.5px solid rgba(200,194,187,0.09)', color:'rgba(200,194,187,0.4)', background:'transparent', cursor:'pointer', fontFamily:'inherit' }}>Preview</button>
+              <a href={`https://drive.google.com/uc?export=download&id=${file.id}`} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} style={{ fontSize:10, letterSpacing:'0.08em', textTransform:'uppercase', padding:'5px 10px', borderRadius:3, border:'0.5px solid rgba(200,194,187,0.09)', color:'rgba(200,194,187,0.4)', background:'transparent', cursor:'pointer', fontFamily:'inherit', textDecoration:'none' }}>Download</a>
+            </div>
+          </div>
+        ))}
+      </div>
+      {/* PREVIEW MODAL */}
+      {previewFile && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.95)', zIndex:300, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:20 }} onClick={() => setPreviewFile(null)}>
+          <div style={{ position:'absolute', top:20, right:20, display:'flex', gap:12, alignItems:'center' }}>
+            <a href={`https://drive.google.com/uc?export=download&id=${previewFile.id}`} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} style={{ fontSize:11, letterSpacing:'0.09em', textTransform:'uppercase', padding:'8px 16px', borderRadius:3, background:'#C8C2BB', color:'#111', textDecoration:'none', fontFamily:'inherit', fontWeight:500 }}>Download</a>
+            <button onClick={() => setPreviewFile(null)} style={{ fontSize:24, color:'rgba(200,194,187,0.5)', background:'transparent', border:'none', cursor:'pointer' }}>×</button>
+          </div>
+          <div style={{ maxWidth:'90vw', maxHeight:'85vh', display:'flex', flexDirection:'column', alignItems:'center', gap:12 }} onClick={e => e.stopPropagation()}>
+            {isVideo(previewFile.mimeType) ? (
+              <iframe src={`https://drive.google.com/file/d/${previewFile.id}/preview`} style={{ width: previewFile.videoMediaMetadata && parseInt(previewFile.videoMediaMetadata.height) > parseInt(previewFile.videoMediaMetadata.width) ? 'min(400px,45vw)' : 'min(900px,90vw)', height: previewFile.videoMediaMetadata && parseInt(previewFile.videoMediaMetadata.height) > parseInt(previewFile.videoMediaMetadata.width) ? 'min(711px,80vh)' : 'min(506px,50vh)', border:'none', borderRadius:6 }} allow="autoplay" />
+            ) : isImage(previewFile.mimeType) ? (
+              <img src={`https://drive.google.com/uc?id=${previewFile.id}`} alt={previewFile.name} style={{ maxWidth:'90vw', maxHeight:'80vh', objectFit:'contain', borderRadius:6 }} />
+            ) : (
+              <a href={previewFile.webViewLink} target="_blank" rel="noopener noreferrer" style={{ color:'#C8C2BB', fontSize:14 }}>Open file in Google Drive</a>
+            )}
+            <div style={{ fontSize:13, color:'rgba(200,194,187,0.6)' }}>{previewFile.name}</div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function ClientPortal() {
   const router = useRouter()
@@ -39,6 +175,7 @@ export default function ClientPortal() {
   const [clientBookings, setClientBookings] = useState<any[]>([])
   const [clientBriefs, setClientBriefs] = useState<any[]>([])
   const [selectedBrief, setSelectedBrief] = useState<any>(null)
+  const [libraryProject, setLibraryProject] = useState<any>(null)
   const [briefFeedback, setBriefFeedback] = useState('')
   const [feedbackSent, setFeedbackSent] = useState(false)
   const [clientProfile, setClientProfile] = useState<any>(null)
@@ -416,26 +553,7 @@ export default function ClientPortal() {
                     <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 14 }}>Recent deliverables</div>
                     <div style={{ display: 'flex', gap: 14, overflowX: 'auto', paddingBottom: 8 }}>
                       {completedProjects.map((p: any) => (
-                        <div key={p.id} style={{ flexShrink: 0, width: 220, background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, overflow: 'hidden' }}>
-                          <div style={{ height: 110, background: 'rgba(100,200,130,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', borderBottom: '0.5px solid rgba(200,194,187,0.06)' }}>
-                            {p.drive_url ? (
-                              <a href={p.drive_url} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, textDecoration: 'none' }}>
-                                <span style={{ fontSize: 28 }}>📁</span>
-                                <span style={{ fontSize: 10, color: 'rgba(100,200,130,0.7)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>View content</span>
-                              </a>
-                            ) : (
-                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-                                <span style={{ fontSize: 28, opacity: 0.25 }}>📁</span>
-                                <span style={{ fontSize: 10, color: 'rgba(200,194,187,0.25)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Coming soon</span>
-                              </div>
-                            )}
-                          </div>
-                          <div style={{ padding: '12px 14px' }}>
-                            <div style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB', marginBottom: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.title}</div>
-                            <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', marginBottom: 8 }}>{p.delivery_due ? new Date(p.delivery_due + 'T12:00:00').toLocaleDateString('en-NZ',{day:'numeric',month:'short',year:'numeric'}) : ''}</div>
-                            <span style={{ fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '2px 7px', borderRadius: 2, background: 'rgba(100,200,130,0.15)', color: 'rgba(100,200,130,0.9)', border: '0.5px solid rgba(100,200,130,0.3)' }}>Delivered</span>
-                          </div>
-                        </div>
+                        <DriveThumb key={p.id} project={p} onClick={() => { setLibraryProject(p); setActiveView('library') }} />
                       ))}
                     </div>
                   </div>
@@ -819,60 +937,141 @@ export default function ClientPortal() {
           </div>
         )}
 
-        {/* ===== LIBRARY ===== */}
-        {activeView === 'library' && (
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 28px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', background: '#14181F', position: 'sticky', top: 0, zIndex: 10 }}>
-              <div>
-                <div style={{ fontSize: 14, fontWeight: 500, color: '#fff' }}>My Content Library</div>
-                <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', marginTop: 2 }}>All deliverables via Google Drive — grouped by project, most recent first</div>
-              </div>
-              <button onClick={() => setActiveView('dashboard')} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>← Back</button>
-            </div>
-            <div style={{ padding: 28 }}>
-              <div style={{ display: 'flex', borderBottom: '0.5px solid rgba(200,194,187,0.09)', marginBottom: 24 }}>
-                {['All (14)','Video (8)','Photo (6)'].map((tab, i) => (
-                  <div key={tab} style={{ fontSize: 12, padding: '10px 16px', cursor: 'pointer', color: i === 0 ? '#C8C2BB' : 'rgba(200,194,187,0.38)', borderBottom: i === 0 ? '1.5px solid #C8C2BB' : '1.5px solid transparent', marginBottom: -0.5 }}>{tab}</div>
-                ))}
-              </div>
-              {[
-                { project: '14 Clifton Road — Jun 2026', items: [
-                  { title: 'Hero Highlights Film', date: '14 Jun 2026', type: 'Video', isNew: true, bg: 'linear-gradient(145deg,#1e2d3a,#0d1620)' },
-                  { title: 'Stills Pack (24 images)', date: '14 Jun 2026', type: 'Photo', isNew: true, bg: 'linear-gradient(145deg,#2a2016,#140e08)' },
-                  { title: 'Social Reels Pack (4x)', date: '14 Jun 2026', type: 'Video', isNew: true, bg: 'linear-gradient(145deg,#1a2418,#0c1408)' },
-                ]},
-                { project: 'Orchard Lane Development — Jun 2026', items: [
-                  { title: 'Drone Reel', date: '2 Jun 2026', type: 'Video', isNew: false, bg: 'linear-gradient(145deg,#262018,#140e08)' },
-                  { title: 'Stills Pack (18 images)', date: '2 Jun 2026', type: 'Photo', isNew: false, bg: 'linear-gradient(145deg,#1e1e2a,#0c0c16)' },
-                ]},
-              ].map(group => (
-                <div key={group.project} style={{ marginBottom: 32 }}>
-                  <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 14 }}>{group.project}</div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14 }}>
-                    {group.items.map((item, i) => (
-                      <div key={i} style={{ ...s.panel, overflow: 'hidden', cursor: 'pointer' }}>
-                        <div style={{ aspectRatio: '16/9', background: item.bg, position: 'relative' }}>
-                          <span style={{ position: 'absolute', top: 10, left: 10, fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', background: 'rgba(0,0,0,0.5)', color: '#C8C2BB', padding: '4px 8px', borderRadius: 2 }}>{item.type}</span>
-                          {item.isNew && <span style={{ position: 'absolute', top: 10, right: 10, fontSize: 9, background: 'rgba(120,200,140,0.2)', color: 'rgba(120,200,140,0.9)', border: '0.5px solid rgba(120,200,140,0.3)', padding: '3px 8px', borderRadius: 2 }}>New</span>}
-                        </div>
-                        <div style={{ padding: '10px 14px 6px' }}>
-                          <div style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB', marginBottom: 3 }}>{item.title}</div>
-                          <div style={{ fontSize: 10, color: 'rgba(200,194,187,0.38)' }}>{item.date}</div>
-                        </div>
-                        <div style={{ display: 'flex', gap: 6, padding: '6px 14px 12px' }}>
-                          <button style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '5px 10px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.09)', color: 'rgba(200,194,187,0.4)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Preview</button>
-                          <button style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '5px 10px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.09)', color: 'rgba(200,194,187,0.4)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Download</button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+        {/* ===== OUR SHOOTS ===== */}
+        {activeView === 'upcoming' && (() => {
+          const now = new Date()
+          const upcomingProjects = clientProjects.filter((p: any) => p.shoot_date && new Date(p.shoot_date) >= now).sort((a: any, b: any) => new Date(a.shoot_date).getTime() - new Date(b.shoot_date).getTime())
+          const deliveredProjects = clientProjects.filter((p: any) => p.stage === 'Awaiting Confirmation').sort((a: any, b: any) => new Date(b.delivery_due || b.created_at).getTime() - new Date(a.delivery_due || a.created_at).getTime())
+          const pendingBookings = clientBookings.filter((b: any) => b.status === 'pending')
+          return (
+            <div>
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'16px 28px', borderBottom:'0.5px solid rgba(200,194,187,0.09)', background:'#14181F', position:'sticky', top:0, zIndex:10 }}>
+                <div>
+                  <div style={{ fontSize:14, fontWeight:500, color:'#fff' }}>Our Shoots</div>
+                  <div style={{ fontSize:11, color:'rgba(200,194,187,0.4)', marginTop:2 }}>{upcomingProjects.length} upcoming · {deliveredProjects.length} delivered</div>
                 </div>
-              ))}
+                <button onClick={() => setActiveView('book')} style={{ fontSize:11, letterSpacing:'0.09em', textTransform:'uppercase', padding:'7px 14px', borderRadius:3, background:'#C8C2BB', color:'#111', border:'none', cursor:'pointer', fontFamily:'inherit', fontWeight:500 }}>+ Book new</button>
+              </div>
+              <div style={{ padding:28, display:'flex', flexDirection:'column', gap:24 }}>
+                {/* PENDING BOOKINGS */}
+                {pendingBookings.length > 0 && (
+                  <div>
+                    <div style={{ fontSize:10, letterSpacing:'0.16em', textTransform:'uppercase', color:'rgba(200,194,187,0.3)', marginBottom:12 }}>Pending confirmation</div>
+                    <div style={{ background:'#1A1F28', border:'0.5px solid rgba(200,194,187,0.09)', borderRadius:7, overflow:'hidden' }}>
+                      {pendingBookings.map((b: any, i: number) => (
+                        <div key={b.id} style={{ display:'flex', alignItems:'center', gap:14, padding:'14px 18px', borderBottom: i < pendingBookings.length-1 ? '0.5px solid rgba(200,194,187,0.06)':'none' }}>
+                          <div style={{ width:42, flexShrink:0, textAlign:'center', background:'rgba(210,175,80,0.08)', border:'0.5px solid rgba(210,175,80,0.2)', borderRadius:5, padding:'6px 4px' }}>
+                            <div style={{ fontSize:16, opacity:0.5 }}>⏳</div>
+                          </div>
+                          <div style={{ flex:1 }}>
+                            <div style={{ fontSize:13, fontWeight:500, color:'#C8C2BB', marginBottom:2 }}>{b.address || b.shoot_package || 'Booking request'}</div>
+                            <div style={{ fontSize:11, color:'rgba(200,194,187,0.4)' }}>{b.shoot_package} {b.preferred_date ? '· ' + new Date(b.preferred_date+'T12:00:00').toLocaleDateString('en-NZ',{day:'numeric',month:'short',year:'numeric'}) : ''}</div>
+                          </div>
+                          <span style={{ fontSize:9, letterSpacing:'0.08em', textTransform:'uppercase', padding:'3px 9px', borderRadius:2, background:'rgba(210,175,80,0.12)', color:'rgba(210,175,80,0.9)', border:'0.5px solid rgba(210,175,80,0.25)' }}>Pending</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {/* UPCOMING SHOOTS */}
+                <div>
+                  <div style={{ fontSize:10, letterSpacing:'0.16em', textTransform:'uppercase', color:'rgba(200,194,187,0.3)', marginBottom:12 }}>Upcoming shoots</div>
+                  {upcomingProjects.length === 0 ? (
+                    <div style={{ background:'#1A1F28', border:'0.5px solid rgba(200,194,187,0.09)', borderRadius:7, padding:'32px 20px', textAlign:'center', color:'rgba(200,194,187,0.25)', fontSize:12 }}>No upcoming shoots — book one above</div>
+                  ) : (
+                    <div style={{ background:'#1A1F28', border:'0.5px solid rgba(200,194,187,0.09)', borderRadius:7, overflow:'hidden' }}>
+                      {upcomingProjects.map((p: any, i: number) => {
+                        const d = new Date(p.shoot_date+'T12:00:00')
+                        return (
+                          <div key={p.id} onClick={() => setSelectedProject(p)} style={{ display:'flex', alignItems:'center', gap:14, padding:'14px 18px', borderBottom: i < upcomingProjects.length-1 ? '0.5px solid rgba(200,194,187,0.06)':'none', cursor:'pointer' }}>
+                            <div style={{ width:42, flexShrink:0, textAlign:'center', background:'rgba(61,71,86,0.3)', border:'0.5px solid rgba(200,194,187,0.09)', borderRadius:5, padding:'6px 4px' }}>
+                              <div style={{ fontSize:16, fontWeight:600, color:'#fff', lineHeight:1 }}>{d.getDate()}</div>
+                              <div style={{ fontSize:9, color:'rgba(200,194,187,0.4)', textTransform:'uppercase' }}>{d.toLocaleDateString('en-NZ',{month:'short'})}</div>
+                            </div>
+                            <div style={{ flex:1 }}>
+                              <div style={{ fontSize:13, fontWeight:500, color:'#C8C2BB', marginBottom:2 }}>{p.title}</div>
+                              <div style={{ fontSize:11, color:'rgba(200,194,187,0.4)' }}>{p.address?.split(',')[0]} {p.delivery_due ? '· Due: '+new Date(p.delivery_due+'T12:00:00').toLocaleDateString('en-NZ',{day:'numeric',month:'short'}) : ''}</div>
+                            </div>
+                            <span style={{ fontSize:9, letterSpacing:'0.08em', textTransform:'uppercase', padding:'3px 9px', borderRadius:2, background:'rgba(100,150,220,0.12)', color:'rgba(100,150,220,0.9)', border:'0.5px solid rgba(100,150,220,0.2)' }}>{p.stage}</span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+                {/* DELIVERED */}
+                {deliveredProjects.length > 0 && (
+                  <div>
+                    <div style={{ fontSize:10, letterSpacing:'0.16em', textTransform:'uppercase', color:'rgba(200,194,187,0.3)', marginBottom:12 }}>Delivered</div>
+                    <div style={{ background:'#1A1F28', border:'0.5px solid rgba(200,194,187,0.09)', borderRadius:7, overflow:'hidden' }}>
+                      {deliveredProjects.map((p: any, i: number) => (
+                        <div key={p.id} onClick={() => setSelectedProject(p)} style={{ display:'flex', alignItems:'center', gap:14, padding:'14px 18px', borderBottom: i < deliveredProjects.length-1 ? '0.5px solid rgba(200,194,187,0.06)':'none', cursor:'pointer' }}>
+                          <div style={{ flex:1 }}>
+                            <div style={{ fontSize:13, fontWeight:500, color:'#C8C2BB', marginBottom:2 }}>{p.title}</div>
+                            <div style={{ fontSize:11, color:'rgba(200,194,187,0.4)' }}>{p.address?.split(',')[0]}</div>
+                          </div>
+                          {p.drive_url && <a href={p.drive_url} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} style={{ fontSize:11, letterSpacing:'0.09em', textTransform:'uppercase', padding:'6px 12px', borderRadius:3, border:'0.5px solid rgba(200,194,187,0.2)', color:'rgba(200,194,187,0.5)', background:'transparent', cursor:'pointer', fontFamily:'inherit', textDecoration:'none' }}>View files</a>}
+                          <span style={{ fontSize:9, letterSpacing:'0.08em', textTransform:'uppercase', padding:'3px 9px', borderRadius:2, background:'rgba(100,200,130,0.12)', color:'rgba(100,200,130,0.9)', border:'0.5px solid rgba(100,200,130,0.2)' }}>Delivered</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        )}
+          )
+        })()}
 
-        {/* ===== PITCH DECKS ===== */}
+        {/* ===== LIBRARY ===== */}
+        {activeView === 'library' && (() => {
+          const projectsWithDrive = clientProjects.filter((p: any) => p.drive_url)
+          return (
+            <div>
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'16px 28px', borderBottom:'0.5px solid rgba(200,194,187,0.09)', background:'#14181F', position:'sticky', top:0, zIndex:10 }}>
+                <div>
+                  {libraryProject ? (
+                    <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                      <button onClick={() => setLibraryProject(null)} style={{ fontSize:11, color:'rgba(200,194,187,0.4)', background:'transparent', border:'none', cursor:'pointer', fontFamily:'inherit' }}>← All projects</button>
+                      <span style={{ color:'rgba(200,194,187,0.2)' }}>/</span>
+                      <div style={{ fontSize:14, fontWeight:500, color:'#fff' }}>{libraryProject.title}</div>
+                    </div>
+                  ) : (
+                    <div>
+                      <div style={{ fontSize:14, fontWeight:500, color:'#fff' }}>My Content Library</div>
+                      <div style={{ fontSize:11, color:'rgba(200,194,187,0.4)', marginTop:2 }}>{projectsWithDrive.length} project{projectsWithDrive.length!==1?'s':''} with deliverables</div>
+                    </div>
+                  )}
+                </div>
+                <button onClick={() => { setLibraryProject(null); setActiveView('dashboard') }} style={{ fontSize:11, letterSpacing:'0.09em', textTransform:'uppercase', padding:'7px 14px', borderRadius:3, border:'0.5px solid rgba(200,194,187,0.2)', color:'rgba(200,194,187,0.5)', background:'transparent', cursor:'pointer', fontFamily:'inherit' }}>← Back</button>
+              </div>
+              <div style={{ padding:28 }}>
+                {!libraryProject ? (
+                  /* PROJECT LIST */
+                  projectsWithDrive.length === 0 ? (
+                    <div style={{ background:'#1A1F28', border:'0.5px solid rgba(200,194,187,0.09)', borderRadius:7, padding:'40px 20px', textAlign:'center', color:'rgba(200,194,187,0.25)', fontSize:13 }}>No delivered content yet</div>
+                  ) : (
+                    <div style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:16 }}>
+                      {projectsWithDrive.map((p: any) => (
+                        <div key={p.id} onClick={() => setLibraryProject(p)} style={{ background:'#1A1F28', border:'0.5px solid rgba(200,194,187,0.09)', borderRadius:7, padding:'20px 22px', cursor:'pointer', display:'flex', alignItems:'center', gap:16 }} onMouseEnter={e=>(e.currentTarget.style.borderColor='rgba(200,194,187,0.2)')} onMouseLeave={e=>(e.currentTarget.style.borderColor='rgba(200,194,187,0.09)')}>
+                          <div style={{ width:48, height:48, borderRadius:8, background:'rgba(200,194,187,0.06)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:22, flexShrink:0 }}>📁</div>
+                          <div style={{ flex:1 }}>
+                            <div style={{ fontSize:13, fontWeight:500, color:'#C8C2BB', marginBottom:4 }}>{p.title}</div>
+                            <div style={{ fontSize:11, color:'rgba(200,194,187,0.4)' }}>{p.shoot_date ? new Date(p.shoot_date+'T12:00:00').toLocaleDateString('en-NZ',{day:'numeric',month:'short',year:'numeric'}) : ''}{p.address ? ' · '+p.address.split(',')[0] : ''}</div>
+                          </div>
+                          <div style={{ fontSize:12, color:'rgba(200,194,187,0.3)' }}>→</div>
+                        </div>
+                      ))}
+                    </div>
+                  )
+                ) : (
+                  /* FILE VIEW */
+                  <DriveFolder project={libraryProject} />
+                )}
+              </div>
+            </div>
+          )
+        })()}
+
         {activeView === 'pitches' && (
           <div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 28px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', background: '#14181F', position: 'sticky', top: 0, zIndex: 10 }}>
