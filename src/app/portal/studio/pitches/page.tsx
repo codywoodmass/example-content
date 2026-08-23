@@ -1,7 +1,7 @@
 'use client'
 import StudioSidebar from '../StudioSidebar'
 import { supabase } from '@/lib/supabase'
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 
 const TEMPLATES = {
@@ -146,7 +146,9 @@ export default function PitchDeckPage() {
   const [finalsDue, setFinalsDue] = useState('')
   // Brief status
   const [briefId, setBriefId] = useState<string | null>(null)
+  const briefIdRef = useRef<string | null>(null)
   const [briefStatus, setBriefStatus] = useState<'draft' | 'sent' | 'approved'>('draft')
+  useEffect(() => { briefIdRef.current = briefId }, [briefId])
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
@@ -211,10 +213,11 @@ export default function PitchDeckPage() {
       shootHours, editHours, preProdHours, travelKm,
       rateFilming, rateEditing, ratePreProd, rateTravelKm,
       calcFilming, calcEditing, calcPreProd, calcTravel,
-      moodboardImages, pricingNotes, tcNotes, template, shotLists, locationList, editHoursMax,
+      moodboardImages, pricingNotes, tcNotes, template, shotLists, slides, locationList, editHoursMax,
     }
-    if (briefId) {
-      await supabase.from('briefs').update({ data: briefData, client_name: clientName, client_email: clientEmail, project_name: projectName }).eq('id', briefId)
+    const currentBriefId = briefIdRef.current || briefId
+    if (currentBriefId) {
+      await supabase.from('briefs').update({ data: briefData, client_name: clientName, client_email: clientEmail, project_name: projectName }).eq('id', currentBriefId)
     } else {
       const { data } = await supabase.from('briefs').insert([{ client_name: clientName, client_email: clientEmail, project_name: projectName, status: 'draft', data: briefData }]).select().single()
       if (data) setBriefId(data.id)
@@ -276,7 +279,7 @@ export default function PitchDeckPage() {
       projectGoals, tone, references, shootDuration, shootDays, shootDates, shootStartTime,
       shootEndTime, draftDue, finalsDue, locations, deliverables, crew, equipment,
       shootHours, editHours, preProdHours, travelKm, rateFilming, rateEditing,
-      ratePreProd, rateTravelKm, pricingNotes, tcNotes, moodboardImages])
+      ratePreProd, rateTravelKm, pricingNotes, tcNotes, moodboardImages, shotLists, slides])
 
   const t = TEMPLATES[template]
   const inp: React.CSSProperties = { background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }

@@ -37,6 +37,10 @@ export default function ClientPortal() {
   const [tcAccepted, setTcAccepted] = useState(false)
   const [clientProjects, setClientProjects] = useState<any[]>([])
   const [clientBookings, setClientBookings] = useState<any[]>([])
+  const [clientBriefs, setClientBriefs] = useState<any[]>([])
+  const [selectedBrief, setSelectedBrief] = useState<any>(null)
+  const [briefFeedback, setBriefFeedback] = useState('')
+  const [feedbackSent, setFeedbackSent] = useState(false)
   const [clientProfile, setClientProfile] = useState<any>(null)
   const [selectedProject, setSelectedProject] = useState<any>(null)
   const [notifications, setNotifications] = useState<any[]>([])
@@ -68,6 +72,8 @@ export default function ClientPortal() {
       // Load bookings linked to this client
       const { data: bookings } = await supabase.from('bookings1').select('*').eq('client_email', email).order('created_at', { ascending: false })
       if (bookings) setClientBookings(bookings)
+      const { data: briefs } = await supabase.from('briefs').select('*').eq('client_email', email).order('created_at', { ascending: false })
+      if (briefs) setClientBriefs(briefs)
       const { data: notifs } = await supabase.from('notifications').select('*').eq('user_email', email).eq('read', false).order('created_at', { ascending: false })
       if (notifs) { setNotifications(notifs); if (notifs.length > 0) setShowNotifications(true) }
     })
@@ -205,7 +211,7 @@ export default function ClientPortal() {
             { id: 'book', label: 'Book a Shoot' },
             { id: 'upcoming', label: 'Our Shoots' },
             { id: 'library', label: 'My Library' },
-            { id: 'pitches', label: 'Pitch Decks' },
+            { id: 'pitches', label: 'Our Briefs' },
             { id: 'invoices', label: 'Invoices' },
           ].map(item => (
             <button key={item.id} onClick={() => { setActiveView(item.id); setBookingStep(1); setSelectedCat(''); setSelectedShoot(null); setSelectedDel(null); setSelectedAddons([]); setTcAccepted(false); setPreferredDate(''); setDraftDue(''); setDeliveryDue(''); setBookingNotes(''); setAccessNotes(''); setPropertyAddress('') }} style={{ display: 'flex', alignItems: 'center', width: '100%', padding: '9px 10px', borderRadius: 5, fontSize: 12, color: activeView === item.id ? '#C8C2BB' : 'rgba(200,194,187,0.38)', background: activeView === item.id ? 'rgba(61,71,86,0.4)' : 'transparent', border: activeView === item.id ? '0.5px solid rgba(200,194,187,0.09)' : '0.5px solid transparent', cursor: 'pointer', marginBottom: 2, textAlign: 'left', fontFamily: 'inherit' }}>
@@ -747,11 +753,18 @@ export default function ClientPortal() {
                   </div>
                   <div style={{ border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 6, padding: '13px 16px', marginBottom: 16, maxHeight: 96, overflowY: 'auto', fontSize: 11, color: 'rgba(200,194,187,0.35)', lineHeight: 1.7, background: 'rgba(0,0,0,0.2)' }}>
                     <strong style={{ color: 'rgba(200,194,187,0.5)' }}>Terms & Conditions — Example Content Ltd</strong><br /><br />
-                    This booking request is not a confirmed shoot until Example Content confirms availability in writing. A 50% deposit is required to secure your shoot date. The remaining 50% is due on delivery. Cancellations made less than 48 hours before shoot date incur a 25% cancellation fee. Example Content retains the right to use footage for portfolio and promotional purposes unless a written waiver is requested prior to shoot day. All prices are exclusive of GST. Delivered files are provided via Google Drive and retained for 60 days.
-                  </div>
+                    <ol style={{ margin: 0, padding: '0 0 0 16px' }}>
+                      <li style={{ marginBottom: 8 }}>A booking request does not constitute a confirmed engagement until Example Content Ltd has confirmed availability and acceptance in writing.</li>
+                      <li style={{ marginBottom: 8 }}>Postponement of a scheduled shoot within 24 hours of the confirmed shoot date, for reasons other than adverse weather conditions, will incur a postponement fee of 25% of the total shoot cost.</li>
+                      <li style={{ marginBottom: 8 }}>Three or more postponements for reasons other than adverse weather conditions will incur a fee of 25% of the total shoot cost per occurrence.</li>
+                      <li style={{ marginBottom: 8 }}>Cancellation of a confirmed booking within 24 hours of the scheduled shoot date will incur a cancellation fee of 25% of the total shoot cost.</li>
+                      <li style={{ marginBottom: 8 }}>Example Content Ltd retains full intellectual property rights over all footage, photography, and associated media produced during the engagement, and reserves the right to use such material for portfolio, marketing, and promotional purposes without limitation.</li>
+                      <li style={{ marginBottom: 8 }}>All quoted prices are exclusive of GST, which will be applied at the prevailing rate.</li>
+                      <li>Final deliverables will be stored securely in Google Drive for a period of 12 months from the date of delivery, after which all files will be permanently deleted. Clients are advised to download and retain their own copies.</li>
+                    </ol></div>
                   <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 20, cursor: 'pointer' }} onClick={() => setTcAccepted(!tcAccepted)}>
                     <div style={{ width: 15, height: 15, borderRadius: 2, border: `1px solid ${tcAccepted ? '#C8C2BB' : 'rgba(200,194,187,0.2)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1, background: tcAccepted ? 'rgba(200,194,187,0.15)' : 'transparent' }}>{tcAccepted && <span style={{ fontSize: 10, color: '#C8C2BB' }}>✓</span>}</div>
-                    <span style={{ fontSize: 12, color: 'rgba(200,194,187,0.5)', lineHeight: 1.6 }}>I have read and agree to the Terms & Conditions. I confirm the above package selection and understand a 50% deposit will be required to finalise my shoot date.</span>
+                    <span style={{ fontSize: 12, color: 'rgba(200,194,187,0.5)', lineHeight: 1.6 }}>I have read and agree to the Terms & Conditions. I confirm the above package selection and authorise Example Content Ltd to proceed with my booking request.</span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 16, borderTop: '0.5px solid rgba(200,194,187,0.09)' }}>
                     <button onClick={() => setBookingStep(4)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>← Back</button>
@@ -864,138 +877,200 @@ export default function ClientPortal() {
           <div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 28px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', background: '#14181F', position: 'sticky', top: 0, zIndex: 10 }}>
               <div>
-                <div style={{ fontSize: 14, fontWeight: 500, color: '#fff' }}>Pitch Decks</div>
-                <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', marginTop: 2 }}>Review and accept proposals from Example Content</div>
+                <div style={{ fontSize: 14, fontWeight: 500, color: '#fff' }}>Our Briefs</div>
+                <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', marginTop: 2 }}>Review and approve proposals from Example Content</div>
               </div>
               <button onClick={() => setActiveView('dashboard')} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>← Back</button>
             </div>
             <div style={{ padding: 28 }}>
-              <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 12 }}>Awaiting review</div>
-              <div style={{ ...s.panel, marginBottom: 24 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '16px 20px' }}>
-                  <div style={{ width: 36, height: 36, borderRadius: 5, background: 'rgba(61,71,86,0.4)', border: '0.5px solid rgba(200,194,187,0.09)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 18 }}>▤</div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 13, fontWeight: 500, color: '#C8C2BB', marginBottom: 2 }}>Orchard Lane — Social Content Campaign Proposal</div>
-                    <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>Sent 13 Jun 2026 · 5 sections · Scope, timeline & pricing</div>
+              {clientBriefs.length === 0 ? (
+                <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, padding: '40px 28px', textAlign: 'center', color: 'rgba(200,194,187,0.3)', fontSize: 13 }}>No briefs received yet</div>
+              ) : (
+                <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, overflow: 'hidden' }}>
+                  {clientBriefs.map((brief: any, i: number) => {
+                    const statusColors: Record<string,{c:string,b:string}> = { draft:{c:'rgba(200,194,187,0.5)',b:'rgba(200,194,187,0.1)'}, sent:{c:'rgba(100,150,220,0.9)',b:'rgba(25,45,80,0.4)'}, approved:{c:'rgba(100,200,130,0.9)',b:'rgba(30,70,45,0.4)'} }
+                    const sc = statusColors[brief.status] || statusColors.sent
+                    return (
+                      <div key={brief.id} style={{ display:'flex', alignItems:'center', gap:14, padding:'16px 20px', borderBottom: i < clientBriefs.length-1 ? '0.5px solid rgba(200,194,187,0.06)':'none' }}>
+                        <div style={{ width:36, height:36, borderRadius:5, background:'rgba(61,71,86,0.4)', border:'0.5px solid rgba(200,194,187,0.09)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, fontSize:18 }}>▤</div>
+                        <div style={{ flex:1 }}>
+                          <div style={{ fontSize:13, fontWeight:500, color:'#C8C2BB', marginBottom:2 }}>{brief.project_name || 'Untitled brief'}</div>
+                          <div style={{ fontSize:11, color:'rgba(200,194,187,0.4)' }}>Received {new Date(brief.created_at).toLocaleDateString('en-NZ',{day:'numeric',month:'short',year:'numeric'})}</div>
+                        </div>
+                        <div style={{ display:'flex', gap:8, alignItems:'center', flexShrink:0 }}>
+                          <span style={{ fontSize:9, letterSpacing:'0.08em', textTransform:'uppercase', padding:'3px 9px', borderRadius:2, background:sc.b, color:sc.c }}>{brief.status}</span>
+                          <button onClick={() => setSelectedBrief(brief)} style={{ fontSize:11, letterSpacing:'0.09em', textTransform:'uppercase', padding:'7px 14px', borderRadius:3, border:'0.5px solid rgba(200,194,187,0.2)', color:'rgba(200,194,187,0.5)', background:'transparent', cursor:'pointer', fontFamily:'inherit' }}>Open</button>
+                          {brief.status === 'sent' && (
+                            <button onClick={async () => { await supabase.from('briefs').update({ status:'approved', approved_at: new Date().toISOString() }).eq('id', brief.id); setClientBriefs(p => p.map(b => b.id===brief.id ? {...b, status:'approved'} : b)) }} style={{ fontSize:11, letterSpacing:'0.09em', textTransform:'uppercase', padding:'7px 14px', borderRadius:3, background:'#C8C2BB', color:'#111', border:'none', cursor:'pointer', fontWeight:500, fontFamily:'inherit' }}>Approve</button>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+            {/* BRIEF VIEWER MODAL */}
+            {selectedBrief && (
+              <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.9)', zIndex:200, display:'flex', alignItems:'flex-start', justifyContent:'center', padding:'20px', overflowY:'auto' }}>
+                <div style={{ background:'#1A1F28', border:'0.5px solid rgba(200,194,187,0.15)', borderRadius:10, width:'100%', maxWidth:800, marginBottom:20 }}>
+                  {/* HEADER */}
+                  <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'18px 24px', borderBottom:'0.5px solid rgba(200,194,187,0.09)', position:'sticky', top:0, background:'#1A1F28', zIndex:10, borderRadius:'10px 10px 0 0' }}>
+                    <div>
+                      <div style={{ fontSize:14, fontWeight:500, color:'#fff' }}>{selectedBrief.project_name}</div>
+                      <div style={{ fontSize:11, color:'rgba(200,194,187,0.4)', marginTop:2 }}>Production Brief · {selectedBrief.client_name}</div>
+                    </div>
+                    <button onClick={() => { setSelectedBrief(null); setBriefFeedback(''); setFeedbackSent(false) }} style={{ fontSize:20, color:'rgba(200,194,187,0.4)', background:'transparent', border:'none', cursor:'pointer' }}>×</button>
                   </div>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
-                    <span style={{ fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '3px 9px', borderRadius: 2, background: 'rgba(25,45,80,0.5)', color: 'rgba(100,150,220,0.85)', border: '0.5px solid rgba(100,150,220,0.2)' }}>Awaiting review</span>
-                    <button style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Open deck</button>
-                    <button style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>Accept</button>
-                  </div>
+                  {(() => {
+                    const d = selectedBrief.data || {}
+                    return (
+                      <div>
+                        {/* COVER SECTION */}
+                        <div style={{ padding:'48px 40px', borderBottom:'0.5px solid rgba(200,194,187,0.09)', textAlign:'center', background:'rgba(0,0,0,0.2)' }}>
+                          <img src="/images/Pale_logo_EX.png" alt="Example Content" style={{ height:44, objectFit:'contain', marginBottom:24, opacity:0.9 }} />
+                          <div style={{ fontSize:11, letterSpacing:'0.2em', textTransform:'uppercase', color:'rgba(200,194,187,0.4)', marginBottom:8 }}>Production Brief — Prepared for</div>
+                          <div style={{ fontSize:32, fontWeight:700, color:'#fff', marginBottom:6 }}>{(selectedBrief.client_name||'').toUpperCase()}</div>
+                          <div style={{ fontSize:16, color:'rgba(200,194,187,0.5)', marginBottom:32 }}>{selectedBrief.project_name}</div>
+                          <div style={{ display:'flex', gap:32, justifyContent:'center', flexWrap:'wrap' }}>
+                            {d.shootDates && <div><div style={{ fontSize:9, letterSpacing:'0.18em', textTransform:'uppercase', color:'rgba(200,194,187,0.35)', marginBottom:4 }}>Shoot Date</div><div style={{ fontSize:14, color:'#C8C2BB', fontWeight:600 }}>{d.shootDates}</div></div>}
+                            {d.shootStartTime && <div><div style={{ fontSize:9, letterSpacing:'0.18em', textTransform:'uppercase', color:'rgba(200,194,187,0.35)', marginBottom:4 }}>Time</div><div style={{ fontSize:14, color:'#C8C2BB', fontWeight:600 }}>{d.shootStartTime}{d.shootEndTime?' – '+d.shootEndTime:''}</div></div>}
+                            {d.draftDue && <div><div style={{ fontSize:9, letterSpacing:'0.18em', textTransform:'uppercase', color:'rgba(200,194,187,0.35)', marginBottom:4 }}>Draft Due</div><div style={{ fontSize:14, color:'#C8C2BB', fontWeight:600 }}>{d.draftDue}</div></div>}
+                            {d.finalsDue && <div><div style={{ fontSize:9, letterSpacing:'0.18em', textTransform:'uppercase', color:'rgba(200,194,187,0.35)', marginBottom:4 }}>Finals Due</div><div style={{ fontSize:14, color:'#C8C2BB', fontWeight:600 }}>{d.finalsDue}</div></div>}
+                            {d.locations && <div><div style={{ fontSize:9, letterSpacing:'0.18em', textTransform:'uppercase', color:'rgba(200,194,187,0.35)', marginBottom:4 }}>Location</div><div style={{ fontSize:14, color:'#C8C2BB', fontWeight:600 }}>{d.locations.split(',')[0]}</div></div>}
+                          </div>
+                        </div>
+                        {/* SCOPE SECTION */}
+                        <div style={{ padding:'32px 40px', borderBottom:'0.5px solid rgba(200,194,187,0.09)' }}>
+                          <div style={{ fontSize:9, letterSpacing:'0.2em', textTransform:'uppercase', color:'rgba(200,194,187,0.35)', marginBottom:6 }}>The Scope</div>
+                          <div style={{ fontSize:22, fontWeight:700, color:'#fff', marginBottom:20 }}>{(d.jobType||'').toUpperCase()}</div>
+                          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:32, marginBottom:24 }}>
+                            <div>
+                              <div style={{ fontSize:10, letterSpacing:'0.16em', textTransform:'uppercase', color:'rgba(200,194,187,0.4)', marginBottom:10, fontWeight:700 }}>Overview</div>
+                              <div style={{ fontSize:14, color:'rgba(200,194,187,0.7)', lineHeight:1.75 }}>{d.jobDescription}</div>
+                            </div>
+                            <div>
+                              <div style={{ fontSize:10, letterSpacing:'0.16em', textTransform:'uppercase', color:'rgba(200,194,187,0.4)', marginBottom:10, fontWeight:700 }}>Deliverables</div>
+                              {(d.deliverables||[]).map((del: any, i: number) => (
+                                <div key={i} style={{ borderBottom:'0.5px solid rgba(200,194,187,0.07)', paddingBottom:10, marginBottom:10 }}>
+                                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:4 }}>
+                                    <span style={{ fontSize:13, color:'#C8C2BB', fontWeight:500 }}>{del.quantity}x {del.name}</span>
+                                    {del.duration && <span style={{ fontSize:11, color:'rgba(200,194,187,0.5)', background:'rgba(200,194,187,0.07)', padding:'2px 8px', borderRadius:3, border:'0.5px solid rgba(200,194,187,0.12)' }}>{del.duration}</span>}
+                                  </div>
+                                  {del.formats && del.formats.length > 0 && <div style={{ display:'flex', gap:4, flexWrap:'wrap' }}>{del.formats.map((f:string,fi:number) => <span key={fi} style={{ fontSize:10, color:'rgba(200,194,187,0.35)', background:'rgba(200,194,187,0.04)', padding:'2px 6px', border:'0.5px solid rgba(200,194,187,0.09)', borderRadius:2 }}>{f}</span>)}</div>}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                        {/* INVESTMENT SECTION */}
+                        {d.total > 0 && (
+                          <div style={{ padding:'32px 40px', borderBottom:'0.5px solid rgba(200,194,187,0.09)' }}>
+                            <div style={{ fontSize:9, letterSpacing:'0.2em', textTransform:'uppercase', color:'rgba(200,194,187,0.35)', marginBottom:6 }}>Investment</div>
+                            <div style={{ fontSize:22, fontWeight:700, color:'#fff', marginBottom:20 }}>PRICING</div>
+                            <div style={{ display:'flex', flexDirection:'column', gap:0 }}>
+                              {d.shootFee > 0 && <div style={{ display:'flex', justifyContent:'space-between', padding:'12px 0', borderBottom:'0.5px solid rgba(200,194,187,0.07)' }}><span style={{ fontSize:14, color:'rgba(200,194,187,0.55)' }}>Filming — {d.shootHours}hrs</span><span style={{ fontSize:14, color:'#C8C2BB', fontWeight:600 }}>${(d.shootFee||0).toLocaleString()}</span></div>}
+                              {d.editFee > 0 && <div style={{ display:'flex', justifyContent:'space-between', padding:'12px 0', borderBottom:'0.5px solid rgba(200,194,187,0.07)' }}><span style={{ fontSize:14, color:'rgba(200,194,187,0.55)' }}>Editing — {d.editHours}hrs</span><span style={{ fontSize:14, color:'#C8C2BB', fontWeight:600 }}>${(d.editFee||0).toLocaleString()}</span></div>}
+                              {d.showPreProd && d.calcPreProd > 0 && <div style={{ display:'flex', justifyContent:'space-between', padding:'12px 0', borderBottom:'0.5px solid rgba(200,194,187,0.07)' }}><span style={{ fontSize:14, color:'rgba(200,194,187,0.55)' }}>Pre-production — {d.preProdHours}hrs</span><span style={{ fontSize:14, color:'#C8C2BB', fontWeight:600 }}>${(d.calcPreProd||0).toLocaleString()}</span></div>}
+                              {d.showTravel && d.calcTravel > 0 && <div style={{ display:'flex', justifyContent:'space-between', padding:'12px 0', borderBottom:'0.5px solid rgba(200,194,187,0.07)' }}><span style={{ fontSize:14, color:'rgba(200,194,187,0.55)' }}>Travel — {d.travelKm}km</span><span style={{ fontSize:14, color:'#C8C2BB', fontWeight:600 }}>${(d.calcTravel||0).toFixed(2)}</span></div>}
+                              <div style={{ marginTop:12, paddingTop:12, borderTop:'1px solid rgba(200,194,187,0.12)' }}>
+                                <div style={{ display:'flex', justifyContent:'space-between', marginBottom:6 }}><span style={{ fontSize:13, color:'rgba(200,194,187,0.4)' }}>Subtotal</span><span style={{ fontSize:13, color:'#C8C2BB' }}>${(d.subtotal||0).toLocaleString()}</span></div>
+                                <div style={{ display:'flex', justifyContent:'space-between', marginBottom:10 }}><span style={{ fontSize:13, color:'rgba(200,194,187,0.4)' }}>GST (15%)</span><span style={{ fontSize:13, color:'#C8C2BB' }}>${(d.gst||0).toLocaleString()}</span></div>
+                                <div style={{ display:'flex', justifyContent:'space-between' }}><span style={{ fontSize:16, fontWeight:700, color:'#fff' }}>Total inc. GST</span><span style={{ fontSize:20, fontWeight:800, color:'#fff' }}>${(d.total||0).toLocaleString()}</span></div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        {/* TEAM SECTION */}
+                        {d.crew && d.crew.length > 0 && (
+                          <div style={{ padding:'32px 40px', borderBottom:'0.5px solid rgba(200,194,187,0.09)' }}>
+                            <div style={{ fontSize:9, letterSpacing:'0.2em', textTransform:'uppercase', color:'rgba(200,194,187,0.35)', marginBottom:6 }}>The Team</div>
+                            <div style={{ fontSize:22, fontWeight:700, color:'#fff', marginBottom:20 }}>YOUR CREW</div>
+                            <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+                              {d.crew.map((c: any, i: number) => (
+                                <div key={i} style={{ display:'flex', alignItems:'center', gap:14, padding:'12px 16px', background:'rgba(200,194,187,0.03)', border:'0.5px solid rgba(200,194,187,0.08)', borderRadius:6 }}>
+                                  {c.photoUrl ? <img src={c.photoUrl} alt={c.name} style={{ width:40, height:40, borderRadius:'50%', objectFit:'cover', flexShrink:0 }} /> : <div style={{ width:40, height:40, borderRadius:'50%', background:'rgba(200,194,187,0.1)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, color:'rgba(200,194,187,0.4)', flexShrink:0 }}>{c.name?.[0]}</div>}
+                                  <div>
+                                    <div style={{ fontSize:13, fontWeight:500, color:'#C8C2BB' }}>{c.name}</div>
+                                    <div style={{ fontSize:11, color:'rgba(200,194,187,0.4)' }}>{c.role}</div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {/* EQUIPMENT SECTION */}
+                        {d.equipment && d.equipment.filter((e: any) => e.selected).length > 0 && (
+                          <div style={{ padding:'32px 40px', borderBottom:'0.5px solid rgba(200,194,187,0.09)' }}>
+                            <div style={{ fontSize:9, letterSpacing:'0.2em', textTransform:'uppercase', color:'rgba(200,194,187,0.35)', marginBottom:6 }}>Equipment</div>
+                            <div style={{ fontSize:22, fontWeight:700, color:'#fff', marginBottom:20 }}>GEAR LIST</div>
+                            <div style={{ display:'flex', flexWrap:'wrap', gap:8 }}>
+                              {d.equipment.filter((e: any) => e.selected).map((e: any, i: number) => (
+                                <span key={i} style={{ fontSize:12, color:'rgba(200,194,187,0.6)', background:'rgba(200,194,187,0.05)', padding:'6px 14px', border:'0.5px solid rgba(200,194,187,0.12)', borderRadius:4 }}>{e.name}</span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {/* SHOT LISTS */}
+                        {d.shotLists && Object.keys(d.shotLists).length > 0 && d.slides && d.slides.filter((s: any) => s.type === 'shotlist').map((slide: any) => {
+                          const sl = d.shotLists[slide.id]
+                          if (!sl || !sl.shots || sl.shots.length === 0) return null
+                          const deliv = d.deliverables?.find((del: any) => del.id === sl.deliverableId)
+                          return (
+                            <div key={slide.id} style={{ padding:'32px 40px', borderBottom:'0.5px solid rgba(200,194,187,0.09)' }}>
+                              <div style={{ fontSize:9, letterSpacing:'0.2em', textTransform:'uppercase', color:'rgba(200,194,187,0.35)', marginBottom:6 }}>Shot List</div>
+                              <div style={{ fontSize:22, fontWeight:700, color:'#fff', marginBottom:20 }}>{deliv ? deliv.name.toUpperCase() : 'SHOTS'}</div>
+                              <div style={{ display:'flex', flexDirection:'column' }}>
+                                <div style={{ display:'grid', gridTemplateColumns:'100px 1fr', gap:0, marginBottom:8 }}>
+                                  <div style={{ fontSize:10, letterSpacing:'0.14em', textTransform:'uppercase', color:'rgba(200,194,187,0.35)', fontWeight:700 }}>Time</div>
+                                  <div style={{ fontSize:10, letterSpacing:'0.14em', textTransform:'uppercase', color:'rgba(200,194,187,0.35)', fontWeight:700 }}>Shot</div>
+                                </div>
+                                {sl.shots.map((shot: any, i: number) => (
+                                  <div key={i} style={{ display:'grid', gridTemplateColumns:'100px 1fr', gap:0, padding:'12px 0', borderTop:'0.5px solid rgba(200,194,187,0.07)' }}>
+                                    <div style={{ fontSize:13, color:'rgba(200,194,187,0.4)' }}>{shot.time || '—'}</div>
+                                    <div style={{ fontSize:14, color:'rgba(200,194,187,0.7)', lineHeight:1.6 }}>{shot.description}</div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )
+                        })}
+                        {/* FEEDBACK / APPROVE SECTION */}
+                        <div style={{ padding:'32px 40px' }}>
+                          {selectedBrief.status === 'approved' ? (
+                            <div style={{ padding:'16px 20px', background:'rgba(100,200,130,0.08)', border:'0.5px solid rgba(100,200,130,0.2)', borderRadius:6, textAlign:'center', fontSize:13, color:'rgba(100,200,130,0.9)' }}>✓ Brief approved — we will be in touch shortly</div>
+                          ) : feedbackSent ? (
+                            <div style={{ padding:'16px 20px', background:'rgba(100,150,220,0.08)', border:'0.5px solid rgba(100,150,220,0.2)', borderRadius:6, textAlign:'center', fontSize:13, color:'rgba(100,150,220,0.9)' }}>✓ Feedback sent — Example Content will review and update your brief</div>
+                          ) : (
+                            <div>
+                              <div style={{ fontSize:12, fontWeight:500, color:'#C8C2BB', marginBottom:16 }}>Your response</div>
+                              <textarea value={briefFeedback} onChange={e => setBriefFeedback(e.target.value)} placeholder="Any changes or feedback? Let us know here..." style={{ width:'100%', background:'rgba(200,194,187,0.04)', border:'0.5px solid rgba(200,194,187,0.09)', borderRadius:4, padding:'12px', fontSize:13, color:'#C8C2BB', fontFamily:'inherit', outline:'none', lineHeight:1.65, resize:'vertical', minHeight:100, marginBottom:16, boxSizing:'border-box' }} />
+                              <div style={{ display:'flex', gap:10, justifyContent:'flex-end' }}>
+                                <button onClick={async () => {
+                                  if (!briefFeedback.trim()) return
+                                  await supabase.from('notifications').insert([{ user_email:'cody@examplecontent.co.nz', type:'brief_feedback', title:'Brief feedback received', message: selectedBrief.client_name + ' sent feedback on ' + selectedBrief.project_name + ': ' + briefFeedback, read:false, project_id: selectedBrief.project_id }])
+                                  await supabase.from('briefs').update({ data: { ...(selectedBrief.data||{}), clientFeedback: briefFeedback, feedbackAt: new Date().toISOString() } }).eq('id', selectedBrief.id)
+                                  setFeedbackSent(true)
+                                }} style={{ fontSize:11, letterSpacing:'0.09em', textTransform:'uppercase', padding:'10px 18px', borderRadius:3, border:'0.5px solid rgba(200,194,187,0.2)', color:'rgba(200,194,187,0.5)', background:'transparent', cursor:'pointer', fontFamily:'inherit' }}>Send feedback</button>
+                                <button onClick={async () => {
+                                  await supabase.from('briefs').update({ status:'approved', approved_at: new Date().toISOString() }).eq('id', selectedBrief.id)
+                                  await supabase.from('notifications').insert([{ user_email:'cody@examplecontent.co.nz', type:'brief_approved', title:'Brief approved', message: selectedBrief.client_name + ' has approved the brief for ' + selectedBrief.project_name, read:false, project_id: selectedBrief.project_id }])
+                                  setClientBriefs(p => p.map(b => b.id===selectedBrief.id ? {...b, status:'approved'} : b))
+                                  setSelectedBrief({...selectedBrief, status:'approved'})
+                                }} style={{ fontSize:11, letterSpacing:'0.09em', textTransform:'uppercase', padding:'10px 24px', borderRadius:3, background:'#C8C2BB', color:'#111', border:'none', cursor:'pointer', fontWeight:500, fontFamily:'inherit' }}>Approve brief</button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })()}
                 </div>
               </div>
-              <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 12 }}>Previously accepted</div>
-              <div style={s.panel}>
-                {[
-                  { title: '14 Clifton Rd — Property Film & Photography', sub: 'Accepted 4 May 2026 · Project complete' },
-                  { title: 'Orchard Lane — Hero Film & Aerial Package', sub: 'Accepted 10 Apr 2026 · Project complete' },
-                ].map((deck, i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 20px', borderBottom: i === 0 ? '0.5px solid rgba(200,194,187,0.06)' : 'none' }}>
-                    <div style={{ width: 36, height: 36, borderRadius: 5, background: 'rgba(61,71,86,0.4)', border: '0.5px solid rgba(200,194,187,0.09)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 18 }}>▤</div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 13, fontWeight: 500, color: '#C8C2BB', marginBottom: 2 }}>{deck.title}</div>
-                      <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>{deck.sub}</div>
-                    </div>
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
-                      <span style={{ fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '3px 9px', borderRadius: 2, background: 'rgba(30,70,45,0.5)', color: 'rgba(100,200,130,0.85)', border: '0.5px solid rgba(100,200,130,0.2)' }}>Accepted</span>
-                      <button style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>View</button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+            )}
           </div>
         )}
-
-        {/* ===== UPCOMING / INVOICES STUBS ===== */}
-        {activeView === 'upcoming' && (() => {
-          const now = new Date()
-          const confirmedShoots = clientProjects.filter((p: any) => p.shoot_date && new Date(p.shoot_date) >= now)
-          const projectShootDates = new Set(clientProjects.map((p: any) => p.shoot_date).filter(Boolean))
-          const pendingShootBookings = clientBookings.filter((b: any) => b.preferred_date && new Date(b.preferred_date) >= now && (b.status === 'pending' || b.status === 'confirmed') && !projectShootDates.has(b.preferred_date)).map((b: any) => ({ id: b.id, title: b.address || b.shoot_package || 'Booking', shoot_date: b.preferred_date, stage: b.status === 'confirmed' ? 'Confirmed' : 'Pending', address: b.address, isPending: true, shoot_package: b.shoot_package, deliverables_type: b.deliverables, addons: b.addons, total: b.total, progress: 0 }))
-          const upcomingAll = [...confirmedShoots, ...pendingShootBookings].sort((a: any, b: any) => new Date(a.shoot_date).getTime() - new Date(b.shoot_date).getTime())
-          const deliveredProjects = clientProjects.filter((p: any) => p.stage === 'Awaiting Confirmation').sort((a: any, b: any) => new Date(b.delivery_due || b.created_at).getTime() - new Date
-          const STAGE_C: Record<string,any> = { 'Pre-Production': {color:'rgba(100,150,220,0.9)',bg:'rgba(25,45,80,0.4)'}, 'Shooting': {color:'rgba(210,175,80,0.9)',bg:'rgba(65,52,18,0.4)'}, 'Post-Production': {color:'rgba(160,100,220,0.9)',bg:'rgba(50,25,80,0.4)'}, 'Revisions': {color:'rgba(220,120,60,0.9)',bg:'rgba(80,35,15,0.4)'}, 'Awaiting Confirmation': {color:'rgba(100,200,130,0.9)',bg:'rgba(30,70,45,0.4)'}, 'Pending': {color:'rgba(210,175,80,0.9)',bg:'rgba(65,52,18,0.4)'}, 'Confirmed': {color:'rgba(100,200,130,0.9)',bg:'rgba(30,70,45,0.4)'} }
-          return (
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 28px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', background: '#14181F', position: 'sticky', top: 0, zIndex: 10 }}>
-                <div style={{ fontSize: 14, fontWeight: 500, color: '#fff' }}>Our Shoots</div>
-                <button onClick={() => setActiveView('book')} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>+ Book new</button>
-              </div>
-              <div style={{ padding: 28 }}>
-                {upcomingAll.length > 0 && (
-                  <div style={{ marginBottom: 32 }}>
-                    <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 14 }}>Upcoming</div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                      {upcomingAll.map((p: any) => {
-                        const d = new Date(p.shoot_date + 'T12:00:00')
-                        const sc = STAGE_C[p.stage] || {color:'#C8C2BB',bg:'rgba(200,194,187,0.1)'}
-                        return (
-                          <div key={p.id} onClick={() => setSelectedProject(p)} style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, padding: '16px 20px', display: 'flex', gap: 16, alignItems: 'center', cursor: 'pointer' }}>
-                            <div style={{ width: 50, flexShrink: 0, textAlign: 'center', background: 'rgba(61,71,86,0.3)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 6, padding: '6px 4px' }}>
-                              <div style={{ fontSize: 18, fontWeight: 600, color: '#fff', lineHeight: 1 }}>{d.getDate()}</div>
-                              <div style={{ fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)', marginTop: 2 }}>{d.toLocaleDateString('en-NZ',{month:'short'})}</div>
-                              <div style={{ fontSize: 9, color: 'rgba(200,194,187,0.3)' }}>{d.getFullYear()}</div>
-                            </div>
-                            <div style={{ flex: 1 }}>
-                              <div style={{ fontSize: 13, fontWeight: 500, color: '#C8C2BB', marginBottom: 3 }}>{p.title}</div>
-                              <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>{d.toLocaleDateString('en-NZ',{weekday:'long', day:'numeric', month:'long'})}</div>
-                              {p.address && <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.3)', marginTop: 2 }}>{p.address}</div>}
-                            </div>
-                            <span style={{ fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '4px 10px', borderRadius: 3, background: sc.bg, color: sc.color, whiteSpace: 'nowrap' }}>{p.stage}</span>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )}
-                {deliveredProjects.length > 0 && (
-                  <div>
-                    <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 14 }}>Delivered</div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                      {deliveredProjects.map((p: any) => {
-                        const delivDate = p.delivery_due ? new Date(p.delivery_due + 'T12:00:00') : null
-                        return (
-                          <div key={p.id} onClick={() => setSelectedProject(p)} style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, padding: '16px 20px', display: 'flex', gap: 16, alignItems: 'center', cursor: 'pointer' }}>
-                            {delivDate ? (
-                              <div style={{ width: 50, flexShrink: 0, textAlign: 'center', background: 'rgba(100,200,130,0.08)', border: '0.5px solid rgba(100,200,130,0.2)', borderRadius: 6, padding: '6px 4px' }}>
-                                <div style={{ fontSize: 18, fontWeight: 600, color: 'rgba(100,200,130,0.9)', lineHeight: 1 }}>{delivDate.getDate()}</div>
-                                <div style={{ fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgba(100,200,130,0.6)', marginTop: 2 }}>{delivDate.toLocaleDateString('en-NZ',{month:'short'})}</div>
-                                <div style={{ fontSize: 9, color: 'rgba(100,200,130,0.4)' }}>{delivDate.getFullYear()}</div>
-                              </div>
-                            ) : (
-                              <div style={{ width: 50, flexShrink: 0, textAlign: 'center', background: 'rgba(100,200,130,0.05)', border: '0.5px solid rgba(100,200,130,0.15)', borderRadius: 6, padding: '6px 4px' }}>
-                                <div style={{ fontSize: 20 }}>✓</div>
-                              </div>
-                            )}
-                            <div style={{ flex: 1 }}>
-                              <div style={{ fontSize: 13, fontWeight: 500, color: '#C8C2BB', marginBottom: 3 }}>{p.title}</div>
-                              <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>{delivDate ? 'Delivered ' + delivDate.toLocaleDateString('en-NZ',{weekday:'long', day:'numeric', month:'long'}) : 'Delivered'}</div>
-                              {p.address && <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.3)', marginTop: 2 }}>{p.address}</div>}
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                              {p.drive_url && <a href={p.drive_url} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '4px 10px', borderRadius: 3, border: '0.5px solid rgba(100,200,130,0.3)', color: 'rgba(100,200,130,0.8)', background: 'rgba(100,200,130,0.08)', textDecoration: 'none', whiteSpace: 'nowrap' }}>📁 View</a>}
-                              <span style={{ fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '4px 10px', borderRadius: 3, background: 'rgba(100,200,130,0.15)', color: 'rgba(100,200,130,0.9)', whiteSpace: 'nowrap' }}>Delivered</span>
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )}
-                {upcomingAll.length === 0 && deliveredProjects.length === 0 && (
-                  <div style={{ textAlign: 'center', paddingTop: 60 }}>
-                    <div style={{ fontSize: 40, marginBottom: 16, opacity: 0.3 }}>📅</div>
-                    <div style={{ fontSize: 14, color: 'rgba(200,194,187,0.4)', marginBottom: 8 }}>No shoots yet</div>
-                    <button onClick={() => setActiveView('book')} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>Book your first shoot</button>
-                  </div>
-                )}
-              </div>
-            </div>
-          )
-        })()}
-        {activeView === 'invoices' && (
+                {activeView === 'invoices' && (
           <div>
             <div style={{ padding: '16px 28px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', background: '#14181F' }}>
               <div style={{ fontSize: 14, fontWeight: 500, color: '#fff' }}>Invoices</div>
