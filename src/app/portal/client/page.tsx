@@ -54,11 +54,16 @@ export default function ClientPortal() {
       setUser(session.user)
       setLoading(false)
       const email = session.user.email
+      // Redirect studio staff to studio portal
+      if (email === 'cody@examplecontent.co.nz') {
+        router.push('/portal/studio')
+        return
+      }
       // Load client profile
       const { data: profile } = await supabase.from('clients1').select('*').eq('email', email).single()
       if (profile) setClientProfile(profile)
       // Load projects linked to this client
-      const { data: projects } = await supabase.from('projects1').select('*').eq('email', email).order('created_at', { ascending: false })
+      const { data: projects } = await supabase.from('projects1').select('*').eq('email', email).eq('archived', false).order('created_at', { ascending: false })
       if (projects) setClientProjects(projects)
       // Load bookings linked to this client
       const { data: bookings } = await supabase.from('bookings1').select('*').eq('client_email', email).order('created_at', { ascending: false })
@@ -229,7 +234,7 @@ export default function ClientPortal() {
           const upcomingShoots = [...confirmedShoots, ...pendingShootBookings].sort((a: any, b: any) => new Date(a.shoot_date).getTime() - new Date(b.shoot_date).getTime())
           const activeProjects = clientProjects.filter((p: any) => p.stage !== 'Awaiting Confirmation')
           const awaitingSchedule = clientBookings.filter((b: any) => !b.preferred_date && b.status === 'pending')
-          const completedProjects = clientProjects.filter((p: any) => p.stage === 'Awaiting Confirmation' || p.archived === true)
+          const completedProjects = clientProjects.filter((p: any) => p.stage === 'Awaiting Confirmation')
           const pendingBookings = clientBookings.filter((b: any) => b.status === 'pending')
 
           // Calendar
@@ -910,7 +915,7 @@ export default function ClientPortal() {
           const projectShootDates = new Set(clientProjects.map((p: any) => p.shoot_date).filter(Boolean))
           const pendingShootBookings = clientBookings.filter((b: any) => b.preferred_date && new Date(b.preferred_date) >= now && (b.status === 'pending' || b.status === 'confirmed') && !projectShootDates.has(b.preferred_date)).map((b: any) => ({ id: b.id, title: b.address || b.shoot_package || 'Booking', shoot_date: b.preferred_date, stage: b.status === 'confirmed' ? 'Confirmed' : 'Pending', address: b.address, isPending: true, shoot_package: b.shoot_package, deliverables_type: b.deliverables, addons: b.addons, total: b.total, progress: 0 }))
           const upcomingAll = [...confirmedShoots, ...pendingShootBookings].sort((a: any, b: any) => new Date(a.shoot_date).getTime() - new Date(b.shoot_date).getTime())
-          const deliveredProjects = clientProjects.filter((p: any) => p.stage === 'Awaiting Confirmation' || p.archived === true).sort((a: any, b: any) => new Date(b.delivery_due || b.created_at).getTime() - new Date(a.delivery_due || a.created_at).getTime())
+          const deliveredProjects = clientProjects.filter((p: any) => p.stage === 'Awaiting Confirmation').sort((a: any, b: any) => new Date(b.delivery_due || b.created_at).getTime() - new Date
           const STAGE_C: Record<string,any> = { 'Pre-Production': {color:'rgba(100,150,220,0.9)',bg:'rgba(25,45,80,0.4)'}, 'Shooting': {color:'rgba(210,175,80,0.9)',bg:'rgba(65,52,18,0.4)'}, 'Post-Production': {color:'rgba(160,100,220,0.9)',bg:'rgba(50,25,80,0.4)'}, 'Revisions': {color:'rgba(220,120,60,0.9)',bg:'rgba(80,35,15,0.4)'}, 'Awaiting Confirmation': {color:'rgba(100,200,130,0.9)',bg:'rgba(30,70,45,0.4)'}, 'Pending': {color:'rgba(210,175,80,0.9)',bg:'rgba(65,52,18,0.4)'}, 'Confirmed': {color:'rgba(100,200,130,0.9)',bg:'rgba(30,70,45,0.4)'} }
           return (
             <div>
