@@ -1,8 +1,87 @@
 'use client'
+import React from 'react'
 import StudioSidebar from './StudioSidebar'
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
+
+function StudioDriveFolder({ driveUrl }: { driveUrl: string }) {
+  const [files, setFiles] = React.useState<any[]>([])
+  const [loading, setLoading] = React.useState(true)
+
+  React.useEffect(() => {
+    fetch(`/api/drive?url=${encodeURIComponent(driveUrl)}`)
+      .then(r => r.json())
+      .then(data => { setFiles(data.files || []); setLoading(false) })
+      .catch(() => setLoading(false))
+  }, [driveUrl])
+
+  if (loading) return <div style={{ textAlign:'center', color:'rgba(200,194,187,0.3)', padding:'40px 0' }}>Loading files...</div>
+  if (files.length === 0) return <div style={{ textAlign:'center', color:'rgba(200,194,187,0.25)', padding:'40px 0' }}>No files found</div>
+
+  return (
+    <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:14 }}>
+      {files.map((file: any) => {
+        const isVideo = file.mimeType?.includes('video')
+        const isImage = file.mimeType?.includes('image')
+        return (
+          <div key={file.id} style={{ background:'#0E1014', border:'0.5px solid rgba(200,194,187,0.08)', borderRadius:7, overflow:'hidden' }}>
+            <div style={{ aspectRatio:'16/9', position:'relative', overflow:'hidden' }}>
+              {isVideo ? (
+                <div style={{ width:'100%', height:'100%', position:'relative', display:'flex', alignItems:'center', justifyContent:'center', background:'#0a0c10' }}>
+                  <img src={`/api/drive?thumb=${file.id}`} alt="" style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', opacity:0.8 }} onError={e=>{(e.target as HTMLImageElement).style.display='none'}} />
+                  <div style={{ position:'relative', width:32, height:32, borderRadius:'50%', background:'rgba(0,0,0,0.6)', display:'flex', alignItems:'center', justifyContent:'center', border:'1px solid rgba(200,194,187,0.3)' }}><span style={{ fontSize:12, marginLeft:2 }}>▶</span></div>
+                </div>
+              ) : isImage ? (
+                <img src={`/api/drive?thumb=${file.id}`} alt={file.name} style={{ width:'100%', height:'100%', objectFit:'cover' }} onError={e=>{(e.target as HTMLImageElement).style.display='none'}} />
+              ) : (
+                <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:28 }}>📄</div>
+              )}
+            </div>
+            <div style={{ padding:'10px 12px' }}>
+              <div style={{ fontSize:11, fontWeight:500, color:'#C8C2BB', marginBottom:4, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{file.name.replace(/\.[^.]+$/, '').replace(/_/g, ' ')}</div>
+              <div style={{ display:'flex', gap:6 }}>
+                <a href={file.webViewLink} target="_blank" rel="noopener noreferrer" style={{ fontSize:9, letterSpacing:'0.08em', textTransform:'uppercase', padding:'4px 8px', borderRadius:2, border:'0.5px solid rgba(200,194,187,0.12)', color:'rgba(200,194,187,0.4)', textDecoration:'none' }}>View</a>
+                <a href={`https://drive.google.com/uc?export=download&id=${file.id}`} target="_blank" rel="noopener noreferrer" style={{ fontSize:9, letterSpacing:'0.08em', textTransform:'uppercase', padding:'4px 8px', borderRadius:2, border:'0.5px solid rgba(200,194,187,0.12)', color:'rgba(200,194,187,0.4)', textDecoration:'none' }}>Download</a>
+              </div>
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function StudioDriveThumb({ driveUrl }: { driveUrl: string }) {
+  const [thumb, setThumb] = React.useState<any>(null)
+  const [loading, setLoading] = React.useState(true)
+
+  React.useEffect(() => {
+    fetch(`/api/drive?url=${encodeURIComponent(driveUrl)}`)
+      .then(r => r.json())
+      .then(data => {
+        const files = data.files || []
+        setThumb(files[0] || null)
+        setLoading(false)
+      })
+      .catch(() => setLoading(false))
+  }, [driveUrl])
+
+  if (loading) return <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', color:'rgba(200,194,187,0.2)', fontSize:11 }}>...</div>
+  if (!thumb) return <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:22, opacity:0.3 }}>📁</div>
+
+  const isVideo = thumb.mimeType?.includes('video')
+  const isImage = thumb.mimeType?.includes('image')
+
+  if (isVideo) return (
+    <div style={{ width:'100%', height:'100%', position:'relative', background:'#0a0c10', display:'flex', alignItems:'center', justifyContent:'center' }}>
+      <img src={`/api/drive?thumb=${thumb.id}`} alt="" style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', opacity:0.8 }} onError={e=>{(e.target as HTMLImageElement).style.display='none'}} />
+      <div style={{ position:'relative', width:32, height:32, borderRadius:'50%', background:'rgba(0,0,0,0.6)', display:'flex', alignItems:'center', justifyContent:'center', border:'1px solid rgba(200,194,187,0.3)', zIndex:1 }}><span style={{ fontSize:12, marginLeft:2, color:'#fff' }}>▶</span></div>
+    </div>
+  )
+  if (isImage) return <img src={`https://lh3.googleusercontent.com/d/${thumb.id}`} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} onError={e=>{(e.target as HTMLImageElement).style.display='none'}} />
+  return <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:22, opacity:0.4 }}>📄</div>
+}
 
 export default function StudioPortal() {
   const router = useRouter()
@@ -14,6 +93,7 @@ export default function StudioPortal() {
   const [respondingToCR, setRespondingToCR] = useState<any>(null)
   const [dashProjects, setDashProjects] = useState<any[]>([])
   const [modalProject, setModalProject] = useState<any>(null)
+  const [deliveryModal, setDeliveryModal] = useState<any>(null)
   const [modalEditing, setModalEditing] = useState(false)
   const [modalSaving, setModalSaving] = useState(false)
   const [modalSaved, setModalSaved] = useState(false)
@@ -289,10 +369,14 @@ export default function StudioPortal() {
                   { label: 'In post-production', value: dashProjects.filter((p: any) => p.stage === 'Post-Production' || p.stage === 'Revisions').length, sub: 'Editing & revisions' },
                   { label: 'Ready to invoice', value: dashProjects.filter((p: any) => p.stage === 'Awaiting Confirmation').length, sub: (() => { const now = new Date(); const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0); const days = Math.ceil((lastDay.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)); return days === 0 ? 'Last day of month!' : `${days} day${days !== 1 ? 's' : ''} until end of month` })(), alert: dashProjects.filter((p: any) => p.stage === 'Awaiting Confirmation').length > 0 },
                 ].map(({ label, value, sub, alert }: any) => (
-                  <div key={label} style={{ background: '#1A1F28', border: '0.5px solid ' + (alert ? 'rgba(210,90,90,0.3)' : 'rgba(200,194,187,0.09)'), borderRadius: 7, padding: '18px 20px' }}>
-                    <div style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 8 }}>{label}</div>
-                    <div style={{ fontSize: 28, fontWeight: 600, color: alert ? 'rgba(210,90,90,0.9)' : '#fff', marginBottom: 6 }}>{value}</div>
-                    <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.35)' }}>{sub}</div>
+                  <div key={label} style={{ background: 'linear-gradient(135deg, rgba(30,36,48,0.9) 0%, rgba(20,24,32,0.95) 100%)', border: '0.5px solid ' + (alert ? 'rgba(210,90,90,0.4)' : 'rgba(200,194,187,0.08)'), borderRadius: 12, padding: '20px 22px', position: 'relative', overflow: 'hidden', boxShadow: alert ? '0 0 20px rgba(210,90,90,0.08) inset' : '0 0 0 0 transparent' }}>
+                    <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '1px', background: alert ? 'linear-gradient(90deg, transparent, rgba(210,90,90,0.5), transparent)' : 'linear-gradient(90deg, transparent, rgba(200,194,187,0.12), transparent)' }} />
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+                      <div style={{ fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', fontWeight: 500 }}>{label}</div>
+                      <div style={{ width: 6, height: 6, borderRadius: '50%', background: alert ? 'rgba(210,90,90,0.9)' : 'rgba(100,200,130,0.7)', boxShadow: alert ? '0 0 8px rgba(210,90,90,0.6)' : '0 0 8px rgba(100,200,130,0.5)' }} />
+                    </div>
+                    <div style={{ fontSize: 42, fontWeight: 700, lineHeight: 1, marginBottom: 8, color: alert ? 'rgba(210,90,90,0.9)' : '#fff' }}>{value}</div>
+                    <div style={{ fontSize: 11, color: alert ? 'rgba(210,90,90,0.7)' : 'rgba(200,194,187,0.3)', letterSpacing: '0.02em' }}>{sub}</div>
                   </div>
                 ))}
               </div>
@@ -358,17 +442,14 @@ export default function StudioPortal() {
                       </div>
                       <div style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 8 }}>
                         {recentDeliveries.map((p: any) => (
-                          <div key={p.id} onClick={() => { setModalProject(p); setModalEditing(false) }} style={{ flexShrink: 0, width: 200, background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, overflow: 'hidden', cursor: 'pointer' }}>
-                            <div style={{ height: 90, background: 'rgba(100,200,130,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', borderBottom: '0.5px solid rgba(200,194,187,0.06)' }}>
+                          <div key={p.id} onClick={() => setDeliveryModal(p)} style={{ flexShrink: 0, width: 200, background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, overflow: 'hidden', cursor: 'pointer' }}>
+                            <div style={{ height:110, background:'#0a0c10', position:'relative', overflow:'hidden', borderBottom:'0.5px solid rgba(200,194,187,0.06)', pointerEvents:'none' }}>
                               {p.drive_url ? (
-                                <a href={p.drive_url} target="_blank" rel="noopener noreferrer" onClick={(e: any) => e.stopPropagation()} style={{ fontSize: 11, color: 'rgba(100,200,130,0.7)', textDecoration: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5 }}>
-                                  <span style={{ fontSize: 22 }}>📁</span>
-                                  <span style={{ fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Open Drive</span>
-                                </a>
+                                <StudioDriveThumb driveUrl={p.drive_url} />
                               ) : (
-                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5 }}>
-                                  <span style={{ fontSize: 22, opacity: 0.25 }}>📁</span>
-                                  <span style={{ fontSize: 9, color: 'rgba(200,194,187,0.25)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>No folder</span>
+                                <div style={{ width:'100%', height:'100%', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:6 }}>
+                                  <span style={{ fontSize:22, opacity:0.25 }}>📁</span>
+                                  <span style={{ fontSize:9, color:'rgba(200,194,187,0.25)', letterSpacing:'0.08em', textTransform:'uppercase' }}>Coming soon</span>
                                 </div>
                               )}
                             </div>
@@ -1237,6 +1318,30 @@ export default function StudioPortal() {
               <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: 16, borderTop: '0.5px solid rgba(200,194,187,0.09)' }}>
                 <button onClick={async () => { await saveModalProject(); setModalProject(null); setModalEditing(false); router.push('/portal/studio/projects') }} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>← Back to projects</button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* DELIVERY MODAL */}
+      {deliveryModal && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.85)', zIndex:300, display:'flex', alignItems:'center', justifyContent:'center', padding:20 }} onClick={() => setDeliveryModal(null)}>
+          <div style={{ background:'#1A1F28', border:'0.5px solid rgba(200,194,187,0.15)', borderRadius:10, width:'100%', maxWidth:800, maxHeight:'90vh', overflow:'hidden', display:'flex', flexDirection:'column' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'18px 24px', borderBottom:'0.5px solid rgba(200,194,187,0.09)' }}>
+              <div>
+                <div style={{ fontSize:14, fontWeight:500, color:'#fff' }}>{deliveryModal.title}</div>
+                <div style={{ fontSize:11, color:'rgba(200,194,187,0.4)', marginTop:2 }}>{deliveryModal.client} · Delivered</div>
+              </div>
+              <div style={{ display:'flex', gap:10 }}>
+                <button onClick={() => { setModalProject(deliveryModal); setModalEditing(false); setDeliveryModal(null) }} style={{ fontSize:11, letterSpacing:'0.09em', textTransform:'uppercase', padding:'7px 14px', borderRadius:3, border:'0.5px solid rgba(200,194,187,0.2)', color:'rgba(200,194,187,0.5)', background:'transparent', cursor:'pointer', fontFamily:'inherit' }}>View project →</button>
+                <button onClick={() => setDeliveryModal(null)} style={{ fontSize:20, color:'rgba(200,194,187,0.4)', background:'transparent', border:'none', cursor:'pointer' }}>×</button>
+              </div>
+            </div>
+            <div style={{ overflowY:'auto', flex:1, padding:24 }}>
+              {deliveryModal.drive_url ? (
+                <StudioDriveFolder driveUrl={deliveryModal.drive_url} />
+              ) : (
+                <div style={{ textAlign:'center', color:'rgba(200,194,187,0.25)', fontSize:13, padding:'40px 0' }}>No files uploaded yet</div>
+              )}
             </div>
           </div>
         </div>

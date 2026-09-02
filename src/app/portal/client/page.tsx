@@ -30,7 +30,7 @@ function DriveThumb({ project, onClick }: { project: any; onClick: () => void })
         ) : firstFile ? (
           isVideo(firstFile.mimeType) ? (
             <div style={{ width:'100%', height:'100%', position:'relative', overflow:'hidden', background:'#0a0c10', display:'flex', alignItems:'center', justifyContent:'center' }}>
-              <img src={`https://drive.google.com/thumbnail?id=${firstFile.id}&sz=w400`} alt={project.title} style={{ width:'100%', height:'100%', objectFit:'cover', opacity:0.8 }} onError={e=>{(e.target as HTMLImageElement).style.display='none'}} />
+              <img src={`/api/drive?thumb=${firstFile.id}`} alt={project.title} style={{ width:'100%', height:'100%', objectFit:'cover', opacity:0.8 }} onError={e=>{(e.target as HTMLImageElement).style.display='none'}} />
               <div style={{ position:'absolute', width:36, height:36, borderRadius:'50%', background:'rgba(0,0,0,0.7)', display:'flex', alignItems:'center', justifyContent:'center', border:'1.5px solid rgba(200,194,187,0.4)' }}><span style={{ fontSize:14, marginLeft:3 }}>▶</span></div>
             </div>
           ) : (
@@ -166,6 +166,11 @@ export default function ClientPortal() {
   // Pre-fill email from logged in user
   useEffect(() => { if (user?.email && !clientEmail2) setClientEmail2(user.email) }, [user])
   const [draftDue, setDraftDue] = useState("")
+  const [preferredTime, setPreferredTime] = useState("")
+  const [propertyLiveDate, setPropertyLiveDate] = useState("")
+  const [suggestedStoryline, setSuggestedStoryline] = useState("")
+  const [shotList, setShotList] = useState("• \n• \n• \n• \n• ")
+  const [prePlanning, setPrePlanning] = useState(false)
   const [deliveryDue, setDeliveryDue] = useState("")
 
 
@@ -256,46 +261,58 @@ export default function ClientPortal() {
 
   const propertyShootPackages = [
     {
-      name: 'Campaign Essentials', price: 890,
-      includes: ['3hrs on-site', '6hrs editing', 'Aerial drone included', 'Colour graded'],
+      name: 'Property Ad', price: 650,
+      tag: 'Popular for socials',
+      description: '20–30s social media highlight reel, optimised for maximum engagement across all platforms.',
+      includes: ['20–30s social media highlights', 'Vertical & landscape formats'],
       deliverables: [
-        { name: 'Walkthrough Video (45–60s)', price: 0, includes: ['1x walkthrough video', 'Google Drive delivery'] },
-        { name: '2x Showcase Reels (20s)', price: 0, includes: ['2x 20s showcase reels', 'Vertical & landscape cuts', 'Google Drive delivery'] },
+        { name: 'Property Ad (20–30s)', price: 0, includes: ['1x social-optimised video', 'Vertical & landscape formats', 'Google Drive delivery'] },
       ]
     },
     {
-      name: 'Campaign Plus', price: 1280,
-      includes: ['4hrs on-site', 'Lifestyle/talent shoot included', '8hrs editing', 'Aerial drone included'],
+      name: 'Signature', price: 890,
+      tag: 'Our base package',
+      description: '60–90s cinematic property tour with a handful of agent lifestyle shots to bring the listing to life.',
+      includes: ['60–90s property tour', 'Agent lifestyle shots'],
       deliverables: [
-        { name: 'Walkthrough Video (60s)', price: 0, includes: ['1x 60s walkthrough video', 'Google Drive delivery'] },
+        { name: 'Walkthrough Film (60–90s)', price: 0, includes: ['1x walkthrough film', 'Google Drive delivery'] },
+        { name: '2x Showcase Reels (20s)', price: 0, includes: ['2x 20s showcase reels', 'Vertical & landscape', 'Google Drive delivery'] },
+      ]
+    },
+    {
+      name: 'Lifestyle Package', price: 1280,
+      tag: 'The lifestyle showcase',
+      description: 'Everything in Signature, plus a full hour of lifestyle filming with talent to elevate the property narrative.',
+      includes: ['60–90s property tour', '1hr lifestyle shoot with talent', 'Agent lifestyle shots'],
+      deliverables: [
+        { name: 'Showcase Film (60–90s)', price: 0, includes: ['1x cinematic film', 'Google Drive delivery'] },
         { name: '3x Reels + Carousel', price: 0, includes: ['3x social reels', '1x carousel', 'Google Drive delivery'] },
       ]
     },
     {
       name: 'Architectural', price: 2480,
-      includes: ['Full day shoot', 'Coming Soon Reel', '1–2 min Property Showcase', 'Story Content', 'Carousel'],
+      tag: 'Full production',
+      description: 'Our most comprehensive package. Morning, afternoon & twilight shoot with lifestyle elements, talking to camera, and unlimited creative flexibility.',
+      includes: ['Morning, afternoon & twilight shoot', 'Lifestyle shoot + talking to camera', 'Unlimited creative elements', '2 days editing', '1x Market-leading property tour (1–2 min)', '1x Social media reel (15–30s)'],
       deliverables: [
-        { name: 'Full Architectural Package', price: 0, includes: ['Coming Soon Reel', '1–2 min Property Showcase', 'Story Content', 'Carousel', 'Google Drive delivery'] },
+        { name: 'Full Architectural Package', price: 0, includes: ['1x Property tour (1–2 min)', '1x Social reel (15–30s)', 'Google Drive delivery'] },
       ]
     },
   ]
 
-  const commercialShootPackages = [
-    { name: 'Brand Film', price: 1490, includes: ['Full production day', 'Director-led shoot', 'Script & shot list included', 'Colour grade & sound mix'] },
-    { name: 'Social Content Day', price: 890, includes: ['Up to 6 hrs on-site', 'Multi-format capture', 'Platform-optimised', '48hr turnaround'] },
-    { name: 'Event Coverage', price: 1190, includes: ['Full event duration', 'Video + photo coverage', 'Highlight reel included', 'Same-day social cuts available'] },
+    const commercialShootPackages = [
+    { name: 'Social Spark', price: 890, includes: ['Multi-format capture', 'Colour graded & edited', 'Google Drive delivery'] },
+    { name: 'Brand Story', price: 1490, includes: ['Director-led production', 'Script & creative development', 'Colour graded & edited', 'Google Drive delivery'] },
+    { name: 'Event Capture', price: 1190, includes: ['Full event coverage', 'Video + photo', 'Colour graded & edited', 'Google Drive delivery'] },
   ]
 
-  const propertyDeliverables: any[] = []
-
-
+    const propertyDeliverables: any[] = []
   const commercialDeliverables = [
     { name: 'Hero Film + Social Cut', price: 290, includes: ['1x hero film (2-3 min)', '1x 60 sec social cut', 'Google Drive delivery'] },
-    { name: 'Social Reels Pack (4x)', price: 390, includes: ['4x social reels', 'Multi-format', 'Cover frames included', 'Google Drive delivery'] },
+    { name: 'Social Reels Pack (4x)', price: 390, includes: ['4x social reels', 'Multi-format', 'Google Drive delivery'] },
     { name: 'Single Social Reel', price: 140, includes: ['1x social reel', 'Vertical or landscape', 'Google Drive delivery'] },
     { name: 'Stills Pack', price: 240, includes: ['20-30 edited stills', 'High-res + web-res', 'Google Drive delivery'] },
   ]
-
   const propertyAddons = [
     { name: 'Additional 20s Reel', price: 250, desc: 'One additional 20s showcase reel' },
     { name: 'Additional 40s Reel', price: 400, desc: 'One additional 40s showcase reel' },
@@ -303,16 +320,13 @@ export default function ClientPortal() {
     { name: 'Open Home Story', price: 80, desc: 'Short-form story content for open home promotion' },
     { name: 'Content Library', price: 100, desc: 'Extended content library for ongoing social use' },
     { name: 'Twilight Shoot', price: 350, desc: 'Golden hour & dusk exterior shoot' },
-    { name: 'Additional Shoot Time', price: 350, desc: 'Extra time on-site beyond package allocation' },
   ]
-
   const commercialAddons = [
     { name: 'Additional Talent', price: 220, desc: 'Extra on-screen talent sourced by Example Content' },
     { name: 'Rush Delivery (48hr)', price: 180, desc: 'Priority turnaround within 48 hours' },
     { name: 'Voiceover & Sound Design', price: 260, desc: 'Professional voiceover and custom sound design' },
-    { name: 'Extra Shoot Hours', price: 290, desc: 'Add up to 3 additional hours to any package' },
+    { name: 'Extra Shoot Hours', price: 290, desc: 'Add additional hours to any package' },
   ]
-
   const shootPackages = selectedCat === 'property' ? propertyShootPackages : commercialShootPackages
   const deliverables = selectedCat === 'property' ? propertyDeliverables : commercialDeliverables
   const addons = selectedCat === 'property' ? propertyAddons : commercialAddons
@@ -377,7 +391,7 @@ export default function ClientPortal() {
           const upcomingShoots = [...confirmedShoots, ...pendingShootBookings].sort((a: any, b: any) => new Date(a.shoot_date).getTime() - new Date(b.shoot_date).getTime())
           const activeProjects = clientProjects.filter((p: any) => p.stage !== 'Awaiting Confirmation')
           const awaitingSchedule = clientBookings.filter((b: any) => !b.preferred_date && b.status === 'pending')
-          const completedProjects = clientProjects.filter((p: any) => p.stage === 'Awaiting Confirmation')
+          const completedProjects = clientProjects.filter((p: any) => p.stage === 'Awaiting Confirmation' || p.drive_url)
           const pendingBookings = clientBookings.filter((b: any) => b.status === 'pending')
 
           // Calendar
@@ -577,13 +591,13 @@ export default function ClientPortal() {
 
               {/* STEP INDICATOR */}
               {bookingStep > 1 && <div style={{ display: 'flex', alignItems: 'center', marginBottom: 28, padding: '0 28px' }}>
-                {['Category','Packages','Add-ons','Details','Confirm'].map((step, i) => (
-                  <div key={step} style={{ display: 'flex', alignItems: 'center', flex: i < 4 ? 1 : 'none' }}>
+                {['Category','Packages','Deliverables','Add-ons','Details','Confirm'].map((step, i) => (
+                  <div key={step} style={{ display: 'flex', alignItems: 'center', flex: i < 5 ? 1 : 'none' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <div style={{ width: 26, height: 26, borderRadius: '50%', border: `1px solid ${bookingStep > i + 1 ? 'rgba(100,200,130,0.5)' : bookingStep === i + 1 ? '#C8C2BB' : 'rgba(200,194,187,0.1)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 500, color: bookingStep > i + 1 ? 'rgba(100,200,130,0.8)' : bookingStep === i + 1 ? '#C8C2BB' : 'rgba(200,194,187,0.3)', background: bookingStep > i + 1 ? 'rgba(30,70,45,0.5)' : bookingStep === i + 1 ? 'rgba(200,194,187,0.08)' : 'transparent', flexShrink: 0 }}>{bookingStep > i + 1 ? '✓' : i + 1}</div>
                       <span style={{ fontSize: 11, color: bookingStep === i + 1 ? '#C8C2BB' : bookingStep > i + 1 ? 'rgba(100,200,130,0.7)' : 'rgba(200,194,187,0.3)', whiteSpace: 'nowrap' }}>{step}</span>
                     </div>
-                    {i < 4 && <div style={{ flex: 1, height: 0.5, background: 'rgba(200,194,187,0.09)', margin: '0 10px' }} />}
+                    {i < 5 && <div style={{ flex: 1, height: 0.5, background: 'rgba(200,194,187,0.09)', margin: '0 10px' }} />}
                   </div>
                 ))}
               </div>}
@@ -654,63 +668,73 @@ export default function ClientPortal() {
               {bookingStep === 2 && (
                 <div>
                   <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 12 }}>Select package</div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 22 }}>
+                  <div style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:14, marginBottom:22 }}>
                     {shootPackages.map((pkg: any) => (
-                      <div key={pkg.name} onClick={() => { setSelectedShoot(pkg); setSelectedSubDel(null); setSelectedDel(null) }} style={{ border: `0.5px solid ${selectedShoot?.name === pkg.name ? '#C8C2BB' : 'rgba(200,194,187,0.09)'}`, borderRadius: 8, padding: '16px 18px', cursor: 'pointer', background: selectedShoot?.name === pkg.name ? 'rgba(200,194,187,0.05)' : '#1A1F28', position: 'relative' }}>
-                        {selectedShoot?.name === pkg.name && <span style={{ position: 'absolute', top: 12, right: 14, color: '#C8C2BB', fontSize: 12 }}>✓</span>}
-                        <div style={{ fontSize: 13, fontWeight: 500, color: '#C8C2BB', marginBottom: 6, paddingRight: 16 }}>{pkg.name}</div>
-                        <div style={{ fontSize: 19, fontWeight: 500, color: '#fff', letterSpacing: '-0.02em', marginBottom: 10 }}>${pkg.price.toLocaleString()} <span style={{ fontSize: 11, fontWeight: 400, color: 'rgba(200,194,187,0.4)' }}>+ GST</span></div>
-                        <ul style={{ listStyle: 'none' }}>
-                          {pkg.includes.map((item: string) => <li key={item} style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', display: 'flex', gap: 7, marginBottom: 5 }}><span style={{ color: 'rgba(200,194,187,0.25)' }}>—</span>{item}</li>)}
-                        </ul>
+                      <div key={pkg.name} onClick={() => { setSelectedShoot(pkg); setSelectedSubDel(null); setSelectedDel(null) }} style={{ border:`0.5px solid ${selectedShoot?.name === pkg.name ? 'rgba(200,194,187,0.35)' : 'rgba(200,194,187,0.08)'}`, borderRadius:12, padding:'22px 24px', cursor:'pointer', background: selectedShoot?.name === pkg.name ? 'linear-gradient(135deg, rgba(35,42,56,0.95) 0%, rgba(22,27,38,0.98) 100%)' : 'linear-gradient(135deg, rgba(26,31,40,0.9) 0%, rgba(18,22,30,0.95) 100%)', position:'relative', transition:'all 0.2s', boxShadow: selectedShoot?.name === pkg.name ? '0 0 30px rgba(200,194,187,0.04) inset' : 'none', overflow:'hidden' }}>
+                        <div style={{ position:'absolute', top:0, left:0, right:0, height:'1px', background: selectedShoot?.name === pkg.name ? 'linear-gradient(90deg, transparent, rgba(200,194,187,0.25), transparent)' : 'linear-gradient(90deg, transparent, rgba(200,194,187,0.06), transparent)' }} />
+                        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:14 }}>
+                          <div>
+                            {pkg.tag && <div style={{ fontSize:9, letterSpacing:'0.14em', textTransform:'uppercase', color:'rgba(100,200,130,0.6)', marginBottom:6, display:'flex', alignItems:'center', gap:5 }}><span style={{ width:4, height:4, borderRadius:'50%', background:'rgba(100,200,130,0.6)', display:'inline-block' }} />{pkg.tag}</div>}
+                            <div style={{ fontSize:16, fontWeight:600, color:'#fff', letterSpacing:'-0.01em' }}>{pkg.name}</div>
+                          </div>
+                          <div style={{ textAlign:'right', flexShrink:0, marginLeft:16 }}>
+                            <div style={{ fontSize:24, fontWeight:700, color:'#fff', letterSpacing:'-0.03em', lineHeight:1 }}>${pkg.price.toLocaleString()}</div>
+                            <div style={{ fontSize:9, color:'rgba(200,194,187,0.3)', letterSpacing:'0.08em', marginTop:2 }}>+ GST</div>
+                          </div>
+                        </div>
+                        {pkg.description && <div style={{ fontSize:12, color:'rgba(200,194,187,0.45)', lineHeight:1.7, marginBottom:16, paddingBottom:16, borderBottom:'0.5px solid rgba(200,194,187,0.07)' }}>{pkg.description}</div>}
+                        {pkg.includes && pkg.includes.length > 0 && (
+                          <div style={{ display:'flex', flexDirection:'column', gap:7 }}>
+                            {pkg.includes.map((item: string) => (
+                              <div key={item} style={{ display:'flex', gap:10, fontSize:11, color:'rgba(200,194,187,0.5)', alignItems:'flex-start' }}>
+                                <span style={{ color:'rgba(100,200,130,0.55)', flexShrink:0, marginTop:1 }}>✓</span>{item}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {selectedShoot?.name === pkg.name && <div style={{ position:'absolute', top:16, right:16, width:22, height:22, borderRadius:'50%', background:'#C8C2BB', display:'flex', alignItems:'center', justifyContent:'center', boxShadow:'0 0 12px rgba(200,194,187,0.3)' }}><span style={{ fontSize:11, color:'#111', fontWeight:700 }}>✓</span></div>}
                       </div>
                     ))}
                   </div>
-
-                  {selectedShoot && selectedShoot.deliverables && (
-                    <div style={{ marginBottom: 22 }}>
-                      <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 12 }}>Choose your deliverable</div>
-                      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${selectedShoot.deliverables.length}, 1fr)`, gap: 12 }}>
-                        {selectedShoot.deliverables.map((del: any) => (
-                          <div key={del.name} onClick={() => { setSelectedSubDel(del); setSelectedDel(del) }} style={{ border: `0.5px solid ${selectedSubDel?.name === del.name ? '#C8C2BB' : 'rgba(200,194,187,0.09)'}`, borderRadius: 8, padding: '14px 16px', cursor: 'pointer', background: selectedSubDel?.name === del.name ? 'rgba(200,194,187,0.05)' : '#1A1F28', position: 'relative' }}>
-                            {selectedSubDel?.name === del.name && <span style={{ position: 'absolute', top: 10, right: 12, color: '#C8C2BB', fontSize: 12 }}>✓</span>}
-                            <div style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB', marginBottom: 8, paddingRight: 14 }}>{del.name}</div>
-                            <ul style={{ listStyle: 'none' }}>
-                              {del.includes.map((item: string) => <li key={item} style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', display: 'flex', gap: 6, marginBottom: 4 }}><span style={{ color: 'rgba(200,194,187,0.25)' }}>—</span>{item}</li>)}
-                            </ul>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {selectedShoot && !selectedShoot.deliverables && deliverables.length > 0 && (
-                    <div style={{ marginBottom: 22 }}>
-                      <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 12 }}>Deliverable package — select one</div>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12 }}>
-                        {deliverables.map((pkg: any) => (
-                          <div key={pkg.name} onClick={() => setSelectedDel(pkg)} style={{ border: `0.5px solid ${selectedDel?.name === pkg.name ? '#C8C2BB' : 'rgba(200,194,187,0.09)'}`, borderRadius: 8, padding: '14px 16px', cursor: 'pointer', background: selectedDel?.name === pkg.name ? 'rgba(200,194,187,0.05)' : '#1A1F28', position: 'relative' }}>
-                            {selectedDel?.name === pkg.name && <span style={{ position: 'absolute', top: 10, right: 12, color: '#C8C2BB', fontSize: 12 }}>✓</span>}
-                            <div style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB', marginBottom: 5, paddingRight: 14 }}>{pkg.name}</div>
-                            <div style={{ fontSize: 17, fontWeight: 500, color: '#fff', letterSpacing: '-0.02em', marginBottom: 8 }}>${pkg.price} <span style={{ fontSize: 11, fontWeight: 400, color: 'rgba(200,194,187,0.4)' }}>+ GST</span></div>
-                            <ul style={{ listStyle: 'none' }}>
-                              {pkg.includes.map((item: string) => <li key={item} style={{ fontSize: 10, color: 'rgba(200,194,187,0.4)', display: 'flex', gap: 6, marginBottom: 4 }}><span style={{ color: 'rgba(200,194,187,0.25)' }}>—</span>{item}</li>)}
-                            </ul>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
                   <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 16, borderTop: '0.5px solid rgba(200,194,187,0.09)' }}>
                     <button onClick={() => setBookingStep(1)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>← Back</button>
-                    <button onClick={() => selectedShoot && (selectedDel || selectedSubDel) && setBookingStep(3)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, background: selectedShoot && (selectedDel || selectedSubDel) ? '#C8C2BB' : 'rgba(200,194,187,0.1)', color: selectedShoot && (selectedDel || selectedSubDel) ? '#111' : 'rgba(200,194,187,0.2)', border: 'none', cursor: selectedShoot && (selectedDel || selectedSubDel) ? 'pointer' : 'not-allowed', fontWeight: 500, fontFamily: 'inherit' }}>Continue →</button>
+                    <button onClick={() => selectedShoot && setBookingStep(3)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, background: selectedShoot ? '#C8C2BB' : 'rgba(200,194,187,0.1)', color: selectedShoot ? '#111' : 'rgba(200,194,187,0.2)', border:'none', cursor: selectedShoot ? 'pointer' : 'not-allowed', fontWeight: 500, fontFamily: 'inherit' }}>Continue →</button>
                   </div>
                 </div>
               )}
 
-              {/* STEP 3: ADD-ONS */}
+              {/* STEP 3: DELIVERABLES */}
               {bookingStep === 3 && (
+                <div>
+                  <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 16 }}>Choose your deliverable</div>
+                  <div style={{ display:'flex', flexDirection:'column', gap:12, marginBottom:22 }}>
+                    {(selectedShoot?.deliverables || deliverables).map((del: any) => (
+                      <div key={del.name} onClick={() => { setSelectedDel(del); setSelectedSubDel(del) }} style={{ border:`0.5px solid ${selectedDel?.name === del.name ? 'rgba(200,194,187,0.35)' : 'rgba(200,194,187,0.08)'}`, borderRadius:12, padding:'22px 24px', cursor:'pointer', background: selectedDel?.name === del.name ? 'linear-gradient(135deg,rgba(35,42,56,0.95),rgba(22,27,38,0.98))' : 'linear-gradient(135deg,rgba(26,31,40,0.9),rgba(18,22,30,0.95))', position:'relative', overflow:'hidden', transition:'all 0.2s', boxShadow: selectedDel?.name === del.name ? '0 0 30px rgba(200,194,187,0.04) inset' : 'none' }}>
+                        <div style={{ position:'absolute', top:0, left:0, right:0, height:'1px', background: selectedDel?.name === del.name ? 'linear-gradient(90deg,transparent,rgba(200,194,187,0.25),transparent)' : 'linear-gradient(90deg,transparent,rgba(200,194,187,0.06),transparent)' }} />
+                        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: del.includes?.length > 0 ? 12 : 0 }}>
+                          <div style={{ fontSize:14, fontWeight:600, color:'#fff' }}>{del.name}</div>
+                          <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                            {del.price > 0 && <div style={{ fontSize:13, color:'rgba(200,194,187,0.5)' }}>+${del.price} GST</div>}
+                            {selectedDel?.name === del.name && <div style={{ width:22, height:22, borderRadius:'50%', background:'#C8C2BB', display:'flex', alignItems:'center', justifyContent:'center' }}><span style={{ fontSize:11, color:'#111', fontWeight:700 }}>✓</span></div>}
+                          </div>
+                        </div>
+                        {del.includes && del.includes.length > 0 && (
+                          <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
+                            {del.includes.filter((i: string) => !i.includes('Google Drive')).map((item: string) => (
+                              <span key={item} style={{ fontSize:10, color:'rgba(200,194,187,0.4)', background:'rgba(200,194,187,0.05)', padding:'3px 10px', borderRadius:3, border:'0.5px solid rgba(200,194,187,0.08)' }}>{item}</span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ display:'flex', justifyContent:'space-between' }}>
+                    <button onClick={() => setBookingStep(2)} style={{ fontSize:11, letterSpacing:'0.09em', textTransform:'uppercase', padding:'8px 16px', borderRadius:3, border:'0.5px solid rgba(200,194,187,0.2)', color:'rgba(200,194,187,0.5)', background:'transparent', cursor:'pointer', fontFamily:'inherit' }}>← Back</button>
+                    <button onClick={() => selectedDel && setBookingStep(4)} style={{ fontSize:11, letterSpacing:'0.09em', textTransform:'uppercase', padding:'8px 16px', borderRadius:3, background: selectedDel ? '#C8C2BB' : 'rgba(200,194,187,0.1)', color: selectedDel ? '#111' : 'rgba(200,194,187,0.2)', border:'none', cursor: selectedDel ? 'pointer' : 'not-allowed', fontWeight:500, fontFamily:'inherit' }}>Continue →</button>
+                  </div>
+                </div>
+              )}
+    {bookingStep === 4 && (
                 <div>
                   <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 6 }}>Add-ons <span style={{ color: 'rgba(200,194,187,0.2)', fontSize: 10, textTransform: 'none', letterSpacing: 0, marginLeft: 8 }}>Optional — select any that apply</span></div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 20 }}>
@@ -734,13 +758,13 @@ export default function ClientPortal() {
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 16, borderTop: '0.5px solid rgba(200,194,187,0.09)' }}>
                     <button onClick={() => setBookingStep(2)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>← Back</button>
-                    <button onClick={() => setBookingStep(4)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>Continue to details →</button>
+                    <button onClick={() => setBookingStep(5)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>Continue to details →</button>
                   </div>
                 </div>
               )}
 
               {/* STEP 4: DETAILS */}
-              {bookingStep === 4 && (
+              {bookingStep === 5 && (
                 <div>
                   <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 16 }}>Your details</div>
 
@@ -777,7 +801,7 @@ export default function ClientPortal() {
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                         <label style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)' }}>Property type</label>
                         <select style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }}>
-                          <option>Luxury residential</option><option>Standard residential</option><option>Multi-unit development</option><option>Commercial property</option><option>Lifestyle / rural</option><option>Land</option>
+                          <option value=''>Select type...</option><option>Standard Residential</option><option>High End Residential</option><option>Lifestyle Property</option><option>Townhouse</option><option>Section</option>
                         </select>
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -822,11 +846,17 @@ export default function ClientPortal() {
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, marginBottom: 14 }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                       <label style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)' }}>Preferred shoot date</label>
-                      <input type="date" value={preferredDate} onChange={e => setPreferredDate(e.target.value)} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }} />
+                      <div style={{ display:'flex', gap:10 }}>
+                        <input type="date" value={preferredDate} onChange={e => setPreferredDate(e.target.value)} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', flex:1 }} />
+                        <select value={preferredTime} onChange={e => setPreferredTime(e.target.value)} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }}>
+                          <option value=''>Preferred time</option>
+                          {['06:00','06:30','07:00','07:30','08:00','08:30','09:00','09:30','10:00','10:30','11:00','11:30','12:00','13:00','14:00','15:00','16:00','17:00','17:30','18:00'].map(t => <option key={t} value={t}>{t}</option>)}
+                        </select>
+                      </div>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      <label style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)' }}>Draft needed by</label>
-                      <input type="date" value={draftDue} onChange={e => setDraftDue(e.target.value)} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }} />
+                      <label style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)' }}>Property going live</label>
+                      <input type="date" value={propertyLiveDate} onChange={e => setPropertyLiveDate(e.target.value)} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }} />
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                       <label style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)' }}>Final delivery needed by</label>
@@ -838,17 +868,29 @@ export default function ClientPortal() {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14 }}>
                     <label style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)' }}>Brief & special requirements</label>
                     <textarea rows={3} value={bookingNotes} onChange={e => setBookingNotes(e.target.value)} placeholder="Style references, key features, specific requirements, timeline notes..." style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', resize: 'vertical', lineHeight: 1.65 }} />
+                    <div style={{ marginTop:16 }}>
+                      <label style={{ fontSize:10, letterSpacing:'0.12em', textTransform:'uppercase', color:'rgba(200,194,187,0.4)', display:'block', marginBottom:6 }}>Suggested storyline</label>
+                      <textarea rows={3} value={suggestedStoryline} onChange={e => setSuggestedStoryline(e.target.value)} placeholder='e.g. A warm family home nestled in a quiet cul-de-sac...' style={{ background:'rgba(200,194,187,0.04)', border:'0.5px solid rgba(200,194,187,0.09)', borderRadius:4, padding:'9px 12px', fontSize:12, color:'#C8C2BB', fontFamily:'inherit', outline:'none', resize:'vertical', lineHeight:1.65, width:'100%' }} />
+                    </div>
+                    <div style={{ marginTop:16 }}>
+                      <label style={{ fontSize:10, letterSpacing:'0.12em', textTransform:'uppercase', color:'rgba(200,194,187,0.4)', display:'block', marginBottom:6 }}>Suggested shot list</label>
+                      <textarea rows={6} value={shotList} onChange={e => setShotList(e.target.value)} style={{ background:'rgba(200,194,187,0.04)', border:'0.5px solid rgba(200,194,187,0.09)', borderRadius:4, padding:'9px 12px', fontSize:12, color:'#C8C2BB', fontFamily:'inherit', outline:'none', resize:'vertical', lineHeight:1.75, width:'100%' }} />
+                    </div>
+                    <div style={{ marginTop:16, display:'flex', alignItems:'center', gap:10, cursor:'pointer' }} onClick={() => setPrePlanning(p => !p)}>
+                      <div style={{ width:18, height:18, borderRadius:4, border:`1px solid ${prePlanning ? '#C8C2BB' : 'rgba(200,194,187,0.2)'}`, background: prePlanning ? 'rgba(200,194,187,0.15)' : 'transparent', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>{prePlanning && <span style={{ fontSize:11, color:'#C8C2BB' }}>✓</span>}</div>
+                      <span style={{ fontSize:12, color:'rgba(200,194,187,0.55)' }}>Does this project involve pre-planning?</span>
+                    </div>
                   </div>
 
                   <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 16, borderTop: '0.5px solid rgba(200,194,187,0.09)' }}>
-                    <button onClick={() => setBookingStep(3)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>← Back</button>
-                    <button onClick={() => setBookingStep(5)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>Review & confirm →</button>
+                    <button onClick={() => setBookingStep(4)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>← Back</button>
+                    <button onClick={() => setBookingStep(6)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>Review & confirm →</button>
                   </div>
                 </div>
               )}
 
               {/* STEP 5: CONFIRM */}
-              {bookingStep === 5 && (
+              {bookingStep === 6 && (
                 <div>
                   <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 16 }}>Review your booking</div>
                   <div style={{ background: 'rgba(61,71,86,0.2)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 8, padding: '18px 22px', marginBottom: 18 }}>
@@ -885,7 +927,7 @@ export default function ClientPortal() {
                     <span style={{ fontSize: 12, color: 'rgba(200,194,187,0.5)', lineHeight: 1.6 }}>I have read and agree to the Terms & Conditions. I confirm the above package selection and authorise Example Content Ltd to proceed with my booking request.</span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 16, borderTop: '0.5px solid rgba(200,194,187,0.09)' }}>
-                    <button onClick={() => setBookingStep(4)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>← Back</button>
+                    <button onClick={() => setBookingStep(5)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>← Back</button>
                     <button onClick={async () => {
                       if (!tcAccepted) return
                       try {
@@ -897,11 +939,19 @@ export default function ClientPortal() {
                           deliverables: selectedDel?.name || '',
                           addons: selectedAddons.map((a: any) => a.name).join(', '),
                           preferred_date: preferredDate,
+                          preferred_time: preferredTime || null,
                           client_email: clientEmail2 || user?.email,
                           draft_due: draftDue || null,
                           delivery_due: deliveryDue || null,
+                          property_live_date: propertyLiveDate || null,
                           address: propertyAddress,
-                          notes: [bookingNotes, accessNotes ? 'Access notes: ' + accessNotes : ''].filter(Boolean).join('\n'),
+                          notes: [
+                            bookingNotes ? 'Notes: ' + bookingNotes : '',
+                            accessNotes ? 'Access: ' + accessNotes : '',
+                            suggestedStoryline ? 'Storyline: ' + suggestedStoryline : '',
+                            shotList ? 'Shot list:\n' + shotList : '',
+                            prePlanning ? 'Pre-planning required' : '',
+                          ].filter(Boolean).join('\n\n'),
                           total: `$${((selectedShoot?.price || 0) + (selectedDel?.price || 0) + selectedAddons.reduce((s: number, a: any) => s + a.price, 0)).toLocaleString()} + GST`,
                           tc_accepted: true,
                           status: 'pending',
@@ -915,14 +965,14 @@ export default function ClientPortal() {
                           total_bookings: 1,
                         }], { onConflict: 'email', ignoreDuplicates: false })
                       } catch (e) { console.error('Client upsert error:', e) }
-                      setBookingStep(6)
+                      setBookingStep(7)
                     }} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, background: tcAccepted ? '#C8C2BB' : 'rgba(200,194,187,0.1)', color: tcAccepted ? '#111' : 'rgba(200,194,187,0.2)', border: 'none', cursor: tcAccepted ? 'pointer' : 'not-allowed', fontWeight: 500, fontFamily: 'inherit' }}>Submit booking request →</button>
                   </div>
                 </div>
               )}
 
               {/* STEP 6: SUCCESS */}
-              {bookingStep === 6 && (
+              {bookingStep === 7 && (
                 <div style={{ textAlign: 'center', padding: '60px 32px' }}>
                   <div style={{ width: 64, height: 64, borderRadius: '50%', border: '1px solid rgba(100,200,130,0.4)', background: 'rgba(100,200,130,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px', fontSize: 28 }}>✓</div>
                   <div style={{ fontSize: 22, fontWeight: 500, color: '#fff', marginBottom: 10 }}>Booking request submitted</div>
@@ -1493,6 +1543,7 @@ export default function ClientPortal() {
           </div>
         </div>
       )}
+
     </main>
   )
 }
