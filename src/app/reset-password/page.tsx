@@ -39,7 +39,9 @@ export default function ResetPassword() {
   return (
     <main style={{ background: '#0E1014', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Inter, sans-serif' }}>
       <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 10, padding: 40, width: 400, maxWidth: '95vw' }}>
-        <img src="/images/Pale_logo_EX.png" alt="Example Content" style={{ height: 44, objectFit: 'contain', marginBottom: 28 }} />
+        <div style={{ textAlign: 'center', marginBottom: 28 }}>
+          <img src="/images/Pale_logo_EX.png" alt="Example Content" style={{ height: 44, objectFit: 'contain' }} />
+        </div>
         <div style={{ fontSize: 16, fontWeight: 600, color: '#fff', marginBottom: 6 }}>Reset your password</div>
         <div style={{ fontSize: 12, color: 'rgba(200,194,187,0.4)', marginBottom: 24 }}>Enter a new password for your account.</div>
         {message && <div style={{ padding: '12px 16px', background: 'rgba(100,200,130,0.08)', border: '0.5px solid rgba(100,200,130,0.2)', borderRadius: 6, fontSize: 12, color: 'rgba(100,200,130,0.9)', marginBottom: 16 }}>{message}</div>}
