@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { formatTime12 } from '@/lib/time'
 
 export default function PitchPrintPage() {
   const [data, setData] = useState<any>(null)
@@ -85,7 +86,7 @@ export default function PitchPrintPage() {
         <div style={{ fontSize: 22, color: t.accentDim, marginBottom: 48 }}>{projectName}</div>
         <div style={{ height: 0.5, background: t.border, width: 80, marginBottom: 48 }} />
         <div style={{ display: 'flex', gap: 48, justifyContent: 'center', flexWrap: 'wrap' }}>
-          {shootDates && <div><div style={{ fontSize: 9, letterSpacing: '0.2em', textTransform: 'uppercase', color: t.muted, marginBottom: 6 }}>Shoot Date</div><div style={{ fontSize: 14, color: t.accent, fontWeight: 600 }}>{shootDates}{shootStartTime ? ' at ' + shootStartTime : ''}</div></div>}
+          {shootDates && <div><div style={{ fontSize: 9, letterSpacing: '0.2em', textTransform: 'uppercase', color: t.muted, marginBottom: 6 }}>Shoot Date</div><div style={{ fontSize: 14, color: t.accent, fontWeight: 600 }}>{shootDates}{shootStartTime ? ' at ' + formatTime12(shootStartTime) : ''}</div></div>}
           {draftDue && <div><div style={{ fontSize: 9, letterSpacing: '0.2em', textTransform: 'uppercase', color: t.muted, marginBottom: 6 }}>Draft Due</div><div style={{ fontSize: 14, color: t.accent, fontWeight: 600 }}>{draftDue}</div></div>}
           {finalsDue && <div><div style={{ fontSize: 9, letterSpacing: '0.2em', textTransform: 'uppercase', color: t.muted, marginBottom: 6 }}>Finals Due</div><div style={{ fontSize: 14, color: t.accent, fontWeight: 600 }}>{finalsDue}</div></div>}
           {locations && <div><div style={{ fontSize: 9, letterSpacing: '0.2em', textTransform: 'uppercase', color: t.muted, marginBottom: 6 }}>Location</div><div style={{ fontSize: 14, color: t.accent, fontWeight: 600 }}>{locations.split(',')[0]}</div></div>}
@@ -128,7 +129,7 @@ export default function PitchPrintPage() {
         {rule()}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 24 }}>
           {shootDates && <div><div style={{ fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', color: t.muted, marginBottom: 6 }}>Shoot Date</div><div style={{ fontSize: 13, color: t.accent, fontWeight: 600 }}>{shootDates}</div></div>}
-          {(shootStartTime || shootEndTime) && <div><div style={{ fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', color: t.muted, marginBottom: 6 }}>Time</div><div style={{ fontSize: 13, color: t.accent, fontWeight: 600 }}>{shootStartTime}{shootEndTime ? ' – ' + shootEndTime : ''}</div></div>}
+          {(shootStartTime || shootEndTime) && <div><div style={{ fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', color: t.muted, marginBottom: 6 }}>Time</div><div style={{ fontSize: 13, color: t.accent, fontWeight: 600 }}>{formatTime12(shootStartTime)}{shootEndTime ? ' – ' + formatTime12(shootEndTime) : ''}</div></div>}
           {draftDue && <div><div style={{ fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', color: t.muted, marginBottom: 6 }}>Draft Due</div><div style={{ fontSize: 13, color: t.accent, fontWeight: 600 }}>{draftDue}</div></div>}
           {finalsDue && <div><div style={{ fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', color: t.muted, marginBottom: 6 }}>Finals Due</div><div style={{ fontSize: 13, color: t.accent, fontWeight: 600 }}>{finalsDue}</div></div>}
           {locations && <div style={{ gridColumn: 'span 4' }}><div style={{ fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', color: t.muted, marginBottom: 6 }}>Location(s)</div><div style={{ fontSize: 13, color: t.accent, fontWeight: 600 }}>{locations}</div></div>}

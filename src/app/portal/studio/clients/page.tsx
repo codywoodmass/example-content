@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import StudioSidebar from '../StudioSidebar'
+import { notify, ToastHost } from '@/lib/notify'
 
 type Client = {
   id: string
@@ -77,7 +78,7 @@ export default function ClientsPage() {
     if (!newForm.name || !newForm.email) return
     setSaving(true)
     const { data, error } = await supabase.from('clients1').insert([{ ...newForm }]).select().single()
-    if (error) { alert('Error: ' + error.message); setSaving(false); return }
+    if (error) { notify('Error: ' + error.message, 'error'); setSaving(false); return }
     if (!error && data) {
       setClients(p => [data, ...p])
       setShowNewModal(false)
@@ -103,6 +104,7 @@ export default function ClientsPage() {
 
   return (
     <main style={{ background: '#0E1014', minHeight: '100vh', fontFamily: 'Inter, sans-serif', color: '#C8C2BB', fontSize: 13, display: 'flex' }}>
+      <ToastHost />
       <StudioSidebar active="clients" />
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden', height: '100vh' }}>
 

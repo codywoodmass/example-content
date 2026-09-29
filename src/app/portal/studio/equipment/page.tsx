@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import StudioSidebar from '../StudioSidebar'
+import { confirmDialog, ConfirmHost } from '@/lib/notify'
 
 type Equipment = {
   id: string
@@ -67,7 +68,7 @@ export default function EquipmentPage() {
   }
 
   async function removeEquipment(id: string) {
-    if (!confirm('Remove this equipment item?')) return
+    if (!(await confirmDialog('Remove this equipment item?'))) return
     await supabase.from('equipment1').delete().eq('id', id)
     setEquipment(p => p.filter(e => e.id !== id))
     setSelected(null)
@@ -86,6 +87,7 @@ export default function EquipmentPage() {
 
   return (
     <main style={{ background: '#0E1014', minHeight: '100vh', fontFamily: 'Inter, sans-serif', color: '#C8C2BB', fontSize: 13, display: 'flex' }}>
+      <ConfirmHost />
       <StudioSidebar active="equipment" />
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden', height: '100vh' }}>
 

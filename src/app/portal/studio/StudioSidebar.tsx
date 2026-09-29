@@ -1,5 +1,6 @@
 'use client'
 import { useRouter } from 'next/navigation'
+import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 
 const NAV = [
@@ -11,6 +12,7 @@ const NAV = [
     { id: 'schedule', label: 'Shoot Schedule', href: '', view: 'schedule' },
     { id: 'bookings', label: 'Booking Requests', href: '', view: 'bookings' },
     { id: 'brief', label: 'Property Brief', href: '/portal/studio/brief', view: '' },
+    { id: 'todos', label: 'To Do List', href: '/portal/studio/todos', view: '' },
   ]},
   { label: 'Team', items: [
     { id: 'team', label: 'Team & Time', href: '/portal/studio/team', view: '' },
@@ -18,6 +20,7 @@ const NAV = [
   ]},
   { label: 'Finance', items: [
     { id: 'finance', label: 'P&L Overview', href: '', view: 'finance' },
+    { id: 'invoices', label: 'Invoices', href: '/portal/studio/invoices', view: '' },
   ]},
   { label: 'Clients', items: [
     { id: 'clients', label: 'Clients', href: '/portal/studio/clients' },
@@ -27,6 +30,27 @@ const NAV = [
 
 export default function StudioSidebar({ active, onViewChange }: { active?: string; onViewChange?: (view: string) => void }) {
   const router = useRouter()
+  const [name, setName] = useState('')
+  const [role, setRole] = useState<string | null>(null)
+
+  useEffect(() => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!session) return
+      const { data: profile } = await supabase.from('profiles').select('role, full_name').eq('id', session.user.id).maybeSingle()
+      setRole(profile?.role || null)
+      setName(profile?.full_name || session.user.email || 'Studio')
+    })
+  }, [])
+
+  // Editors get everything except the Finance group and booking requests. Fail closed
+  // while role is still loading (null) so Finance never flashes for an editor account —
+  // it only appears once the role is confirmed as exactly 'studio'.
+  const nav = NAV
+    .filter(group => role === 'studio' || group.label !== 'Finance')
+    .map(group => group.label === 'Work' && role !== 'studio'
+      ? { ...group, items: group.items.filter(item => item.id !== 'bookings') }
+      : group)
+  const initial = (name || 'S').trim().charAt(0).toUpperCase()
 
   async function handleSignOut() {
     await supabase.auth.signOut()
@@ -39,11 +63,11 @@ export default function StudioSidebar({ active, onViewChange }: { active?: strin
         <img src="/images/Pale_logo_EX.png" alt="Example Content" style={{ height: 44, objectFit: 'contain', maxWidth: 160 }} />
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 16px', borderBottom: '0.5px solid rgba(200,194,187,0.09)' }}>
-        <img src="/images/Cody.jpg" alt="Cody" style={{ width: 30, height: 30, borderRadius: '50%', objectFit: 'cover', objectPosition: 'top', flexShrink: 0 }} />
-        <div style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>Cody Woodmass</div>
+        <div style={{ width: 30, height: 30, borderRadius: '50%', background: 'rgba(200,194,187,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 12, fontWeight: 600, color: '#C8C2BB' }}>{initial}</div>
+        <div style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>{name}</div>
       </div>
       <nav style={{ padding: '12px 10px', flex: 1, overflowY: 'auto' }}>
-        {NAV.map(group => (
+        {nav.map(group => (
           <div key={group.label}>
             <div style={{ fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.22)', padding: '0 8px', margin: '14px 0 5px' }}>{group.label}</div>
             {group.items.map(item => (

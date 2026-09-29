@@ -1,8 +1,13 @@
 'use client'
 import React from 'react'
 import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase'
+import { supabase, ensureClientProfile } from '@/lib/supabase'
+import { formatTime12 } from '@/lib/time'
 import { useRouter } from 'next/navigation'
+
+const VIDEO_FORMATS = ['1920×1080', '1080×1080', '9×16 Vertical', '4×5', '4K 3840×2160']
+const PHOTO_FORMATS = ['High-res JPEG', 'RAW Files', 'Web-res JPEG']
+type BriefDeliverable = { id: string; name: string; quantity: number; duration: string; formats: string[]; notes: string }
 
 function DriveThumb({ project, onClick }: { project: any; onClick: () => void }) {
   const [firstFile, setFirstFile] = React.useState<any>(null)
@@ -10,12 +15,22 @@ function DriveThumb({ project, onClick }: { project: any; onClick: () => void })
 
   React.useEffect(() => {
     if (!project.drive_url) { setLoading(false); return }
+    const isMedia = (f: any) => f.mimeType?.includes('video') || f.mimeType?.includes('image')
     fetch(`/api/drive?url=${encodeURIComponent(project.drive_url)}`)
       .then(r => r.json())
-      .then(data => { 
+      .then(async data => {
         const files = data.files || []
-        setFirstFile(files[0] || null)
-        setLoading(false) 
+        const media = files.find(isMedia)
+        if (media) { setFirstFile(media); setLoading(false); return }
+        const folder = files.find((f: any) => f.mimeType === 'application/vnd.google-apps.folder')
+        if (folder) {
+          const res2 = await fetch(`/api/drive?folderId=${folder.id}`)
+          const data2 = await res2.json()
+          setFirstFile((data2.files || []).find(isMedia) || null)
+        } else {
+          setFirstFile(null)
+        }
+        setLoading(false)
       })
       .catch(() => setLoading(false))
   }, [project.drive_url])
@@ -52,24 +67,134 @@ function DriveThumb({ project, onClick }: { project: any; onClick: () => void })
   )
 }
 
-function DriveFolder({ project }: { project: any }) {
+function DriveFolder({ project, clientEmail, clientName }: { project: any; clientEmail?: string; clientName?: string }) {
   const [files, setFiles] = React.useState<any[]>([])
   const [loading, setLoading] = React.useState(true)
   const [previewFile, setPreviewFile] = React.useState<any>(null)
+  const [stack, setStack] = React.useState<{ id: string; name: string }[]>([])
+  const [selectedFileIds, setSelectedFileIds] = React.useState<Set<string>>(new Set())
+  const [feedbackList, setFeedbackList] = React.useState<any[]>([])
+  const [feedbackTimestamp, setFeedbackTimestamp] = React.useState('')
+  const [feedbackMessage, setFeedbackMessage] = React.useState('')
+  const [submittingFeedback, setSubmittingFeedback] = React.useState(false)
+  const [feedbackSent, setFeedbackSent] = React.useState(false)
 
   React.useEffect(() => {
+    if (!previewFile) { setFeedbackList([]); return }
+    supabase.from('video_feedback').select('*').eq('file_id', previewFile.id).order('timestamp_seconds', { ascending: true })
+      .then(({ data }) => setFeedbackList(data || []))
+  }, [previewFile])
+
+  function parseTimestamp(input: string): number {
+    const parts = input.trim().split(':').map(Number)
+    if (parts.some(isNaN)) return 0
+    if (parts.length === 2) return parts[0] * 60 + parts[1]
+    if (parts.length === 1) return parts[0]
+    return 0
+  }
+
+  function formatSeconds(seconds: number): string {
+    const m = Math.floor(seconds / 60)
+    const s = Math.floor(seconds % 60)
+    return `${m}:${s.toString().padStart(2, '0')}`
+  }
+
+  async function submitFeedback() {
+    if (!feedbackMessage.trim() || !clientEmail || !previewFile) return
+    setSubmittingFeedback(true)
+    const timestamp_seconds = parseTimestamp(feedbackTimestamp)
+    const { data, error } = await supabase.from('video_feedback').insert([{
+      project_id: project.id,
+      file_id: previewFile.id,
+      file_name: previewFile.name,
+      client_email: clientEmail,
+      client_name: clientName || clientEmail,
+      timestamp_seconds,
+      message: feedbackMessage.trim(),
+    }]).select().single()
+    if (!error && data) {
+      setFeedbackList(p => [...p, data].sort((a, b) => a.timestamp_seconds - b.timestamp_seconds))
+      try {
+        await fetch('/api/video-feedback', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            projectId: project.id,
+            projectTitle: project.title,
+            fileName: previewFile.name,
+            clientName: clientName || clientEmail,
+            clientEmail,
+            timestampSeconds: timestamp_seconds,
+            message: feedbackMessage.trim(),
+          }),
+        })
+      } catch (e) { console.error('Feedback notify error:', e) }
+      setFeedbackTimestamp('')
+      setFeedbackMessage('')
+      setFeedbackSent(true)
+      setTimeout(() => setFeedbackSent(false), 2500)
+    }
+    setSubmittingFeedback(false)
+  }
+
+  function loadRoot() {
     if (!project.drive_url) return
+    setLoading(true)
     fetch(`/api/drive?url=${encodeURIComponent(project.drive_url)}`)
       .then(r => r.json())
-      .then(data => { setFiles(data.files || []); setLoading(false) })
+      .then(data => { setFiles(data.files || []); setStack([]); setSelectedFileIds(new Set()); setLoading(false) })
       .catch(() => setLoading(false))
-  }, [project.drive_url])
+  }
+
+  React.useEffect(() => { loadRoot() }, [project.drive_url])
+
+  function openFolder(folder: any) {
+    setLoading(true)
+    fetch(`/api/drive?folderId=${folder.id}`)
+      .then(r => r.json())
+      .then(data => { setFiles(data.files || []); setStack(p => [...p, { id: folder.id, name: folder.name }]); setSelectedFileIds(new Set()); setLoading(false) })
+      .catch(() => setLoading(false))
+  }
+
+  function goToCrumb(index: number) {
+    if (index < 0) { loadRoot(); return }
+    const target = stack[index]
+    setLoading(true)
+    fetch(`/api/drive?folderId=${target.id}`)
+      .then(r => r.json())
+      .then(data => { setFiles(data.files || []); setStack(stack.slice(0, index + 1)); setSelectedFileIds(new Set()); setLoading(false) })
+      .catch(() => setLoading(false))
+  }
 
   const isVideo = (mime: string) => mime?.includes('video')
   const isImage = (mime: string) => mime?.includes('image')
+  const isFolder = (mime: string) => mime === 'application/vnd.google-apps.folder'
+
+  function toggleFileSelected(id: string) {
+    setSelectedFileIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+
+  function downloadFile(file: any) {
+    const a = document.createElement('a')
+    a.href = `/api/drive/download?id=${file.id}&name=${encodeURIComponent(file.name)}`
+    a.download = file.name
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+  }
+
+  function downloadSelected() {
+    const toDownload = files.filter(f => selectedFileIds.has(f.id))
+    toDownload.forEach((f, i) => setTimeout(() => downloadFile(f), i * 500))
+    setSelectedFileIds(new Set())
+  }
 
   if (loading) return <div style={{ marginBottom:32 }}><div style={{ fontSize:10, letterSpacing:'0.16em', textTransform:'uppercase', color:'rgba(200,194,187,0.28)', marginBottom:14 }}>{project.title}</div><div style={{ color:'rgba(200,194,187,0.2)', fontSize:12, padding:'20px 0' }}>Loading files...</div></div>
-  if (files.length === 0) return null
+  if (files.length === 0 && stack.length === 0) return null
 
   return (
     <div style={{ marginBottom:40 }}>
@@ -82,14 +207,38 @@ function DriveFolder({ project }: { project: any }) {
         <div style={{ display:'flex', gap:16 }}>
           {project.shoot_date && <div style={{ fontSize:11, color:'rgba(200,194,187,0.4)' }}>Shoot: {new Date(project.shoot_date+'T12:00:00').toLocaleDateString('en-NZ',{day:'numeric',month:'short',year:'numeric'})}</div>}
           {project.address && <div style={{ fontSize:11, color:'rgba(200,194,187,0.4)' }}>{project.address.split(',')[0]}</div>}
-          <div style={{ fontSize:11, color:'rgba(100,200,130,0.7)' }}>{files.length} file{files.length!==1?'s':''}</div>
+          <div style={{ fontSize:11, color:'rgba(100,200,130,0.7)' }}>{files.length} item{files.length!==1?'s':''}</div>
         </div>
       </div>
+      {stack.length > 0 && (
+        <div style={{ display:'flex', flexWrap:'wrap' as const, alignItems:'center', gap:4, marginBottom:14, fontSize:11 }}>
+          <span onClick={() => goToCrumb(-1)} style={{ cursor:'pointer', color: 'rgba(200,194,187,0.4)', textDecoration:'underline' }}>📁 {project.title}</span>
+          {stack.map((s, i) => (
+            <span key={s.id} style={{ display:'flex', alignItems:'center', gap:4 }}>
+              <span style={{ color:'rgba(200,194,187,0.25)' }}>/</span>
+              <span onClick={() => goToCrumb(i)} style={{ cursor: i < stack.length - 1 ? 'pointer' : 'default', color: i < stack.length - 1 ? 'rgba(200,194,187,0.4)' : '#C8C2BB', textDecoration: i < stack.length - 1 ? 'underline' : 'none' }}>{s.name}</span>
+            </span>
+          ))}
+        </div>
+      )}
+      {files.some(f => !isFolder(f.mimeType)) && (
+        <div style={{ display:'flex', justifyContent:'flex-end', alignItems:'center', gap:10, marginBottom:12, minHeight:28 }}>
+          {selectedFileIds.size > 0 && (
+            <>
+              <span style={{ fontSize:11, color:'rgba(200,194,187,0.5)' }}>{selectedFileIds.size} selected</span>
+              <button onClick={() => setSelectedFileIds(new Set())} style={{ fontSize:10, letterSpacing:'0.08em', textTransform:'uppercase', padding:'6px 12px', borderRadius:3, border:'0.5px solid rgba(200,194,187,0.12)', color:'rgba(200,194,187,0.5)', background:'transparent', cursor:'pointer', fontFamily:'inherit' }}>Clear</button>
+              <button onClick={downloadSelected} style={{ fontSize:11, letterSpacing:'0.09em', textTransform:'uppercase', padding:'8px 16px', borderRadius:3, background:'#C8C2BB', color:'#111', border:'none', cursor:'pointer', fontFamily:'inherit', fontWeight:500 }}>Download selected ({selectedFileIds.size})</button>
+            </>
+          )}
+        </div>
+      )}
       <div style={{ display:'flex', flexWrap:'wrap', alignItems:'flex-start', gap:14 }}>
         {files.map((file: any) => (
-          <div key={file.id} style={{ background:'#1A1F28', border:'0.5px solid rgba(200,194,187,0.09)', borderRadius:7, overflow:'hidden', cursor:'pointer', width: file.videoMediaMetadata && parseInt(file.videoMediaMetadata.height) > parseInt(file.videoMediaMetadata.width) ? 'calc(33% - 10px)' : 'calc(50% - 7px)' }} onClick={() => setPreviewFile(file)}>
+          <div key={file.id} style={{ background:'#1A1F28', border:'0.5px solid rgba(200,194,187,0.09)', borderRadius:7, overflow:'hidden', cursor:'pointer', width: file.videoMediaMetadata && parseInt(file.videoMediaMetadata.height) > parseInt(file.videoMediaMetadata.width) ? 'calc(33% - 10px)' : 'calc(50% - 7px)' }} onClick={() => { if (isFolder(file.mimeType)) openFolder(file); else setPreviewFile(file) }}>
             <div style={{ aspectRatio: file.videoMediaMetadata && parseInt(file.videoMediaMetadata.height) > parseInt(file.videoMediaMetadata.width) ? '9/16' : '16/9', background:'#0E1014', position:'relative', overflow:'hidden', display:'flex', alignItems:'center', justifyContent:'center' }}>
-              {isVideo(file.mimeType) ? (
+              {isFolder(file.mimeType) ? (
+                <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:36 }}>📁</div>
+              ) : isVideo(file.mimeType) ? (
                 <div style={{ width:'100%', height:'100%', position:'relative', overflow:'hidden', background:'#0a0c10' }} onClick={e => e.stopPropagation()}>
                   {file.videoMediaMetadata && parseInt(file.videoMediaMetadata.height) > parseInt(file.videoMediaMetadata.width) ? (
                 <iframe src={`https://drive.google.com/file/d/${file.id}/preview`} style={{ width:'56%', height:'calc(100% + 220px)', border:'none', marginTop:'-110px', marginBottom:'-110px' }} allow="autoplay; fullscreen" allowFullScreen />
@@ -102,36 +251,80 @@ function DriveFolder({ project }: { project: any }) {
               ) : (
                 <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:32 }}>📄</div>
               )}
-              <span style={{ position:'absolute', top:8, left:8, fontSize:9, letterSpacing:'0.12em', textTransform:'uppercase', background:'rgba(0,0,0,0.6)', color:'#C8C2BB', padding:'3px 8px', borderRadius:2 }}>{isVideo(file.mimeType) ? 'Video' : isImage(file.mimeType) ? 'Photo' : 'File'}</span>
+              {!isFolder(file.mimeType) && <span style={{ position:'absolute', top:8, left:8, fontSize:9, letterSpacing:'0.12em', textTransform:'uppercase', background:'rgba(0,0,0,0.6)', color:'#C8C2BB', padding:'3px 8px', borderRadius:2 }}>{isVideo(file.mimeType) ? 'Video' : isImage(file.mimeType) ? 'Photo' : 'File'}</span>}
               {file.videoMediaMetadata && parseInt(file.videoMediaMetadata.height) > parseInt(file.videoMediaMetadata.width) && <span style={{ position:'absolute', top:8, right:8, fontSize:9, letterSpacing:'0.12em', textTransform:'uppercase', background:'rgba(0,0,0,0.6)', color:'rgba(200,194,187,0.7)', padding:'3px 8px', borderRadius:2 }}>Vertical</span>}
+              {!isFolder(file.mimeType) && (
+                <div onClick={e => { e.stopPropagation(); toggleFileSelected(file.id) }} style={{ position:'absolute', bottom:8, right:8, width:20, height:20, borderRadius:4, border: selectedFileIds.has(file.id) ? 'none' : '1.5px solid rgba(255,255,255,0.55)', background: selectedFileIds.has(file.id) ? '#C8C2BB' : 'rgba(0,0,0,0.4)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', zIndex:2 }}>
+                  {selectedFileIds.has(file.id) && <span style={{ fontSize:12, color:'#111', fontWeight:700, lineHeight:1 }}>✓</span>}
+                </div>
+              )}
             </div>
             <div style={{ padding:'10px 14px 6px' }}>
               <div style={{ fontSize:12, fontWeight:500, color:'#C8C2BB', marginBottom:3, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{file.name}</div>
               {file.size && <div style={{ fontSize:10, color:'rgba(200,194,187,0.35)' }}>{(parseInt(file.size)/1024/1024).toFixed(1)} MB</div>}
             </div>
-            <div style={{ display:'flex', gap:6, padding:'6px 14px 12px' }}>
-              <button onClick={e => { e.stopPropagation(); setPreviewFile(file) }} style={{ fontSize:10, letterSpacing:'0.08em', textTransform:'uppercase', padding:'5px 10px', borderRadius:3, border:'0.5px solid rgba(200,194,187,0.09)', color:'rgba(200,194,187,0.4)', background:'transparent', cursor:'pointer', fontFamily:'inherit' }}>Preview</button>
-              <a href={`https://drive.google.com/uc?export=download&id=${file.id}`} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} style={{ fontSize:10, letterSpacing:'0.08em', textTransform:'uppercase', padding:'5px 10px', borderRadius:3, border:'0.5px solid rgba(200,194,187,0.09)', color:'rgba(200,194,187,0.4)', background:'transparent', cursor:'pointer', fontFamily:'inherit', textDecoration:'none' }}>Download</a>
-            </div>
+            {isFolder(file.mimeType) ? (
+              <div style={{ fontSize:10, letterSpacing:'0.08em', textTransform:'uppercase', color:'rgba(200,194,187,0.3)', padding:'6px 14px 12px' }}>Open folder →</div>
+            ) : (
+              <div style={{ display:'flex', gap:6, padding:'6px 14px 12px' }}>
+                <button onClick={e => { e.stopPropagation(); setPreviewFile(file) }} style={{ fontSize:10, letterSpacing:'0.08em', textTransform:'uppercase', padding:'5px 10px', borderRadius:3, border:'0.5px solid rgba(200,194,187,0.09)', color:'rgba(200,194,187,0.4)', background:'transparent', cursor:'pointer', fontFamily:'inherit' }}>Preview</button>
+                <a href={`/api/drive/download?id=${file.id}&name=${encodeURIComponent(file.name)}`} download={file.name} onClick={e => e.stopPropagation()} style={{ fontSize:10, letterSpacing:'0.08em', textTransform:'uppercase', padding:'5px 10px', borderRadius:3, border:'0.5px solid rgba(200,194,187,0.09)', color:'rgba(200,194,187,0.4)', background:'transparent', cursor:'pointer', fontFamily:'inherit', textDecoration:'none' }}>Download</a>
+              </div>
+            )}
           </div>
         ))}
       </div>
-      {/* PREVIEW MODAL */}
+      {/* PREVIEW MODAL — fills nearly the whole screen */}
       {previewFile && (
-        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.95)', zIndex:300, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:20 }} onClick={() => setPreviewFile(null)}>
-          <div style={{ position:'absolute', top:20, right:20, display:'flex', gap:12, alignItems:'center' }}>
-            <a href={`https://drive.google.com/uc?export=download&id=${previewFile.id}`} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} style={{ fontSize:11, letterSpacing:'0.09em', textTransform:'uppercase', padding:'8px 16px', borderRadius:3, background:'#C8C2BB', color:'#111', textDecoration:'none', fontFamily:'inherit', fontWeight:500 }}>Download</a>
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.95)', zIndex:300, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:16 }} onClick={() => setPreviewFile(null)}>
+          <div style={{ position:'absolute', top:20, right:20, display:'flex', gap:12, alignItems:'center', zIndex:10 }} onClick={e => e.stopPropagation()}>
+            <a href={`/api/drive/download?id=${previewFile.id}&name=${encodeURIComponent(previewFile.name)}`} download={previewFile.name} style={{ fontSize:11, letterSpacing:'0.09em', textTransform:'uppercase', padding:'8px 16px', borderRadius:3, background:'#C8C2BB', color:'#111', textDecoration:'none', fontFamily:'inherit', fontWeight:500 }}>Download</a>
             <button onClick={() => setPreviewFile(null)} style={{ fontSize:24, color:'rgba(200,194,187,0.5)', background:'transparent', border:'none', cursor:'pointer' }}>×</button>
           </div>
-          <div style={{ maxWidth:'90vw', maxHeight:'85vh', display:'flex', flexDirection:'column', alignItems:'center', gap:12 }} onClick={e => e.stopPropagation()}>
+          <div style={{ width:'96vw', height:'90vh', display:'flex', flexDirection: isVideo(previewFile.mimeType) ? 'row' as const : 'column' as const, alignItems:'center', justifyContent:'center', gap:16 }} onClick={e => e.stopPropagation()}>
             {isVideo(previewFile.mimeType) ? (
-              <iframe src={`https://drive.google.com/file/d/${previewFile.id}/preview`} style={{ width: previewFile.videoMediaMetadata && parseInt(previewFile.videoMediaMetadata.height) > parseInt(previewFile.videoMediaMetadata.width) ? 'min(400px,45vw)' : 'min(900px,90vw)', height: previewFile.videoMediaMetadata && parseInt(previewFile.videoMediaMetadata.height) > parseInt(previewFile.videoMediaMetadata.width) ? 'min(711px,80vh)' : 'min(506px,50vh)', border:'none', borderRadius:6 }} allow="autoplay" />
+              <>
+                <div style={{ flex:'1 1 auto', height:'90vh', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:10, minWidth:0 }}>
+                  <iframe src={`https://drive.google.com/file/d/${previewFile.id}/preview`} style={{ width:'100%', maxWidth: previewFile.videoMediaMetadata && parseInt(previewFile.videoMediaMetadata.height) > parseInt(previewFile.videoMediaMetadata.width) ? 'min(40vw,700px)' : '68vw', height:'82vh', border:'none', borderRadius:6 }} allow="autoplay" allowFullScreen />
+                  <div style={{ fontSize:13, color:'rgba(200,194,187,0.6)' }}>{previewFile.name}</div>
+                </div>
+                <div style={{ width:320, flexShrink:0, height:'90vh', background:'#14181F', border:'0.5px solid rgba(200,194,187,0.12)', borderRadius:8, display:'flex', flexDirection:'column', overflow:'hidden' }}>
+                  <div style={{ padding:'16px 18px', borderBottom:'0.5px solid rgba(200,194,187,0.1)' }}>
+                    <div style={{ fontSize:13, fontWeight:500, color:'#fff', marginBottom:2 }}>Feedback</div>
+                    <div style={{ fontSize:11, color:'rgba(200,194,187,0.4)' }}>Note the time you see on the player, then describe the change</div>
+                  </div>
+                  <div style={{ flex:1, overflowY:'auto', padding:'12px 18px', display:'flex', flexDirection:'column', gap:10 }}>
+                    {feedbackList.length === 0 && <div style={{ fontSize:12, color:'rgba(200,194,187,0.25)' }}>No feedback yet</div>}
+                    {feedbackList.map(fb => (
+                      <div key={fb.id} style={{ background:'rgba(200,194,187,0.04)', border:'0.5px solid rgba(200,194,187,0.08)', borderRadius:5, padding:'8px 10px' }}>
+                        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:4 }}>
+                          <span style={{ fontSize:11, fontWeight:600, color:'#C8C2BB' }}>{formatSeconds(fb.timestamp_seconds)}</span>
+                          {fb.status === 'resolved' && <span style={{ fontSize:9, letterSpacing:'0.06em', textTransform:'uppercase', color:'rgba(100,200,130,0.8)' }}>✓ Resolved</span>}
+                        </div>
+                        <div style={{ fontSize:12, color:'rgba(200,194,187,0.7)', lineHeight:1.5 }}>{fb.message}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ padding:'14px 18px', borderTop:'0.5px solid rgba(200,194,187,0.1)', display:'flex', flexDirection:'column', gap:8 }}>
+                    <input value={feedbackTimestamp} onChange={e => setFeedbackTimestamp(e.target.value)} placeholder="Timestamp e.g. 1:23" style={{ background:'rgba(200,194,187,0.05)', border:'0.5px solid rgba(200,194,187,0.12)', borderRadius:4, padding:'8px 10px', fontSize:12, color:'#C8C2BB', fontFamily:'inherit', outline:'none' }} />
+                    <textarea value={feedbackMessage} onChange={e => setFeedbackMessage(e.target.value)} placeholder="What would you like changed?" rows={3} style={{ background:'rgba(200,194,187,0.05)', border:'0.5px solid rgba(200,194,187,0.12)', borderRadius:4, padding:'8px 10px', fontSize:12, color:'#C8C2BB', fontFamily:'inherit', outline:'none', resize:'vertical' as const }} />
+                    <button onClick={submitFeedback} disabled={submittingFeedback || !feedbackMessage.trim()} style={{ fontSize:11, letterSpacing:'0.08em', textTransform:'uppercase', padding:'9px 14px', borderRadius:3, background: feedbackSent ? 'rgba(100,200,130,0.15)' : '#C8C2BB', color: feedbackSent ? 'rgba(100,200,130,0.9)' : '#111', border: feedbackSent ? '0.5px solid rgba(100,200,130,0.3)' : 'none', cursor: submittingFeedback || !feedbackMessage.trim() ? 'not-allowed' : 'pointer', fontWeight:500, fontFamily:'inherit', opacity: !feedbackMessage.trim() && !submittingFeedback ? 0.5 : 1 }}>
+                      {submittingFeedback ? 'Sending...' : feedbackSent ? '✓ Sent' : 'Send feedback'}
+                    </button>
+                  </div>
+                </div>
+              </>
             ) : isImage(previewFile.mimeType) ? (
-              <img src={`https://drive.google.com/uc?id=${previewFile.id}`} alt={previewFile.name} style={{ maxWidth:'90vw', maxHeight:'80vh', objectFit:'contain', borderRadius:6 }} />
+              <>
+                <img src={`https://drive.google.com/uc?id=${previewFile.id}`} alt={previewFile.name} style={{ maxWidth:'94vw', maxHeight:'86vh', objectFit:'contain', borderRadius:6 }} />
+                <div style={{ fontSize:13, color:'rgba(200,194,187,0.6)' }}>{previewFile.name}</div>
+              </>
             ) : (
-              <a href={previewFile.webViewLink} target="_blank" rel="noopener noreferrer" style={{ color:'#C8C2BB', fontSize:14 }}>Open file in Google Drive</a>
+              <>
+                <a href={previewFile.webViewLink} target="_blank" rel="noopener noreferrer" style={{ color:'#C8C2BB', fontSize:14 }}>Open file in Google Drive</a>
+                <div style={{ fontSize:13, color:'rgba(200,194,187,0.6)' }}>{previewFile.name}</div>
+              </>
             )}
-            <div style={{ fontSize:13, color:'rgba(200,194,187,0.6)' }}>{previewFile.name}</div>
           </div>
         </div>
       )}
@@ -173,12 +366,26 @@ export default function ClientPortal() {
   const [prePlanning, setPrePlanning] = useState(false)
   const [deliveryDue, setDeliveryDue] = useState("")
 
-
+  // Commercial & Events — request-a-quote brief fields
+  const [projectType, setProjectType] = useState('')
+  const [projectTitle, setProjectTitle] = useState('')
+  const [projectDescription, setProjectDescription] = useState('')
+  const [targetAudience, setTargetAudience] = useState('')
+  const [keyMessage, setKeyMessage] = useState('')
+  const [talentDetails, setTalentDetails] = useState('')
+  const [briefDeliverables, setBriefDeliverables] = useState<BriefDeliverable[]>([
+    { id: '1', name: '', quantity: 1, duration: '', formats: [], notes: '' },
+  ])
+  const [dateFlexible, setDateFlexible] = useState(false)
+  const [shootDuration, setShootDuration] = useState('')
+  const [referenceLinks, setReferenceLinks] = useState('')
+  const [budgetRange, setBudgetRange] = useState('')
 
   const [tcAccepted, setTcAccepted] = useState(false)
   const [clientProjects, setClientProjects] = useState<any[]>([])
   const [clientBookings, setClientBookings] = useState<any[]>([])
   const [clientBriefs, setClientBriefs] = useState<any[]>([])
+  const [clientInvoices, setClientInvoices] = useState<any[]>([])
   const [selectedBrief, setSelectedBrief] = useState<any>(null)
   const [libraryProject, setLibraryProject] = useState<any>(null)
   const [briefFeedback, setBriefFeedback] = useState('')
@@ -205,7 +412,8 @@ export default function ClientPortal() {
         router.push('/portal/studio')
         return
       }
-      // Load client profile
+      // Load client profile (create one if this is a first login with no profile yet)
+      await ensureClientProfile(session.user)
       const { data: profile } = await supabase.from('clients1').select('*').eq('email', email).single()
       if (profile) setClientProfile(profile)
       // Load projects linked to this client
@@ -216,9 +424,33 @@ export default function ClientPortal() {
       if (bookings) setClientBookings(bookings)
       const { data: briefs } = await supabase.from('briefs').select('*').eq('client_email', email).order('created_at', { ascending: false })
       if (briefs) setClientBriefs(briefs)
+      const { data: invoices } = await supabase.from('invoices1').select('*').eq('client_email', email).neq('status', 'draft').order('created_at', { ascending: false })
+      if (invoices) setClientInvoices(invoices)
       const { data: notifs } = await supabase.from('notifications').select('*').eq('user_email', email).eq('read', false).order('created_at', { ascending: false })
       if (notifs) { setNotifications(notifs); if (notifs.length > 0) setShowNotifications(true) }
     })
+
+    // Background token refresh can silently fail if the tab sits idle for a
+    // while (browsers throttle timers in hidden tabs) — the old token then
+    // stays cached and every request quietly fails with no error shown. Revalidate
+    // whenever the tab regains focus/visibility so a dead session bounces to login
+    // instead of leaving the page looking broken/empty.
+    async function revalidateSession() {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) router.push('/login')
+    }
+    function onVisible() { if (document.visibilityState === 'visible') revalidateSession() }
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('focus', revalidateSession)
+    const { data: authListener } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_OUT') router.push('/login')
+    })
+
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('focus', revalidateSession)
+      authListener.subscription.unsubscribe()
+    }
   }, [router])
 
   async function handleSignOut() {
@@ -261,12 +493,15 @@ export default function ClientPortal() {
 
   const propertyShootPackages = [
     {
-      name: 'Property Ad', price: 650,
-      tag: 'Popular for socials',
-      description: '20–30s social media highlight reel, optimised for maximum engagement across all platforms.',
-      includes: ['20–30s social media highlights', 'Vertical & landscape formats'],
+      name: 'Starter Content Package', price: 800,
+      tag: 'Starter package',
+      description: 'A punchy multi-format bundle — a 20s property ad, a branded carousel, and a short video ad to round out your social presence.',
+      includes: ['20s property ad', 'Branded carousel', '5–10s video ad'],
+      allIncluded: true,
       deliverables: [
-        { name: 'Property Ad (20–30s)', price: 0, includes: ['1x social-optimised video', 'Vertical & landscape formats', 'Google Drive delivery'] },
+        { name: 'Property Ad (20s)', price: 0, includes: ['1x social-optimised video', 'Vertical & landscape formats', 'Google Drive delivery'] },
+        { name: 'Carousel', price: 0, includes: ['1x branded property carousel', 'Google Drive delivery'] },
+        { name: 'Video Ad (5–10s)', price: 0, includes: ['1x short-form video ad', 'Vertical & landscape formats', 'Google Drive delivery'] },
       ]
     },
     {
@@ -332,6 +567,12 @@ export default function ClientPortal() {
   const addons = selectedCat === 'property' ? propertyAddons : commercialAddons
 
   const s = { panel: { background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7 } as React.CSSProperties }
+  const cInp: React.CSSProperties = { background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }
+  const cLbl: React.CSSProperties = { fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)' }
+  function addBriefDel() { setBriefDeliverables(p => [...p, { id: Date.now().toString(), name: '', quantity: 1, duration: '', formats: [], notes: '' }]) }
+  function updateBriefDel(id: string, field: keyof BriefDeliverable, value: any) { setBriefDeliverables(p => p.map(d => d.id === id ? { ...d, [field]: value } : d)) }
+  function removeBriefDel(id: string) { setBriefDeliverables(p => p.filter(d => d.id !== id)) }
+  function toggleBriefFmt(id: string, fmt: string) { setBriefDeliverables(p => p.map(d => d.id === id ? { ...d, formats: d.formats.includes(fmt) ? d.formats.filter(f => f !== fmt) : [...d.formats, fmt] } : d)) }
 
   if (loading) return (
     <main style={{ background: '#0E1014', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -344,9 +585,8 @@ export default function ClientPortal() {
 
       {/* SIDEBAR */}
       <aside style={{ width: 220, flexShrink: 0, background: '#14181F', borderRight: '0.5px solid rgba(200,194,187,0.09)', display: 'flex', flexDirection: 'column', position: 'sticky', top: 0, height: '100vh' }}>
-        <div style={{ padding: '14px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ padding: '14px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', display: 'flex', alignItems: 'center' }}>
           <img src="/images/Pale_logo_EX.png" alt="Example Content" style={{ height: 40, objectFit: 'contain', maxWidth: 150 }} />
-          <span style={{ fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', background: 'rgba(61,71,86,0.6)', color: '#C8C2BB', padding: '3px 7px', borderRadius: 2 }}>Client</span>
         </div>
         <div style={{ margin: '14px 14px 8px', background: 'rgba(61,71,86,0.3)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 6, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{ width: 30, height: 30, borderRadius: '50%', background: '#3D4756', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 500, color: '#C8C2BB', flexShrink: 0 }}>{clientProfile?.name ? clientProfile.name.split(' ').map((n: string) => n[0]).join('').slice(0,2).toUpperCase() : user?.email?.[0]?.toUpperCase() || '?'}</div>
@@ -356,7 +596,7 @@ export default function ClientPortal() {
           </div>
         </div>
 
-        <nav style={{ padding: '12px 10px', flex: 1 }}>
+        <nav style={{ padding: '18px 12px', flex: 1 }}>
           {[
             { id: 'dashboard', label: 'Dashboard' },
             { id: 'book', label: 'Book a Shoot' },
@@ -365,7 +605,7 @@ export default function ClientPortal() {
             { id: 'pitches', label: 'Our Briefs' },
             { id: 'invoices', label: 'Invoices' },
           ].map(item => (
-            <button key={item.id} onClick={() => { setActiveView(item.id); setBookingStep(1); setSelectedCat(''); setSelectedShoot(null); setSelectedDel(null); setSelectedAddons([]); setTcAccepted(false); setPreferredDate(''); setDraftDue(''); setDeliveryDue(''); setBookingNotes(''); setAccessNotes(''); setPropertyAddress('') }} style={{ display: 'flex', alignItems: 'center', width: '100%', padding: '9px 10px', borderRadius: 5, fontSize: 12, color: activeView === item.id ? '#C8C2BB' : 'rgba(200,194,187,0.38)', background: activeView === item.id ? 'rgba(61,71,86,0.4)' : 'transparent', border: activeView === item.id ? '0.5px solid rgba(200,194,187,0.09)' : '0.5px solid transparent', cursor: 'pointer', marginBottom: 2, textAlign: 'left', fontFamily: 'inherit' }}>
+            <button key={item.id} onClick={() => { setActiveView(item.id); setBookingStep(1); setSelectedCat(''); setSelectedShoot(null); setSelectedDel(null); setSelectedAddons([]); setTcAccepted(false); setPreferredDate(''); setDraftDue(''); setDeliveryDue(''); setBookingNotes(''); setAccessNotes(''); setPropertyAddress(''); setProjectType(''); setProjectTitle(''); setProjectDescription(''); setTargetAudience(''); setKeyMessage(''); setTalentDetails(''); setBriefDeliverables([{ id: '1', name: '', quantity: 1, duration: '', formats: [], notes: '' }]); setDateFlexible(false); setShootDuration(''); setReferenceLinks(''); setBudgetRange('') }} style={{ display: 'flex', alignItems: 'center', width: '100%', padding: '13px 14px', borderRadius: 6, fontSize: 13, letterSpacing: '0.01em', fontWeight: activeView === item.id ? 600 : 500, color: activeView === item.id ? '#fff' : 'rgba(200,194,187,0.5)', background: activeView === item.id ? 'rgba(61,71,86,0.4)' : 'transparent', border: activeView === item.id ? '0.5px solid rgba(200,194,187,0.15)' : '0.5px solid transparent', cursor: 'pointer', marginBottom: 8, textAlign: 'left', fontFamily: 'var(--font-space-grotesk), Inter, sans-serif' }}>
               {item.label}
             </button>
           ))}
@@ -583,7 +823,7 @@ export default function ClientPortal() {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 28px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', background: '#14181F', position: 'sticky', top: 0, zIndex: 10 }}>
               <div>
                 <div style={{ fontSize: 14, fontWeight: 500, color: '#fff' }}>Book a Shoot</div>
-                <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', marginTop: 2 }}>Select your category, packages and preferred date</div>
+                <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', marginTop: 2 }}>{selectedCat === 'commercial' ? 'Tell us about your project and we will be in touch with a quote' : 'Select your category, packages and preferred date'}</div>
               </div>
               <button onClick={() => setActiveView('dashboard')} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>← Dashboard</button>
             </div>
@@ -591,13 +831,16 @@ export default function ClientPortal() {
 
               {/* STEP INDICATOR */}
               {bookingStep > 1 && <div style={{ display: 'flex', alignItems: 'center', marginBottom: 28, padding: '0 28px' }}>
-                {['Category','Packages','Deliverables','Add-ons','Details','Confirm'].map((step, i) => (
-                  <div key={step} style={{ display: 'flex', alignItems: 'center', flex: i < 5 ? 1 : 'none' }}>
+                {(selectedCat === 'commercial'
+                  ? [{ label: 'Category', value: 1 }, { label: 'Project brief', value: 2 }, { label: 'Confirm', value: 6 }]
+                  : [{ label: 'Category', value: 1 }, { label: 'Packages', value: 2 }, { label: 'Deliverables', value: 3 }, { label: 'Add-ons', value: 4 }, { label: 'Details', value: 5 }, { label: 'Confirm', value: 6 }]
+                ).map((step, i, arr) => (
+                  <div key={step.label} style={{ display: 'flex', alignItems: 'center', flex: i < arr.length - 1 ? 1 : 'none' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <div style={{ width: 26, height: 26, borderRadius: '50%', border: `1px solid ${bookingStep > i + 1 ? 'rgba(100,200,130,0.5)' : bookingStep === i + 1 ? '#C8C2BB' : 'rgba(200,194,187,0.1)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 500, color: bookingStep > i + 1 ? 'rgba(100,200,130,0.8)' : bookingStep === i + 1 ? '#C8C2BB' : 'rgba(200,194,187,0.3)', background: bookingStep > i + 1 ? 'rgba(30,70,45,0.5)' : bookingStep === i + 1 ? 'rgba(200,194,187,0.08)' : 'transparent', flexShrink: 0 }}>{bookingStep > i + 1 ? '✓' : i + 1}</div>
-                      <span style={{ fontSize: 11, color: bookingStep === i + 1 ? '#C8C2BB' : bookingStep > i + 1 ? 'rgba(100,200,130,0.7)' : 'rgba(200,194,187,0.3)', whiteSpace: 'nowrap' }}>{step}</span>
+                      <div style={{ width: 26, height: 26, borderRadius: '50%', border: `1px solid ${bookingStep > step.value ? 'rgba(100,200,130,0.5)' : bookingStep === step.value ? '#C8C2BB' : 'rgba(200,194,187,0.1)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 500, color: bookingStep > step.value ? 'rgba(100,200,130,0.8)' : bookingStep === step.value ? '#C8C2BB' : 'rgba(200,194,187,0.3)', background: bookingStep > step.value ? 'rgba(30,70,45,0.5)' : bookingStep === step.value ? 'rgba(200,194,187,0.08)' : 'transparent', flexShrink: 0 }}>{bookingStep > step.value ? '✓' : i + 1}</div>
+                      <span style={{ fontSize: 11, color: bookingStep === step.value ? '#C8C2BB' : bookingStep > step.value ? 'rgba(100,200,130,0.7)' : 'rgba(200,194,187,0.3)', whiteSpace: 'nowrap' }}>{step.label}</span>
                     </div>
-                    {i < 5 && <div style={{ flex: 1, height: 0.5, background: 'rgba(200,194,187,0.09)', margin: '0 10px' }} />}
+                    {i < arr.length - 1 && <div style={{ flex: 1, height: 0.5, background: 'rgba(200,194,187,0.09)', margin: '0 10px' }} />}
                   </div>
                 ))}
               </div>}
@@ -665,21 +908,33 @@ export default function ClientPortal() {
                   </div>
                 </div>
               )}
-              {bookingStep === 2 && (
+              {bookingStep === 2 && selectedCat === 'property' && (
                 <div>
                   <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 12 }}>Select package</div>
                   <div style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:14, marginBottom:22 }}>
                     {shootPackages.map((pkg: any) => (
-                      <div key={pkg.name} onClick={() => { setSelectedShoot(pkg); setSelectedSubDel(null); setSelectedDel(null) }} style={{ border:`0.5px solid ${selectedShoot?.name === pkg.name ? 'rgba(200,194,187,0.35)' : 'rgba(200,194,187,0.08)'}`, borderRadius:12, padding:'22px 24px', cursor:'pointer', background: selectedShoot?.name === pkg.name ? 'linear-gradient(135deg, rgba(35,42,56,0.95) 0%, rgba(22,27,38,0.98) 100%)' : 'linear-gradient(135deg, rgba(26,31,40,0.9) 0%, rgba(18,22,30,0.95) 100%)', position:'relative', transition:'all 0.2s', boxShadow: selectedShoot?.name === pkg.name ? '0 0 30px rgba(200,194,187,0.04) inset' : 'none', overflow:'hidden' }}>
+                      <div key={pkg.name} onClick={() => {
+                        setSelectedShoot(pkg)
+                        setSelectedSubDel(null)
+                        if (pkg.allIncluded) {
+                          const bundled = { name: pkg.deliverables.map((d: any) => d.name).join(' + '), price: 0, includes: pkg.deliverables.flatMap((d: any) => d.includes) }
+                          setSelectedDel(bundled)
+                        } else {
+                          setSelectedDel(null)
+                        }
+                      }} style={{ border:`0.5px solid ${selectedShoot?.name === pkg.name ? 'rgba(200,194,187,0.35)' : 'rgba(200,194,187,0.08)'}`, borderRadius:12, padding:'22px 24px', cursor:'pointer', background: selectedShoot?.name === pkg.name ? 'linear-gradient(135deg, rgba(35,42,56,0.95) 0%, rgba(22,27,38,0.98) 100%)' : 'linear-gradient(135deg, rgba(26,31,40,0.9) 0%, rgba(18,22,30,0.95) 100%)', position:'relative', transition:'all 0.2s', boxShadow: selectedShoot?.name === pkg.name ? '0 0 30px rgba(200,194,187,0.04) inset' : 'none', overflow:'hidden' }}>
                         <div style={{ position:'absolute', top:0, left:0, right:0, height:'1px', background: selectedShoot?.name === pkg.name ? 'linear-gradient(90deg, transparent, rgba(200,194,187,0.25), transparent)' : 'linear-gradient(90deg, transparent, rgba(200,194,187,0.06), transparent)' }} />
                         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:14 }}>
                           <div>
                             {pkg.tag && <div style={{ fontSize:9, letterSpacing:'0.14em', textTransform:'uppercase', color:'rgba(100,200,130,0.6)', marginBottom:6, display:'flex', alignItems:'center', gap:5 }}><span style={{ width:4, height:4, borderRadius:'50%', background:'rgba(100,200,130,0.6)', display:'inline-block' }} />{pkg.tag}</div>}
                             <div style={{ fontSize:16, fontWeight:600, color:'#fff', letterSpacing:'-0.01em' }}>{pkg.name}</div>
                           </div>
-                          <div style={{ textAlign:'right', flexShrink:0, marginLeft:16 }}>
-                            <div style={{ fontSize:24, fontWeight:700, color:'#fff', letterSpacing:'-0.03em', lineHeight:1 }}>${pkg.price.toLocaleString()}</div>
-                            <div style={{ fontSize:9, color:'rgba(200,194,187,0.3)', letterSpacing:'0.08em', marginTop:2 }}>+ GST</div>
+                          <div style={{ display:'flex', alignItems:'center', gap:8, flexShrink:0, marginLeft:16 }}>
+                            {selectedShoot?.name === pkg.name && <div style={{ width:20, height:20, borderRadius:'50%', background:'#C8C2BB', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, boxShadow:'0 0 12px rgba(200,194,187,0.3)' }}><span style={{ fontSize:10, color:'#111', fontWeight:700 }}>✓</span></div>}
+                            <div style={{ textAlign:'right' }}>
+                              <div style={{ fontSize:24, fontWeight:700, color:'#fff', letterSpacing:'-0.03em', lineHeight:1 }}>${pkg.price.toLocaleString()}</div>
+                              <div style={{ fontSize:9, color:'rgba(200,194,187,0.3)', letterSpacing:'0.08em', marginTop:2 }}>+ GST</div>
+                            </div>
                           </div>
                         </div>
                         {pkg.description && <div style={{ fontSize:12, color:'rgba(200,194,187,0.45)', lineHeight:1.7, marginBottom:16, paddingBottom:16, borderBottom:'0.5px solid rgba(200,194,187,0.07)' }}>{pkg.description}</div>}
@@ -692,16 +947,175 @@ export default function ClientPortal() {
                             ))}
                           </div>
                         )}
-                        {selectedShoot?.name === pkg.name && <div style={{ position:'absolute', top:16, right:16, width:22, height:22, borderRadius:'50%', background:'#C8C2BB', display:'flex', alignItems:'center', justifyContent:'center', boxShadow:'0 0 12px rgba(200,194,187,0.3)' }}><span style={{ fontSize:11, color:'#111', fontWeight:700 }}>✓</span></div>}
                       </div>
                     ))}
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 16, borderTop: '0.5px solid rgba(200,194,187,0.09)' }}>
                     <button onClick={() => setBookingStep(1)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>← Back</button>
-                    <button onClick={() => selectedShoot && setBookingStep(3)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, background: selectedShoot ? '#C8C2BB' : 'rgba(200,194,187,0.1)', color: selectedShoot ? '#111' : 'rgba(200,194,187,0.2)', border:'none', cursor: selectedShoot ? 'pointer' : 'not-allowed', fontWeight: 500, fontFamily: 'inherit' }}>Continue →</button>
+                    <button onClick={() => selectedShoot && setBookingStep(selectedShoot.allIncluded ? 4 : 3)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, background: selectedShoot ? '#C8C2BB' : 'rgba(200,194,187,0.1)', color: selectedShoot ? '#111' : 'rgba(200,194,187,0.2)', border:'none', cursor: selectedShoot ? 'pointer' : 'not-allowed', fontWeight: 500, fontFamily: 'inherit' }}>Continue →</button>
                   </div>
                 </div>
               )}
+
+              {/* STEP 2 (COMMERCIAL & EVENTS): PROJECT BRIEF — a custom-scope request, not a package pick */}
+              {bookingStep === 2 && selectedCat === 'commercial' && (() => {
+                const commercialRequestValid = clientContactName && clientEmail2 && projectType && projectDescription
+                return (
+                <div>
+                  <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 4 }}>Tell us about your project</div>
+                  <div style={{ fontSize: 12, color: 'rgba(200,194,187,0.35)', marginBottom: 22, lineHeight: 1.6 }}>Commercial and event work is quoted per project rather than off a fixed package — the more detail you give us here, the faster and more accurate your quote will be.</div>
+
+                  {/* About you */}
+                  <div style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.3)', marginBottom: 10, marginTop: 4 }}>About you</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 20 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <label style={cLbl}>Business / brand name</label>
+                      <input value={clientContactName} onChange={e => setClientContactName(e.target.value)} placeholder="e.g. Black Barn Retreats" style={cInp} />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <label style={cLbl}>Your email</label>
+                      <input type="email" value={clientEmail2} onChange={e => setClientEmail2(e.target.value)} placeholder="your@email.com" style={cInp} />
+                    </div>
+                  </div>
+
+                  {/* The project */}
+                  <div style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.3)', marginBottom: 10 }}>The project</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 20 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <label style={cLbl}>Project title</label>
+                      <input value={projectTitle} onChange={e => setProjectTitle(e.target.value)} placeholder="e.g. 2026 Brand Campaign" style={cInp} />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <label style={cLbl}>Type of project</label>
+                      <select value={projectType} onChange={e => setProjectType(e.target.value)} style={cInp}>
+                        <option value=''>Select type...</option>
+                        <option>Brand / commercial video</option><option>Event coverage</option><option>Product video</option><option>Corporate / testimonial</option><option>Social content</option><option>Photography only</option><option>Other</option>
+                      </select>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, gridColumn: 'span 2' }}>
+                      <label style={cLbl}>Target audience</label>
+                      <input value={targetAudience} onChange={e => setTargetAudience(e.target.value)} placeholder="e.g. First-home buyers aged 25–40" style={cInp} />
+                    </div>
+                  </div>
+
+                  {/* The brief */}
+                  <div style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.3)', marginBottom: 10 }}>The brief</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginBottom: 20 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <label style={cLbl}>Describe the project & scope of work</label>
+                      <textarea rows={4} value={projectDescription} onChange={e => setProjectDescription(e.target.value)} placeholder="What's the project, what story are we telling, and what does success look like?" style={{ ...cInp, resize: 'vertical', lineHeight: 1.65 }} />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <label style={cLbl}>Key message / takeaway</label>
+                      <input value={keyMessage} onChange={e => setKeyMessage(e.target.value)} placeholder="What should viewers think, feel, or do after watching?" style={cInp} />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <label style={cLbl}>Interviews, presenters, or talent on camera?</label>
+                      <input value={talentDetails} onChange={e => setTalentDetails(e.target.value)} placeholder="e.g. 2 staff interviews, no professional talent needed" style={cInp} />
+                    </div>
+                  </div>
+
+                  {/* Deliverables */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                    <div style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.3)' }}>Deliverables needed</div>
+                    <button onClick={addBriefDel} style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '4px 10px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>+ Add</button>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 20 }}>
+                    {briefDeliverables.map(d => (
+                      <div key={d.id} style={{ background: 'rgba(0,0,0,0.2)', border: '0.5px solid rgba(200,194,187,0.07)', borderRadius: 6, padding: 14 }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px 110px', gap: 10, marginBottom: 10 }}>
+                          <input style={cInp} value={d.name} onChange={e => updateBriefDel(d.id, 'name', e.target.value)} placeholder="e.g. Hero brand film..." />
+                          <div><label style={{ ...cLbl, marginBottom: 4, display: 'block' }}>Qty</label><input style={{ ...cInp, textAlign: 'center' as const }} type="number" min="1" value={d.quantity} onChange={e => updateBriefDel(d.id, 'quantity', parseInt(e.target.value) || 1)} /></div>
+                          <div><label style={{ ...cLbl, marginBottom: 4, display: 'block' }}>Length</label><input style={cInp} value={d.duration} onChange={e => updateBriefDel(d.id, 'duration', e.target.value)} placeholder="2-3 min" /></div>
+                        </div>
+                        <div style={{ marginBottom: 8 }}>
+                          <label style={{ ...cLbl, marginBottom: 6, display: 'block' }}>Formats</label>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                            {[...VIDEO_FORMATS, ...PHOTO_FORMATS].map(fmt => (
+                              <button key={fmt} onClick={() => toggleBriefFmt(d.id, fmt)} style={{ fontSize: 10, padding: '4px 9px', borderRadius: 3, border: `0.5px solid ${d.formats.includes(fmt) ? '#C8C2BB' : 'rgba(200,194,187,0.12)'}`, background: d.formats.includes(fmt) ? 'rgba(200,194,187,0.1)' : 'transparent', color: d.formats.includes(fmt) ? '#C8C2BB' : 'rgba(200,194,187,0.3)', cursor: 'pointer', fontFamily: 'inherit' }}>{fmt}</button>
+                            ))}
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: 10 }}>
+                          <input style={{ ...cInp, fontSize: 11 }} value={d.notes} onChange={e => updateBriefDel(d.id, 'notes', e.target.value)} placeholder="Notes..." />
+                          {briefDeliverables.length > 1 && <button onClick={() => removeBriefDel(d.id)} style={{ fontSize: 13, color: 'rgba(210,90,90,0.6)', background: 'transparent', border: 'none', cursor: 'pointer', flexShrink: 0 }}>✕</button>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Logistics */}
+                  <div style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.3)', marginBottom: 10 }}>Logistics</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 20 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, gridColumn: 'span 2' }}>
+                      <label style={cLbl}>Shoot location(s)</label>
+                      <div style={{ position: 'relative' }}>
+                        <input value={propertyAddress} onChange={e => handleAddressChange(e.target.value)} onBlur={() => setTimeout(() => setShowAddressSuggestions(false), 200)} placeholder="Start typing an address..." style={cInp} />
+                        {showAddressSuggestions && addressSuggestions.length > 0 && (
+                          <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, zIndex: 50, overflow: 'hidden', marginTop: 4 }}>
+                            {addressSuggestions.map((sug: any, i: number) => (
+                              <div key={i} onClick={() => selectAddress(sug)} style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: i < addressSuggestions.length - 1 ? '0.5px solid rgba(200,194,187,0.06)' : 'none', fontSize: 12, color: '#C8C2BB' }} onMouseEnter={e => (e.currentTarget.style.background = 'rgba(200,194,187,0.05)')} onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                                {sug.place_name}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <label style={cLbl}>Preferred / target date</label>
+                      <div style={{ display: 'flex', gap: 10 }}>
+                        <input type="date" value={preferredDate} onChange={e => setPreferredDate(e.target.value)} style={{ ...cInp, flex: 1 }} />
+                        <select value={preferredTime} onChange={e => setPreferredTime(e.target.value)} style={cInp}>
+                          <option value=''>Time</option>
+                          {['06:00','06:30','07:00','07:30','08:00','08:30','09:00','09:30','10:00','10:30','11:00','11:30','12:00','13:00','14:00','15:00','16:00','17:00','17:30','18:00'].map(t => <option key={t} value={t}>{formatTime12(t)}</option>)}
+                        </select>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginTop: 4 }} onClick={() => setDateFlexible(f => !f)}>
+                        <div style={{ width: 15, height: 15, borderRadius: 3, border: `1px solid ${dateFlexible ? '#C8C2BB' : 'rgba(200,194,187,0.2)'}`, background: dateFlexible ? 'rgba(200,194,187,0.15)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{dateFlexible && <span style={{ fontSize: 10, color: '#C8C2BB' }}>✓</span>}</div>
+                        <span style={{ fontSize: 11, color: 'rgba(200,194,187,0.5)' }}>Date is flexible</span>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <label style={cLbl}>Estimated shoot duration</label>
+                      <select value={shootDuration} onChange={e => setShootDuration(e.target.value)} style={cInp}>
+                        <option value=''>Select duration...</option>
+                        <option>1–2 hours</option><option>Half day</option><option>Full day</option><option>Multi-day</option><option>Not sure yet</option>
+                      </select>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <label style={cLbl}>Final delivery needed by</label>
+                      <input type="date" value={deliveryDue} onChange={e => setDeliveryDue(e.target.value)} style={cInp} />
+                    </div>
+                  </div>
+
+                  {/* Extras */}
+                  <div style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.3)', marginBottom: 10 }}>Extras</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 20 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <label style={cLbl}>Reference links / mood board / brand guidelines</label>
+                      <input value={referenceLinks} onChange={e => setReferenceLinks(e.target.value)} placeholder="Paste any links here" style={cInp} />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <label style={cLbl}>Estimated budget range (optional)</label>
+                      <select value={budgetRange} onChange={e => setBudgetRange(e.target.value)} style={cInp}>
+                        <option value=''>Prefer not to say</option>
+                        <option>Under $1,000</option><option>$1,000 – $2,000</option><option>$2,000 – $3,000</option><option>$3,000 – $6,000</option><option>$6,000 – $10,000</option><option>$10,000+</option><option>Not sure yet</option>
+                      </select>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, gridColumn: 'span 2' }}>
+                      <label style={cLbl}>Additional notes / special requirements</label>
+                      <textarea rows={3} value={bookingNotes} onChange={e => setBookingNotes(e.target.value)} placeholder="Anything else we should know?" style={{ ...cInp, resize: 'vertical', lineHeight: 1.65 }} />
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 16, borderTop: '0.5px solid rgba(200,194,187,0.09)' }}>
+                    <button onClick={() => setBookingStep(1)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>← Back</button>
+                    <button onClick={() => commercialRequestValid && setBookingStep(6)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, background: commercialRequestValid ? '#C8C2BB' : 'rgba(200,194,187,0.1)', color: commercialRequestValid ? '#111' : 'rgba(200,194,187,0.2)', border: 'none', cursor: commercialRequestValid ? 'pointer' : 'not-allowed', fontWeight: 500, fontFamily: 'inherit' }}>Review & submit →</button>
+                  </div>
+                </div>
+                )
+              })()}
 
               {/* STEP 3: DELIVERABLES */}
               {bookingStep === 3 && (
@@ -771,7 +1185,7 @@ export default function ClientPortal() {
                   {/* Contact info — always shown first */}
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      <label style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)' }}>{selectedCat === 'property' ? 'Listing agent name' : 'Your name'}</label>
+                      <label style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)' }}>Listing agent name</label>
                       <input value={clientContactName} onChange={e => setClientContactName(e.target.value)} placeholder="e.g. Jessica Moore" style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }} />
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -811,37 +1225,6 @@ export default function ClientPortal() {
                     </div>
                   )}
 
-                  {/* Commercial specific */}
-                  {selectedCat === 'commercial' && (
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        <label style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)' }}>Business / brand name</label>
-                        <input value={clientContactName} onChange={e => setClientContactName(e.target.value)} placeholder="e.g. Black Barn Retreats" style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }} />
-                      </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        <label style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)' }}>Industry</label>
-                        <select style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }}>
-                          <option>Hospitality & tourism</option><option>Retail & product</option><option>Corporate</option><option>Not-for-profit</option><option>Health & wellness</option><option>Other</option>
-                        </select>
-                      </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, gridColumn: 'span 2' }}>
-                        <label style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)' }}>Shoot location</label>
-                        <div style={{ position: 'relative' }}>
-                          <input value={propertyAddress} onChange={e => handleAddressChange(e.target.value)} onBlur={() => setTimeout(() => setShowAddressSuggestions(false), 200)} placeholder="Start typing an address..." style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }} />
-                          {showAddressSuggestions && addressSuggestions.length > 0 && (
-                            <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, zIndex: 50, overflow: 'hidden', marginTop: 4 }}>
-                              {addressSuggestions.map((s: any, i: number) => (
-                                <div key={i} onClick={() => selectAddress(s)} style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: i < addressSuggestions.length - 1 ? '0.5px solid rgba(200,194,187,0.06)' : 'none', fontSize: 12, color: '#C8C2BB' }} onMouseEnter={e => (e.currentTarget.style.background = 'rgba(200,194,187,0.05)')} onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-                                  {s.place_name}
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
                   {/* Dates — always shown */}
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, marginBottom: 14 }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -850,7 +1233,7 @@ export default function ClientPortal() {
                         <input type="date" value={preferredDate} onChange={e => setPreferredDate(e.target.value)} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', flex:1 }} />
                         <select value={preferredTime} onChange={e => setPreferredTime(e.target.value)} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }}>
                           <option value=''>Preferred time</option>
-                          {['06:00','06:30','07:00','07:30','08:00','08:30','09:00','09:30','10:00','10:30','11:00','11:30','12:00','13:00','14:00','15:00','16:00','17:00','17:30','18:00'].map(t => <option key={t} value={t}>{t}</option>)}
+                          {['06:00','06:30','07:00','07:30','08:00','08:30','09:00','09:30','10:00','10:30','11:00','11:30','12:00','13:00','14:00','15:00','16:00','17:00','17:30','18:00'].map(t => <option key={t} value={t}>{formatTime12(t)}</option>)}
                         </select>
                       </div>
                     </div>
@@ -892,24 +1275,36 @@ export default function ClientPortal() {
               {/* STEP 5: CONFIRM */}
               {bookingStep === 6 && (
                 <div>
-                  <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 16 }}>Review your booking</div>
+                  <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 16 }}>{selectedCat === 'commercial' ? 'Review your request' : 'Review your booking'}</div>
                   <div style={{ background: 'rgba(61,71,86,0.2)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 8, padding: '18px 22px', marginBottom: 18 }}>
-                    {[
-                      { key: 'Category', val: selectedCat === 'property' ? 'Property & Architecture' : 'Commercial & Events' },
+                    {(selectedCat === 'commercial' ? [
+                      { key: 'Category', val: 'Commercial & Events' },
+                      { key: 'Business / brand', val: clientContactName || '—' },
+                      { key: 'Project type', val: projectType || '—' },
+                      { key: 'Location', val: propertyAddress || '—' },
+                      { key: 'Preferred date', val: dateFlexible ? 'Flexible' : (preferredDate ? preferredDate + (preferredTime ? ' at ' + formatTime12(preferredTime) : '') : 'TBC') },
+                      { key: 'Deliverables', val: briefDeliverables.filter(d => d.name).length ? briefDeliverables.filter(d => d.name).map(d => `${d.quantity}x ${d.name}`).join(', ') : 'To be discussed' },
+                      { key: 'Budget range', val: budgetRange || 'Not specified' },
+                    ] : [
+                      { key: 'Category', val: 'Property & Architecture' },
                       { key: 'Shoot package', val: `${selectedShoot?.name} — $${selectedShoot?.price?.toLocaleString()} + GST` },
                       { key: 'Deliverable package', val: `${selectedDel?.name} — $${selectedDel?.price} + GST` },
                       { key: 'Add-ons', val: selectedAddons.length ? selectedAddons.map(a => `${a.name} (+$${a.price})`).join(', ') : 'None' },
                       { key: 'Preferred date', val: 'TBC — confirmed within 24 hrs' },
-                    ].map(({ key, val }) => (
+                    ]).map(({ key, val }) => (
                       <div key={key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '8px 0', borderBottom: '0.5px solid rgba(200,194,187,0.06)' }}>
                         <span style={{ fontSize: 12, color: 'rgba(200,194,187,0.4)' }}>{key}</span>
                         <span style={{ fontSize: 13, color: '#C8C2BB', fontWeight: 500, textAlign: 'right', maxWidth: 360 }}>{val}</span>
                       </div>
                     ))}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', paddingTop: 14, marginTop: 4 }}>
-                      <span style={{ fontSize: 13, fontWeight: 500, color: '#C8C2BB' }}>Total estimate</span>
-                      <span style={{ fontSize: 18, fontWeight: 500, color: '#fff' }}>${grandTotal.toLocaleString()} + GST</span>
-                    </div>
+                    {selectedCat === 'commercial' ? (
+                      <div style={{ paddingTop: 14, marginTop: 4, fontSize: 12, color: 'rgba(200,194,187,0.4)', lineHeight: 1.6 }}>This is quoted per project — we'll review your brief and come back with a custom quote within 24–48 hours.</div>
+                    ) : (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', paddingTop: 14, marginTop: 4 }}>
+                        <span style={{ fontSize: 13, fontWeight: 500, color: '#C8C2BB' }}>Total estimate</span>
+                        <span style={{ fontSize: 18, fontWeight: 500, color: '#fff' }}>${grandTotal.toLocaleString()} + GST</span>
+                      </div>
+                    )}
                   </div>
                   <div style={{ border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 6, padding: '13px 16px', marginBottom: 16, maxHeight: 96, overflowY: 'auto', fontSize: 11, color: 'rgba(200,194,187,0.35)', lineHeight: 1.7, background: 'rgba(0,0,0,0.2)' }}>
                     <strong style={{ color: 'rgba(200,194,187,0.5)' }}>Terms & Conditions — Example Content Ltd</strong><br /><br />
@@ -924,14 +1319,45 @@ export default function ClientPortal() {
                     </ol></div>
                   <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 20, cursor: 'pointer' }} onClick={() => setTcAccepted(!tcAccepted)}>
                     <div style={{ width: 15, height: 15, borderRadius: 2, border: `1px solid ${tcAccepted ? '#C8C2BB' : 'rgba(200,194,187,0.2)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1, background: tcAccepted ? 'rgba(200,194,187,0.15)' : 'transparent' }}>{tcAccepted && <span style={{ fontSize: 10, color: '#C8C2BB' }}>✓</span>}</div>
-                    <span style={{ fontSize: 12, color: 'rgba(200,194,187,0.5)', lineHeight: 1.6 }}>I have read and agree to the Terms & Conditions. I confirm the above package selection and authorise Example Content Ltd to proceed with my booking request.</span>
+                    <span style={{ fontSize: 12, color: 'rgba(200,194,187,0.5)', lineHeight: 1.6 }}>I have read and agree to the Terms & Conditions. {selectedCat === 'commercial' ? 'I confirm the above details and authorise Example Content Ltd to prepare a quote based on this request.' : 'I confirm the above package selection and authorise Example Content Ltd to proceed with my booking request.'}</span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 16, borderTop: '0.5px solid rgba(200,194,187,0.09)' }}>
-                    <button onClick={() => setBookingStep(5)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>← Back</button>
+                    <button onClick={() => setBookingStep(selectedCat === 'commercial' ? 2 : 5)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>← Back</button>
                     <button onClick={async () => {
                       if (!tcAccepted) return
                       try {
-                        await supabase.from('bookings1').insert([{
+                        await supabase.from('bookings1').insert([selectedCat === 'commercial' ? {
+                          client_id: user?.id,
+                          client_name: clientContactName || user?.email,
+                          category: selectedCat,
+                          shoot_package: projectType,
+                          deliverables: briefDeliverables.filter(d => d.name).map(d => `${d.quantity}x ${d.name}${d.duration ? ' (' + d.duration + ')' : ''}`).join(', '),
+                          addons: '',
+                          preferred_date: preferredDate || null,
+                          preferred_time: preferredTime || null,
+                          client_email: clientEmail2 || user?.email,
+                          draft_due: null,
+                          delivery_due: deliveryDue || null,
+                          property_live_date: null,
+                          address: propertyAddress,
+                          notes: [
+                            projectTitle ? 'Project title: ' + projectTitle : '',
+                            projectDescription ? 'Project description: ' + projectDescription : '',
+                            targetAudience ? 'Target audience: ' + targetAudience : '',
+                            keyMessage ? 'Key message: ' + keyMessage : '',
+                            talentDetails ? 'Talent / interviews: ' + talentDetails : '',
+                            briefDeliverables.filter(d => d.name).length ? 'Deliverables:\n' + briefDeliverables.filter(d => d.name).map(d => `- ${d.quantity}x ${d.name}${d.duration ? ' (' + d.duration + ')' : ''}${d.formats.length ? ' [' + d.formats.join(', ') + ']' : ''}${d.notes ? ' — ' + d.notes : ''}`).join('\n') : '',
+                            shootDuration ? 'Estimated duration: ' + shootDuration : '',
+                            dateFlexible ? 'Preferred date is flexible' : '',
+                            referenceLinks ? 'References: ' + referenceLinks : '',
+                            budgetRange ? 'Budget range: ' + budgetRange : '',
+                            bookingNotes ? 'Additional notes: ' + bookingNotes : '',
+                          ].filter(Boolean).join('\n\n'),
+                          total: '',
+                          total_price: null,
+                          tc_accepted: true,
+                          status: 'pending',
+                        } : {
                           client_id: user?.id,
                           client_name: clientContactName || user?.email,
                           category: selectedCat,
@@ -953,6 +1379,7 @@ export default function ClientPortal() {
                             prePlanning ? 'Pre-planning required' : '',
                           ].filter(Boolean).join('\n\n'),
                           total: `$${((selectedShoot?.price || 0) + (selectedDel?.price || 0) + selectedAddons.reduce((s: number, a: any) => s + a.price, 0)).toLocaleString()} + GST`,
+                          total_price: (selectedShoot?.price || 0) + (selectedDel?.price || 0) + selectedAddons.reduce((s: number, a: any) => s + a.price, 0),
                           tc_accepted: true,
                           status: 'pending',
                         }])
@@ -965,8 +1392,44 @@ export default function ClientPortal() {
                           total_bookings: 1,
                         }], { onConflict: 'email', ignoreDuplicates: false })
                       } catch (e) { console.error('Client upsert error:', e) }
+                      try {
+                        const details = selectedCat === 'commercial' ? [
+                          { label: 'Business / brand', value: clientContactName },
+                          { label: 'Project type', value: projectType },
+                          { label: 'Target audience', value: targetAudience },
+                          { label: 'Key message', value: keyMessage },
+                          { label: 'Talent / interviews', value: talentDetails },
+                          { label: 'Deliverables', value: briefDeliverables.filter(d => d.name).map(d => `${d.quantity}x ${d.name}${d.duration ? ' (' + d.duration + ')' : ''}`).join(', ') || 'To be discussed' },
+                          { label: 'Location', value: propertyAddress },
+                          { label: 'Preferred date', value: dateFlexible ? 'Flexible' : (preferredDate ? preferredDate + (preferredTime ? ' at ' + formatTime12(preferredTime) : '') : 'TBC') },
+                          { label: 'Estimated duration', value: shootDuration },
+                          { label: 'Budget range', value: budgetRange || 'Not specified' },
+                          { label: 'Reference links', value: referenceLinks },
+                          { label: 'Description', value: projectDescription },
+                          { label: 'Additional notes', value: bookingNotes },
+                        ] : [
+                          { label: 'Listing agent', value: clientContactName },
+                          { label: 'Package', value: selectedShoot?.name ? `${selectedShoot.name} — $${selectedShoot.price?.toLocaleString()} + GST` : '' },
+                          { label: 'Deliverables', value: selectedDel?.name },
+                          { label: 'Add-ons', value: selectedAddons.length ? selectedAddons.map(a => a.name).join(', ') : 'None' },
+                          { label: 'Address', value: propertyAddress },
+                          { label: 'Preferred date', value: preferredDate ? preferredDate + (preferredTime ? ' at ' + formatTime12(preferredTime) : '') : 'TBC' },
+                          { label: 'Notes', value: bookingNotes },
+                        ]
+                        await fetch('/api/notify-booking', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            category: selectedCat,
+                            clientName: clientContactName || user?.email,
+                            clientEmail: clientEmail2 || user?.email,
+                            title: selectedCat === 'commercial' ? (projectTitle || projectType) : propertyAddress,
+                            details: details.filter(d => d.value),
+                          }),
+                        })
+                      } catch (e) { console.error('Notify-booking error:', e) }
                       setBookingStep(7)
-                    }} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, background: tcAccepted ? '#C8C2BB' : 'rgba(200,194,187,0.1)', color: tcAccepted ? '#111' : 'rgba(200,194,187,0.2)', border: 'none', cursor: tcAccepted ? 'pointer' : 'not-allowed', fontWeight: 500, fontFamily: 'inherit' }}>Submit booking request →</button>
+                    }} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, background: tcAccepted ? '#C8C2BB' : 'rgba(200,194,187,0.1)', color: tcAccepted ? '#111' : 'rgba(200,194,187,0.2)', border: 'none', cursor: tcAccepted ? 'pointer' : 'not-allowed', fontWeight: 500, fontFamily: 'inherit' }}>{selectedCat === 'commercial' ? 'Submit request →' : 'Submit booking request →'}</button>
                   </div>
                 </div>
               )}
@@ -979,7 +1442,7 @@ export default function ClientPortal() {
                   <div style={{ fontSize: 14, color: 'rgba(200,194,187,0.4)', lineHeight: 1.7, maxWidth: 400, margin: '0 auto 32px' }}>We've received your request and will confirm availability within 24 hours. You'll hear from the Example Content team shortly.</div>
                   <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
                     <button onClick={() => setActiveView('dashboard')} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Back to dashboard</button>
-                    <button onClick={() => { setBookingStep(1); setSelectedCat(''); setSelectedShoot(null); setSelectedDel(null); setSelectedAddons([]); setTcAccepted(false); setPreferredDate(''); setDraftDue(''); setDeliveryDue(''); setBookingNotes(''); setAccessNotes(''); setPropertyAddress('') }} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>Book another shoot</button>
+                    <button onClick={() => { setBookingStep(1); setSelectedCat(''); setSelectedShoot(null); setSelectedDel(null); setSelectedAddons([]); setTcAccepted(false); setPreferredDate(''); setDraftDue(''); setDeliveryDue(''); setBookingNotes(''); setAccessNotes(''); setPropertyAddress(''); setProjectType(''); setProjectTitle(''); setProjectDescription(''); setTargetAudience(''); setKeyMessage(''); setTalentDetails(''); setBriefDeliverables([{ id: '1', name: '', quantity: 1, duration: '', formats: [], notes: '' }]); setDateFlexible(false); setShootDuration(''); setReferenceLinks(''); setBudgetRange('') }} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>Book another shoot</button>
                   </div>
                 </div>
               )}
@@ -1115,7 +1578,7 @@ export default function ClientPortal() {
                   )
                 ) : (
                   /* FILE VIEW */
-                  <DriveFolder project={libraryProject} />
+                  <DriveFolder project={libraryProject} clientEmail={user?.email} clientName={clientProfile?.name} />
                 )}
               </div>
             </div>
@@ -1150,7 +1613,11 @@ export default function ClientPortal() {
                           <span style={{ fontSize:9, letterSpacing:'0.08em', textTransform:'uppercase', padding:'3px 9px', borderRadius:2, background:sc.b, color:sc.c }}>{brief.status}</span>
                           <button onClick={() => setSelectedBrief(brief)} style={{ fontSize:11, letterSpacing:'0.09em', textTransform:'uppercase', padding:'7px 14px', borderRadius:3, border:'0.5px solid rgba(200,194,187,0.2)', color:'rgba(200,194,187,0.5)', background:'transparent', cursor:'pointer', fontFamily:'inherit' }}>Open</button>
                           {brief.status === 'sent' && (
-                            <button onClick={async () => { await supabase.from('briefs').update({ status:'approved', approved_at: new Date().toISOString() }).eq('id', brief.id); setClientBriefs(p => p.map(b => b.id===brief.id ? {...b, status:'approved'} : b)) }} style={{ fontSize:11, letterSpacing:'0.09em', textTransform:'uppercase', padding:'7px 14px', borderRadius:3, background:'#C8C2BB', color:'#111', border:'none', cursor:'pointer', fontWeight:500, fontFamily:'inherit' }}>Approve</button>
+                            <button onClick={async () => {
+                              await supabase.from('briefs').update({ status:'approved', approved_at: new Date().toISOString() }).eq('id', brief.id)
+                              if (brief.project_id) await supabase.from('projects1').update({ client_confirmed:true, confirmed_at:new Date().toISOString(), stage:'Pre-Production', progress:10 }).eq('id', brief.project_id).eq('stage','Enquiry')
+                              setClientBriefs(p => p.map(b => b.id===brief.id ? {...b, status:'approved'} : b))
+                            }} style={{ fontSize:11, letterSpacing:'0.09em', textTransform:'uppercase', padding:'7px 14px', borderRadius:3, background:'#C8C2BB', color:'#111', border:'none', cursor:'pointer', fontWeight:500, fontFamily:'inherit' }}>Approve</button>
                           )}
                         </div>
                       </div>
@@ -1183,7 +1650,7 @@ export default function ClientPortal() {
                           <div style={{ fontSize:16, color:'rgba(200,194,187,0.5)', marginBottom:32 }}>{selectedBrief.project_name}</div>
                           <div style={{ display:'flex', gap:32, justifyContent:'center', flexWrap:'wrap' }}>
                             {d.shootDates && <div><div style={{ fontSize:9, letterSpacing:'0.18em', textTransform:'uppercase', color:'rgba(200,194,187,0.35)', marginBottom:4 }}>Shoot Date</div><div style={{ fontSize:14, color:'#C8C2BB', fontWeight:600 }}>{d.shootDates}</div></div>}
-                            {d.shootStartTime && <div><div style={{ fontSize:9, letterSpacing:'0.18em', textTransform:'uppercase', color:'rgba(200,194,187,0.35)', marginBottom:4 }}>Time</div><div style={{ fontSize:14, color:'#C8C2BB', fontWeight:600 }}>{d.shootStartTime}{d.shootEndTime?' – '+d.shootEndTime:''}</div></div>}
+                            {d.shootStartTime && <div><div style={{ fontSize:9, letterSpacing:'0.18em', textTransform:'uppercase', color:'rgba(200,194,187,0.35)', marginBottom:4 }}>Time</div><div style={{ fontSize:14, color:'#C8C2BB', fontWeight:600 }}>{formatTime12(d.shootStartTime)}{d.shootEndTime?' – '+formatTime12(d.shootEndTime):''}</div></div>}
                             {d.draftDue && <div><div style={{ fontSize:9, letterSpacing:'0.18em', textTransform:'uppercase', color:'rgba(200,194,187,0.35)', marginBottom:4 }}>Draft Due</div><div style={{ fontSize:14, color:'#C8C2BB', fontWeight:600 }}>{d.draftDue}</div></div>}
                             {d.finalsDue && <div><div style={{ fontSize:9, letterSpacing:'0.18em', textTransform:'uppercase', color:'rgba(200,194,187,0.35)', marginBottom:4 }}>Finals Due</div><div style={{ fontSize:14, color:'#C8C2BB', fontWeight:600 }}>{d.finalsDue}</div></div>}
                             {d.locations && <div><div style={{ fontSize:9, letterSpacing:'0.18em', textTransform:'uppercase', color:'rgba(200,194,187,0.35)', marginBottom:4 }}>Location</div><div style={{ fontSize:14, color:'#C8C2BB', fontWeight:600 }}>{d.locations.split(',')[0]}</div></div>}
@@ -1303,6 +1770,7 @@ export default function ClientPortal() {
                                 }} style={{ fontSize:11, letterSpacing:'0.09em', textTransform:'uppercase', padding:'10px 18px', borderRadius:3, border:'0.5px solid rgba(200,194,187,0.2)', color:'rgba(200,194,187,0.5)', background:'transparent', cursor:'pointer', fontFamily:'inherit' }}>Send feedback</button>
                                 <button onClick={async () => {
                                   await supabase.from('briefs').update({ status:'approved', approved_at: new Date().toISOString() }).eq('id', selectedBrief.id)
+                                  if (selectedBrief.project_id) await supabase.from('projects1').update({ client_confirmed:true, confirmed_at:new Date().toISOString(), stage:'Pre-Production', progress:10 }).eq('id', selectedBrief.project_id).eq('stage','Enquiry')
                                   await supabase.from('notifications').insert([{ user_email:'cody@examplecontent.co.nz', type:'brief_approved', title:'Brief approved', message: selectedBrief.client_name + ' has approved the brief for ' + selectedBrief.project_name, read:false, project_id: selectedBrief.project_id }])
                                   setClientBriefs(p => p.map(b => b.id===selectedBrief.id ? {...b, status:'approved'} : b))
                                   setSelectedBrief({...selectedBrief, status:'approved'})
@@ -1324,11 +1792,30 @@ export default function ClientPortal() {
             <div style={{ padding: '16px 28px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', background: '#14181F' }}>
               <div style={{ fontSize: 14, fontWeight: 500, color: '#fff' }}>Invoices</div>
             </div>
-            <div style={{ padding: 28, textAlign: 'center', paddingTop: 80 }}>
-              <div style={{ fontSize: 40, marginBottom: 16, opacity: 0.3 }}>🧾</div>
-              <div style={{ fontSize: 14, color: 'rgba(200,194,187,0.4)', marginBottom: 8 }}>Coming soon</div>
-              <div style={{ fontSize: 12, color: 'rgba(200,194,187,0.25)' }}>Invoice and payment history will appear here once connected.</div>
-            </div>
+            {clientInvoices.length === 0 ? (
+              <div style={{ padding: 28, textAlign: 'center', paddingTop: 80 }}>
+                <div style={{ fontSize: 40, marginBottom: 16, opacity: 0.3 }}>🧾</div>
+                <div style={{ fontSize: 14, color: 'rgba(200,194,187,0.4)', marginBottom: 8 }}>No invoices yet</div>
+                <div style={{ fontSize: 12, color: 'rgba(200,194,187,0.25)' }}>Invoice and payment history will appear here once we send one.</div>
+              </div>
+            ) : (
+              <div style={{ padding: 28, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {clientInvoices.map((invoice: any) => {
+                  const sc = invoice.status === 'paid' ? { color: 'rgba(100,200,130,0.9)', bg: 'rgba(30,70,45,0.4)' } : { color: 'rgba(100,150,220,0.9)', bg: 'rgba(25,45,80,0.4)' }
+                  return (
+                    <div key={invoice.id} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '16px 20px', background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7 }}>
+                      <div style={{ width: 36, height: 36, borderRadius: 5, background: 'rgba(61,71,86,0.4)', border: '0.5px solid rgba(200,194,187,0.09)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 18 }}>🧾</div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 13, fontWeight: 500, color: '#C8C2BB', marginBottom: 2 }}>Invoice #{invoice.id.slice(0, 8).toUpperCase()}</div>
+                        <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>{invoice.sent_at ? new Date(invoice.sent_at).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' }) : ''}</div>
+                      </div>
+                      <div style={{ fontSize: 15, fontWeight: 600, color: '#fff' }}>${(invoice.total || 0).toLocaleString()}</div>
+                      <span style={{ fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '3px 9px', borderRadius: 2, background: sc.bg, color: sc.color }}>{invoice.status}</span>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
         )}
 

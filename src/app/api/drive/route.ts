@@ -4,6 +4,7 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const url = searchParams.get('url')
   const thumbId = searchParams.get('thumb')
+  const folderIdParam = searchParams.get('folderId')
 
   // Proxy thumbnail
   if (thumbId) {
@@ -18,14 +19,17 @@ export async function GET(req: NextRequest) {
     return new NextResponse(null, { status: 404 })
   }
 
-  if (!url) return NextResponse.json({ error: 'No URL' }, { status: 400 })
-  const match = url.match(/folders\/([a-zA-Z0-9_-]+)/) || url.match(/id=([a-zA-Z0-9_-]+)/)
-  if (!match) return NextResponse.json({ error: 'Invalid Drive URL' }, { status: 400 })
-  
-  const folderId = match[1]
+  let folderId = folderIdParam
+  if (!folderId) {
+    if (!url) return NextResponse.json({ error: 'No URL' }, { status: 400 })
+    const match = url.match(/folders\/([a-zA-Z0-9_-]+)/) || url.match(/id=([a-zA-Z0-9_-]+)/)
+    if (!match) return NextResponse.json({ error: 'Invalid Drive URL' }, { status: 400 })
+    folderId = match[1]
+  }
+
   const apiKey = process.env.GOOGLE_DRIVE_API_KEY
   const res = await fetch(
-    `https://www.googleapis.com/drive/v3/files?q='${folderId}'+in+parents&fields=files(id,name,mimeType,thumbnailLink,webViewLink,webContentLink,size,videoMediaMetadata,imageMediaMetadata)&orderBy=name&key=${apiKey}`,
+    `https://www.googleapis.com/drive/v3/files?q='${folderId}'+in+parents&fields=files(id,name,mimeType,thumbnailLink,webViewLink,webContentLink,size,videoMediaMetadata,imageMediaMetadata)&orderBy=folder,name&key=${apiKey}`,
     { next: { revalidate: 60 } }
   )
   const data = await res.json()

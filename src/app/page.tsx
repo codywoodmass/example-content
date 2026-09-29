@@ -104,9 +104,9 @@ export default function Home() {
         .nav-logo:hover { opacity: 0.75; }
       `}</style>
       <nav style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 48px', borderBottom: '0.5px solid rgba(200,194,187,0.1)', position: 'fixed', top: 0, left: 0, right: 0, zIndex: 50, background: 'rgba(14,16,20,0.75)', backdropFilter: 'blur(12px)' }}>
-        <a href="/" className="nav-logo">
+        <Link href="/" className="nav-logo">
           <img src="/images/Pale_logo_EX.png" alt="Example Content" style={{ height: 40, objectFit: 'contain', display: 'block' }} />
-        </a>
+        </Link>
         <div style={{ display: 'flex', gap: 36 }}>
           {['Work', 'Property', 'Services', 'About'].map(item => (
             <a key={item} href={`#${item.toLowerCase()}`} className="nav-link" style={{ fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.6)', textDecoration: 'none' }}>{item}</a>
@@ -341,7 +341,7 @@ export default function Home() {
         <p style={{ fontSize: 15, color: 'rgba(200,194,187,0.4)', marginBottom: 38 }}>Tell us about your listing or project and we'll be in touch within 24 hours.</p>
         <div style={{ display: 'flex', gap: 16, justifyContent: 'center', alignItems: 'center' }}>
           <a href="/contact" style={{ background: '#C8C2BB', color: '#111', fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', padding: '14px 28px', borderRadius: 2, textDecoration: 'none', fontWeight: 500 }}>Start a project</a>
-          <a href="/portal" style={{ color: 'rgba(200,194,187,0.55)', fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', textDecoration: 'none' }}>Client portal →</a>
+          <a href="/portal/client" style={{ color: 'rgba(200,194,187,0.55)', fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', textDecoration: 'none' }}>Client portal →</a>
         </div>
       </div>
 

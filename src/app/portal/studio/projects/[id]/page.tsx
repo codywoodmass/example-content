@@ -4,8 +4,9 @@ import { useRouter, useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import StudioSidebar from '../../StudioSidebar'
 
-const STAGES = ['Pre-Production', 'Shooting', 'Post-Production', 'Revisions', 'Awaiting Confirmation']
+const STAGES = ['Enquiry', 'Pre-Production', 'Shooting', 'Post-Production', 'Revisions', 'Awaiting Confirmation']
 const STAGE_COLORS: Record<string, { color: string; bg: string }> = {
+  'Enquiry': { color: 'rgba(200,194,187,0.55)', bg: 'rgba(200,194,187,0.06)' },
   'Pre-Production': { color: 'rgba(100,150,220,0.9)', bg: 'rgba(25,45,80,0.4)' },
   'Shooting': { color: 'rgba(210,175,80,0.9)', bg: 'rgba(65,52,18,0.4)' },
   'Post-Production': { color: 'rgba(160,100,220,0.9)', bg: 'rgba(50,25,80,0.4)' },

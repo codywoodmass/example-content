@@ -190,6 +190,46 @@ export default function BriefPage() {
                 ))}
               </div>
 
+              {/* Built year & style */}
+              {(brief.property?.yearBuilt || brief.property?.architecturalStyle) && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, padding: '14px 16px' }}>
+                    <div style={{ fontSize: 9, color: 'rgba(200,194,187,0.35)', marginBottom: 6, letterSpacing: '0.12em', textTransform: 'uppercase' }}>Year built</div>
+                    <div style={{ fontSize: 14, fontWeight: 500, color: '#C8C2BB' }}>{brief.property?.yearBuilt || '—'}</div>
+                  </div>
+                  <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, padding: '14px 16px' }}>
+                    <div style={{ fontSize: 9, color: 'rgba(200,194,187,0.35)', marginBottom: 6, letterSpacing: '0.12em', textTransform: 'uppercase' }}>Architectural style</div>
+                    <div style={{ fontSize: 14, fontWeight: 500, color: '#C8C2BB' }}>{brief.property?.architecturalStyle || '—'}</div>
+                  </div>
+                </div>
+              )}
+
+              {/* Photos */}
+              {brief.property?.photoUrls && brief.property.photoUrls.length > 0 && (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+                  {brief.property.photoUrls.map((url: string, i: number) => (
+                    <div key={i} style={{ borderRadius: 7, overflow: 'hidden', border: '0.5px solid rgba(200,194,187,0.09)', aspectRatio: '4/3', background: '#0E1014' }}>
+                      <img src={url} alt="Property photo" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} onError={e => { (e.target as HTMLImageElement).closest('div')!.style.display = 'none' }} />
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Points of interest */}
+              {brief.property?.pointsOfInterest && brief.property.pointsOfInterest.length > 0 && (
+                <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, padding: '18px 20px' }}>
+                  <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 10 }}>Nearby points of interest</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {brief.property.pointsOfInterest.map((poi: string, i: number) => (
+                      <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                        <span style={{ fontSize: 10, color: 'rgba(100,150,220,0.7)', marginTop: 4, flexShrink: 0 }}>●</span>
+                        <span style={{ fontSize: 12, color: 'rgba(200,194,187,0.7)', lineHeight: 1.6 }}>{poi}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Suburb & description */}
               {(brief.property?.suburbCharacter || brief.property?.description) && (
                 <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, padding: '18px 20px' }}>
@@ -265,7 +305,41 @@ export default function BriefPage() {
                             </div>
                           ))}
                         </div>
+                        {(p.yearBuilt || p.architecturalStyle) && (
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
+                            <div style={{ background: 'rgba(61,71,86,0.2)', borderRadius: 5, padding: '10px 12px' }}>
+                              <div style={{ fontSize: 9, color: 'rgba(200,194,187,0.35)', marginBottom: 4 }}>Year built</div>
+                              <div style={{ fontSize: 12, color: '#C8C2BB' }}>{p.yearBuilt || '—'}</div>
+                            </div>
+                            <div style={{ background: 'rgba(61,71,86,0.2)', borderRadius: 5, padding: '10px 12px' }}>
+                              <div style={{ fontSize: 9, color: 'rgba(200,194,187,0.35)', marginBottom: 4 }}>Style</div>
+                              <div style={{ fontSize: 12, color: '#C8C2BB' }}>{p.architecturalStyle || '—'}</div>
+                            </div>
+                          </div>
+                        )}
                         {p.description && <div style={{ fontSize: 12, color: 'rgba(200,194,187,0.5)', lineHeight: 1.7, marginBottom: 14 }}>{p.description}</div>}
+                        {p.photoUrls && p.photoUrls.length > 0 && (
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 14 }}>
+                            {p.photoUrls.map((url: string, i: number) => (
+                              <div key={i} style={{ borderRadius: 5, overflow: 'hidden', aspectRatio: '4/3', background: 'rgba(61,71,86,0.2)' }}>
+                                <img src={url} alt="Property photo" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} onError={e => { (e.target as HTMLImageElement).closest('div')!.style.display = 'none' }} />
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {p.pointsOfInterest && p.pointsOfInterest.length > 0 && (
+                          <div style={{ marginBottom: 14 }}>
+                            <div style={{ fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 8 }}>Nearby points of interest</div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                              {p.pointsOfInterest.map((poi: string, i: number) => (
+                                <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                                  <span style={{ fontSize: 10, color: 'rgba(100,150,220,0.7)', marginTop: 3, flexShrink: 0 }}>●</span>
+                                  <span style={{ fontSize: 12, color: 'rgba(200,194,187,0.6)', lineHeight: 1.6 }}>{poi}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                         {b.mapbox_image_url && <div style={{ borderRadius: 6, overflow: 'hidden', marginBottom: 14 }}><img src={b.mapbox_image_url} alt="Satellite" style={{ width: '100%', display: 'block' }} /></div>}
                       </div>
                     )}

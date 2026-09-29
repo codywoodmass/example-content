@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
 
     const message = await anthropic.messages.create({
       model: 'claude-sonnet-4-6',
-      max_tokens: 2000,
+      max_tokens: 2500,
       tools: [
         {
           type: 'web_search_20250305',
@@ -85,10 +85,11 @@ export async function POST(req: NextRequest) {
           role: 'user',
           content: `You are researching a New Zealand property at: "${address}" for a video production crew. Search broadly across multiple sources to find as much data as possible. Try these searches:
 
-1. Search for "${address}" on homes.co.nz, OneRoof, Trade Me Property, or Realestate.co.nz to find listing details, floor plans, bedrooms, bathrooms
-2. Search for "${address} property" to find council records, QV, or rateable value data
+1. Search for "${address}" on homes.co.nz, OneRoof, Trade Me Property, or Realestate.co.nz to find listing details, floor plans, bedrooms, bathrooms, and listing photos
+2. Search for "${address} property" to find council records, QV, rateable value data, and year built
 3. Search for the suburb/area to understand the neighbourhood character, nearby amenities, and what makes it desirable
 4. Search for any recent sales history at or near this address
+5. Search for what's nearby — cafes, restaurants, parks, beaches, schools, or landmarks within a short walk or drive, useful context for a shoot
 
 Property type: ${propertyType || 'not specified'}
 Additional notes: ${briefNotes || 'none'}
@@ -101,14 +102,20 @@ Based on everything you find, return ONLY a JSON object with no other text:
   "garageSpaces": "number as string, or 'Not found'",
   "floorSize": "floor area in m² as string e.g. '180m²', or 'Not found'",
   "landSize": "land area in m² as string e.g. '600m²', or 'Not found'",
+  "yearBuilt": "year the property was built if found, or 'Not found'",
+  "architecturalStyle": "short description of the architectural style e.g. 'Contemporary', 'Character villa', 'Mid-century modern', or 'Not found'",
   "rateableValue": "CV or RV if found e.g. '$1,200,000', or 'Not found'",
   "lastSalePrice": "last known sale price if found, or 'Not found'",
   "lastSaleDate": "year of last sale if found, or 'Not found'",
   "suburb": "suburb name and city",
   "suburbCharacter": "2 sentences describing what the suburb is known for and who lives there",
   "description": "3 sentences describing this specific property — its style, key features, and what makes it stand out for a video shoot",
-  "listingUrl": "direct URL to the current or most recent listing on homes.co.nz, OneRoof, or Trade Me Property if found, or null"
-}`,
+  "pointsOfInterest": ["array of 3-6 short bullet points naming specific nearby cafes, restaurants, parks, beaches, schools, or landmarks and roughly how close they are — only include real places you actually found, omit this if you find nothing specific"],
+  "listingUrl": "direct URL to the current or most recent listing on homes.co.nz, OneRoof, or Trade Me Property if found, or null",
+  "photoUrls": ["array of direct image URLs (ending in .jpg, .jpeg, .png, or .webp) for actual photos of this property that you found verbatim in the listing pages you searched — only include URLs you genuinely saw in the page content, never invent or guess one, and return an empty array if you didn't find any"]
+}
+
+Only use real URLs you actually encountered while searching — do not fabricate listing, photo, or source URLs under any circumstance.`,
         },
       ],
     })

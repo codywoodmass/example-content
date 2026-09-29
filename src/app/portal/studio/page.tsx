@@ -3,51 +3,162 @@ import React from 'react'
 import StudioSidebar from './StudioSidebar'
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import { formatTime12 } from '@/lib/time'
+import { xeroAuthedFetch } from '@/lib/xeroClient'
+import { notify, confirmDialog, ToastHost, ConfirmHost } from '@/lib/notify'
 import { useRouter } from 'next/navigation'
 
 function StudioDriveFolder({ driveUrl }: { driveUrl: string }) {
   const [files, setFiles] = React.useState<any[]>([])
   const [loading, setLoading] = React.useState(true)
+  const [stack, setStack] = React.useState<{ id: string; name: string }[]>([])
+  const [previewFile, setPreviewFile] = React.useState<any>(null)
+  const [feedbackList, setFeedbackList] = React.useState<any[]>([])
 
   React.useEffect(() => {
+    if (!previewFile) { setFeedbackList([]); return }
+    supabase.from('video_feedback').select('*').eq('file_id', previewFile.id).order('timestamp_seconds', { ascending: true })
+      .then(({ data }) => setFeedbackList(data || []))
+  }, [previewFile])
+
+  function formatSeconds(seconds: number): string {
+    const m = Math.floor(seconds / 60)
+    const s = Math.floor(seconds % 60)
+    return `${m}:${s.toString().padStart(2, '0')}`
+  }
+
+  async function resolveFeedback(id: string) {
+    await supabase.from('video_feedback').update({ status: 'resolved' }).eq('id', id)
+    setFeedbackList(p => p.map(f => f.id === id ? { ...f, status: 'resolved' } : f))
+  }
+
+  function loadRoot() {
+    setLoading(true)
     fetch(`/api/drive?url=${encodeURIComponent(driveUrl)}`)
       .then(r => r.json())
-      .then(data => { setFiles(data.files || []); setLoading(false) })
+      .then(data => { setFiles(data.files || []); setStack([]); setLoading(false) })
       .catch(() => setLoading(false))
-  }, [driveUrl])
+  }
+
+  React.useEffect(() => { loadRoot() }, [driveUrl])
+
+  function openFolder(folder: any) {
+    setLoading(true)
+    fetch(`/api/drive?folderId=${folder.id}`)
+      .then(r => r.json())
+      .then(data => { setFiles(data.files || []); setStack(p => [...p, { id: folder.id, name: folder.name }]); setLoading(false) })
+      .catch(() => setLoading(false))
+  }
+
+  function goToCrumb(index: number) {
+    if (index < 0) { loadRoot(); return }
+    const target = stack[index]
+    setLoading(true)
+    fetch(`/api/drive?folderId=${target.id}`)
+      .then(r => r.json())
+      .then(data => { setFiles(data.files || []); setStack(stack.slice(0, index + 1)); setLoading(false) })
+      .catch(() => setLoading(false))
+  }
+
+  const breadcrumb = (
+    <div style={{ display:'flex', flexWrap:'wrap' as const, alignItems:'center', gap:4, marginBottom:14, fontSize:11 }}>
+      <span onClick={() => goToCrumb(-1)} style={{ cursor:'pointer', color: stack.length ? 'rgba(200,194,187,0.4)' : '#C8C2BB', textDecoration: stack.length ? 'underline' : 'none' }}>📁 Root</span>
+      {stack.map((s, i) => (
+        <span key={s.id} style={{ display:'flex', alignItems:'center', gap:4 }}>
+          <span style={{ color:'rgba(200,194,187,0.25)' }}>/</span>
+          <span onClick={() => goToCrumb(i)} style={{ cursor: i < stack.length - 1 ? 'pointer' : 'default', color: i < stack.length - 1 ? 'rgba(200,194,187,0.4)' : '#C8C2BB', textDecoration: i < stack.length - 1 ? 'underline' : 'none' }}>{s.name}</span>
+        </span>
+      ))}
+    </div>
+  )
 
   if (loading) return <div style={{ textAlign:'center', color:'rgba(200,194,187,0.3)', padding:'40px 0' }}>Loading files...</div>
-  if (files.length === 0) return <div style={{ textAlign:'center', color:'rgba(200,194,187,0.25)', padding:'40px 0' }}>No files found</div>
 
   return (
-    <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:14 }}>
-      {files.map((file: any) => {
-        const isVideo = file.mimeType?.includes('video')
-        const isImage = file.mimeType?.includes('image')
-        return (
-          <div key={file.id} style={{ background:'#0E1014', border:'0.5px solid rgba(200,194,187,0.08)', borderRadius:7, overflow:'hidden' }}>
-            <div style={{ aspectRatio:'16/9', position:'relative', overflow:'hidden' }}>
-              {isVideo ? (
-                <div style={{ width:'100%', height:'100%', position:'relative', display:'flex', alignItems:'center', justifyContent:'center', background:'#0a0c10' }}>
-                  <img src={`/api/drive?thumb=${file.id}`} alt="" style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', opacity:0.8 }} onError={e=>{(e.target as HTMLImageElement).style.display='none'}} />
-                  <div style={{ position:'relative', width:32, height:32, borderRadius:'50%', background:'rgba(0,0,0,0.6)', display:'flex', alignItems:'center', justifyContent:'center', border:'1px solid rgba(200,194,187,0.3)' }}><span style={{ fontSize:12, marginLeft:2 }}>▶</span></div>
+    <div>
+      {stack.length > 0 && breadcrumb}
+      {files.length === 0 ? (
+        <div style={{ textAlign:'center', color:'rgba(200,194,187,0.25)', padding:'40px 0' }}>No files found</div>
+      ) : (
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:14 }}>
+          {files.map((file: any) => {
+            const isFolder = file.mimeType === 'application/vnd.google-apps.folder'
+            const isVideo = file.mimeType?.includes('video')
+            const isImage = file.mimeType?.includes('image')
+            return (
+              <div key={file.id} onClick={() => { if (isFolder) openFolder(file); else if (isVideo || isImage) setPreviewFile(file) }} style={{ background:'#0E1014', border:'0.5px solid rgba(200,194,187,0.08)', borderRadius:7, overflow:'hidden', cursor: isFolder || isVideo || isImage ? 'pointer' : 'default' }}>
+                <div style={{ aspectRatio:'16/9', position:'relative', overflow:'hidden' }}>
+                  {isFolder ? (
+                    <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:32, background:'#14181F' }}>📁</div>
+                  ) : isVideo ? (
+                    <div style={{ width:'100%', height:'100%', position:'relative', display:'flex', alignItems:'center', justifyContent:'center', background:'#0a0c10' }}>
+                      <img src={`/api/drive?thumb=${file.id}`} alt="" style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', opacity:0.8 }} onError={e=>{(e.target as HTMLImageElement).style.display='none'}} />
+                      <div style={{ position:'relative', width:32, height:32, borderRadius:'50%', background:'rgba(0,0,0,0.6)', display:'flex', alignItems:'center', justifyContent:'center', border:'1px solid rgba(200,194,187,0.3)' }}><span style={{ fontSize:12, marginLeft:2 }}>▶</span></div>
+                    </div>
+                  ) : isImage ? (
+                    <img src={`/api/drive?thumb=${file.id}`} alt={file.name} style={{ width:'100%', height:'100%', objectFit:'cover' }} onError={e=>{(e.target as HTMLImageElement).style.display='none'}} />
+                  ) : (
+                    <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:28 }}>📄</div>
+                  )}
                 </div>
-              ) : isImage ? (
-                <img src={`/api/drive?thumb=${file.id}`} alt={file.name} style={{ width:'100%', height:'100%', objectFit:'cover' }} onError={e=>{(e.target as HTMLImageElement).style.display='none'}} />
-              ) : (
-                <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:28 }}>📄</div>
-              )}
-            </div>
-            <div style={{ padding:'10px 12px' }}>
-              <div style={{ fontSize:11, fontWeight:500, color:'#C8C2BB', marginBottom:4, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{file.name.replace(/\.[^.]+$/, '').replace(/_/g, ' ')}</div>
-              <div style={{ display:'flex', gap:6 }}>
-                <a href={file.webViewLink} target="_blank" rel="noopener noreferrer" style={{ fontSize:9, letterSpacing:'0.08em', textTransform:'uppercase', padding:'4px 8px', borderRadius:2, border:'0.5px solid rgba(200,194,187,0.12)', color:'rgba(200,194,187,0.4)', textDecoration:'none' }}>View</a>
-                <a href={`https://drive.google.com/uc?export=download&id=${file.id}`} target="_blank" rel="noopener noreferrer" style={{ fontSize:9, letterSpacing:'0.08em', textTransform:'uppercase', padding:'4px 8px', borderRadius:2, border:'0.5px solid rgba(200,194,187,0.12)', color:'rgba(200,194,187,0.4)', textDecoration:'none' }}>Download</a>
+                <div style={{ padding:'10px 12px' }}>
+                  <div style={{ fontSize:11, fontWeight:500, color:'#C8C2BB', marginBottom:4, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{file.name.replace(/\.[^.]+$/, '').replace(/_/g, ' ')}</div>
+                  {isFolder ? (
+                    <div style={{ fontSize:9, letterSpacing:'0.08em', textTransform:'uppercase', color:'rgba(200,194,187,0.3)' }}>Open folder →</div>
+                  ) : (
+                    <div style={{ display:'flex', gap:6 }}>
+                      <a href={file.webViewLink} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} style={{ fontSize:9, letterSpacing:'0.08em', textTransform:'uppercase', padding:'4px 8px', borderRadius:2, border:'0.5px solid rgba(200,194,187,0.12)', color:'rgba(200,194,187,0.4)', textDecoration:'none' }}>View</a>
+                      <a href={`https://drive.google.com/uc?export=download&id=${file.id}`} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} style={{ fontSize:9, letterSpacing:'0.08em', textTransform:'uppercase', padding:'4px 8px', borderRadius:2, border:'0.5px solid rgba(200,194,187,0.12)', color:'rgba(200,194,187,0.4)', textDecoration:'none' }}>Download</a>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+      {previewFile && (
+        <div onClick={() => setPreviewFile(null)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.9)', zIndex:500, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:20, gap:14 }}>
+          {previewFile.mimeType?.includes('video') ? (
+            <div style={{ display:'flex', gap:16, width:'96vw', height:'88vh' }} onClick={e => e.stopPropagation()}>
+              <div style={{ flex:'1 1 auto', display:'flex', alignItems:'center', justifyContent:'center', minWidth:0 }}>
+                <iframe src={`https://drive.google.com/file/d/${previewFile.id}/preview`} style={{ width:'100%', maxWidth:'68vw', height:'86vh', border:'none', borderRadius:6 }} allow="autoplay" allowFullScreen />
+              </div>
+              <div style={{ width:320, flexShrink:0, height:'86vh', background:'#14181F', border:'0.5px solid rgba(200,194,187,0.12)', borderRadius:8, display:'flex', flexDirection:'column', overflow:'hidden' }}>
+                <div style={{ padding:'16px 18px', borderBottom:'0.5px solid rgba(200,194,187,0.1)' }}>
+                  <div style={{ fontSize:13, fontWeight:500, color:'#fff' }}>Client feedback</div>
+                </div>
+                <div style={{ flex:1, overflowY:'auto', padding:'12px 18px', display:'flex', flexDirection:'column', gap:10 }}>
+                  {feedbackList.length === 0 && <div style={{ fontSize:12, color:'rgba(200,194,187,0.25)' }}>No feedback yet</div>}
+                  {feedbackList.map(fb => (
+                    <div key={fb.id} style={{ background:'rgba(200,194,187,0.04)', border:'0.5px solid rgba(200,194,187,0.08)', borderRadius:5, padding:'8px 10px' }}>
+                      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:4 }}>
+                        <span style={{ fontSize:11, fontWeight:600, color:'#C8C2BB' }}>{formatSeconds(fb.timestamp_seconds)}</span>
+                        <span style={{ fontSize:10, color:'rgba(200,194,187,0.35)' }}>{fb.client_name}</span>
+                      </div>
+                      <div style={{ fontSize:12, color:'rgba(200,194,187,0.7)', lineHeight:1.5, marginBottom:6 }}>{fb.message}</div>
+                      {fb.status === 'resolved' ? (
+                        <span style={{ fontSize:9, letterSpacing:'0.06em', textTransform:'uppercase', color:'rgba(100,200,130,0.8)' }}>✓ Resolved</span>
+                      ) : (
+                        <button onClick={() => resolveFeedback(fb.id)} style={{ fontSize:9, letterSpacing:'0.06em', textTransform:'uppercase', padding:'3px 8px', borderRadius:2, border:'0.5px solid rgba(200,194,187,0.15)', color:'rgba(200,194,187,0.5)', background:'transparent', cursor:'pointer', fontFamily:'inherit' }}>Mark resolved</button>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
-          </div>
-        )
-      })}
+          ) : (
+            <div onClick={e => e.stopPropagation()}>
+              {previewFile.mimeType?.includes('image') ? (
+                <img src={`https://drive.google.com/uc?id=${previewFile.id}`} alt={previewFile.name} style={{ maxWidth:'94vw', maxHeight:'88vh', objectFit:'contain', borderRadius:6 }} />
+              ) : (
+                <a href={previewFile.webViewLink} target="_blank" rel="noopener noreferrer" style={{ color:'#C8C2BB', fontSize:14 }}>Open file in Google Drive</a>
+              )}
+            </div>
+          )}
+          <button onClick={() => setPreviewFile(null)} style={{ fontSize:11, letterSpacing:'0.08em', textTransform:'uppercase', padding:'8px 16px', borderRadius:3, border:'0.5px solid rgba(200,194,187,0.2)', color:'rgba(200,194,187,0.5)', background:'transparent', cursor:'pointer', fontFamily:'inherit' }}>Close</button>
+        </div>
+      )}
     </div>
   )
 }
@@ -57,11 +168,21 @@ function StudioDriveThumb({ driveUrl }: { driveUrl: string }) {
   const [loading, setLoading] = React.useState(true)
 
   React.useEffect(() => {
+    const isMedia = (f: any) => f.mimeType?.includes('video') || f.mimeType?.includes('image')
     fetch(`/api/drive?url=${encodeURIComponent(driveUrl)}`)
       .then(r => r.json())
-      .then(data => {
+      .then(async data => {
         const files = data.files || []
-        setThumb(files[0] || null)
+        const media = files.find(isMedia)
+        if (media) { setThumb(media); setLoading(false); return }
+        const folder = files.find((f: any) => f.mimeType === 'application/vnd.google-apps.folder')
+        if (folder) {
+          const res2 = await fetch(`/api/drive?folderId=${folder.id}`)
+          const data2 = await res2.json()
+          setThumb((data2.files || []).find(isMedia) || null)
+        } else {
+          setThumb(null)
+        }
         setLoading(false)
       })
       .catch(() => setLoading(false))
@@ -86,13 +207,45 @@ function StudioDriveThumb({ driveUrl }: { driveUrl: string }) {
 export default function StudioPortal() {
   const router = useRouter()
   const [user, setUser] = useState<any>(null)
+  const [userRole, setUserRole] = useState<string | null>(null)
   const [bookings, setBookings] = useState<any[]>([])
   const [bookingCount, setBookingCount] = useState(0)
   const [changeRequests, setChangeRequests] = useState<any[]>([])
   const [changeRequestCount, setChangeRequestCount] = useState(0)
+  const [videoFeedbackCount, setVideoFeedbackCount] = useState(0)
   const [respondingToCR, setRespondingToCR] = useState<any>(null)
   const [dashProjects, setDashProjects] = useState<any[]>([])
   const [modalProject, setModalProject] = useState<any>(null)
+  const [dayTodoDate, setDayTodoDate] = useState<string | null>(null)
+  const [todos, setTodos] = useState<any[]>([])
+  const [newTodoText, setNewTodoText] = useState('')
+  const [newTodoDate, setNewTodoDate] = useState<string>('')
+
+  async function loadTodos() {
+    const { data } = await supabase.from('todos').select('*').order('done', { ascending: true }).order('due_date', { ascending: true, nullsFirst: false }).order('created_at', { ascending: true })
+    setTodos(data || [])
+  }
+
+  async function addTodo() {
+    if (!newTodoText.trim()) return
+    const { data, error } = await supabase.from('todos').insert([{ text: newTodoText.trim(), due_date: newTodoDate || null }]).select().single()
+    if (error) { notify('Error adding task: ' + error.message, 'error'); return }
+    setTodos(p => [...p, data])
+    setNewTodoText('')
+    setNewTodoDate('')
+  }
+
+  async function toggleTodo(id: string, done: boolean) {
+    await supabase.from('todos').update({ done: !done }).eq('id', id)
+    setTodos(p => p.map(t => t.id === id ? { ...t, done: !done } : t))
+  }
+
+  async function deleteTodo(id: string) {
+    await supabase.from('todos').delete().eq('id', id)
+    setTodos(p => p.filter(t => t.id !== id))
+  }
+
+  useEffect(() => { loadTodos() }, [])
   const [deliveryModal, setDeliveryModal] = useState<any>(null)
   const [modalEditing, setModalEditing] = useState(false)
   const [modalSaving, setModalSaving] = useState(false)
@@ -104,6 +257,8 @@ export default function StudioPortal() {
   const [scheduleModal, setScheduleModal] = useState(false)
   const [selectedBooking, setSelectedBooking] = useState<any>(null)
   const [shootDate, setShootDate] = useState("")
+  const [meetingMode, setMeetingMode] = useState(false)
+  const [scheduleMonthOffset, setScheduleMonthOffset] = useState(0)
   const [shootTime, setShootTime] = useState("08:00")
   const [calendarView, setCalendarView] = useState(false)
   const [hoveredDate, setHoveredDate] = useState<string | null>(null)
@@ -111,7 +266,9 @@ export default function StudioPortal() {
   const [endTime, setEndTime] = useState("12:00")
   const [calendarConnected, setCalendarConnected] = useState(false)
   const [creatingEvent, setCreatingEvent] = useState(false)
+  const [confirmingBooking, setConfirmingBooking] = useState(false)
   const [eventLink, setEventLink] = useState("")
+  const [showConnectPrompt, setShowConnectPrompt] = useState(false)
 
 
   const [loading, setLoading] = useState(true)
@@ -127,20 +284,114 @@ export default function StudioPortal() {
     const hash = window.location.hash.replace('#', '')
     if (hash) setActiveView(hash)
   }, [])
+
+  const [xeroStatus, setXeroStatus] = useState<{ connected: boolean; tenantName?: string } | null>(null)
+  const [pnl, setPnl] = useState<any>(null)
+  const [pnlLoading, setPnlLoading] = useState(false)
+  const [recentInvoices, setRecentInvoices] = useState<any[]>([])
+  const [pnlMonths, setPnlMonths] = useState(6)
+
+  async function loadXeroStatus() {
+    const res = await xeroAuthedFetch('/api/xero/status')
+    const data = await res.json()
+    setXeroStatus(data)
+  }
+
+  async function loadInvoiceSummary() {
+    const { data } = await supabase.from('invoices1').select('*').order('created_at', { ascending: false }).limit(50)
+    setRecentInvoices(data || [])
+  }
+
+  async function loadPnl(months = pnlMonths) {
+    setPnlLoading(true)
+    try {
+      const res = await xeroAuthedFetch('/api/xero/pnl?months=' + months)
+      const data = await res.json()
+      setPnl(data)
+    } finally {
+      setPnlLoading(false)
+    }
+  }
+
+  async function connectXero(scopeOverride?: string) {
+    const qs = scopeOverride ? '?scope=' + encodeURIComponent(scopeOverride) : ''
+    const res = await xeroAuthedFetch('/api/xero/connect' + qs)
+    const data = await res.json()
+    if (data.url) window.location.href = data.url
+    else notify('Xero connect error: ' + (data.error || 'unknown'), 'error')
+  }
+
+  async function disconnectXero() {
+    if (!(await confirmDialog('Disconnect Xero from the studio portal?'))) return
+    await xeroAuthedFetch('/api/xero/disconnect', { method: 'POST' })
+    setXeroStatus({ connected: false })
+    setPnl(null)
+  }
+
+  useEffect(() => { if (activeView === 'finance' && userRole === 'studio') { loadXeroStatus(); loadInvoiceSummary() } }, [activeView, userRole])
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('xero') === 'error') {
+      notify('Xero connection failed' + (params.get('detail') ? ': ' + params.get('detail') : ''), 'error')
+      window.history.replaceState({}, '', window.location.pathname + window.location.hash)
+    } else if (params.get('xero') === 'connected') {
+      window.history.replaceState({}, '', window.location.pathname + window.location.hash)
+    }
+  }, [])
+  useEffect(() => { if (activeView === 'finance' && xeroStatus?.connected) loadPnl(pnlMonths) }, [activeView, xeroStatus?.connected, pnlMonths])
+
   const [briefData, setBriefData] = useState<Record<number, any>>({})
   const [briefLoading, setBriefLoading] = useState<Record<number, boolean>>({})
 
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!session) { router.push('/login'); return }
+      const { data: profile } = await supabase.from('profiles').select('role').eq('id', session.user.id).maybeSingle()
+      if (profile?.role !== 'studio' && profile?.role !== 'editor') { router.push('/portal/client'); return }
+      setUserRole(profile.role)
       setUser(session.user)
       setLoading(false)
       loadBookings()
+      checkGoogleStatus()
     })
+
+    // Background token refresh can silently fail if the tab sits idle for a
+    // while (browsers throttle timers in hidden tabs) — the old token then
+    // stays cached and every request quietly fails with no error shown. Revalidate
+    // whenever the tab regains focus/visibility so a dead session bounces to login
+    // instead of leaving the page looking broken/empty.
+    async function revalidateSession() {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) router.push('/login')
+    }
+    function onVisible() { if (document.visibilityState === 'visible') revalidateSession() }
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('focus', revalidateSession)
+    const { data: authListener } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_OUT') router.push('/login')
+    })
+
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('focus', revalidateSession)
+      authListener.subscription.unsubscribe()
+    }
   }, [router])
+
+  async function checkGoogleStatus() {
+    try {
+      const res = await fetch('/api/calendar?action=status')
+      const data = await res.json()
+      setCalendarConnected(!!data.connected)
+      if (!data.connected && !sessionStorage.getItem('google_connect_prompted')) {
+        sessionStorage.setItem('google_connect_prompted', '1')
+        setShowConnectPrompt(true)
+      }
+    } catch (e) { console.error(e) }
+  }
   const STAGE_PROGRESS: Record<string, number> = {
-    'Pre-Production': 10, 'Shooting': 35, 'Post-Production': 65, 'Revisions': 85, 'Awaiting Confirmation': 100,
+    'Enquiry': 0, 'Pre-Production': 10, 'Shooting': 35, 'Post-Production': 65, 'Revisions': 85, 'Awaiting Confirmation': 100,
   }
 
   async function saveModalProject() {
@@ -163,14 +414,18 @@ export default function StudioPortal() {
   }
 
   async function loadBookings() {
-    const { data, error } = await supabase.from('bookings1').select('*').eq('status', 'pending').order('created_at', { ascending: false })
+    const [{ data, error }, { data: projects }, { data: crs }, { data: vf }] = await Promise.all([
+      supabase.from('bookings1').select('*').eq('status', 'pending').order('created_at', { ascending: false }),
+      supabase.from('projects1').select('*').order('created_at', { ascending: false }),
+      supabase.from('change_requests').select('*').eq('status', 'pending').order('created_at', { ascending: false }),
+      supabase.from('video_feedback').select('*').eq('status', 'pending').order('created_at', { ascending: false }),
+    ])
     if (!error && data) {
       setBookings(data)
       setBookingCount(data.length)
     }
-    const { data: projects } = await supabase.from('projects1').select('*').order('created_at', { ascending: false })
-    const { data: crs } = await supabase.from('change_requests').select('*').eq('status', 'pending').order('created_at', { ascending: false })
     if (crs) { setChangeRequests(crs); setChangeRequestCount(crs.length) }
+    if (vf) setVideoFeedbackCount(vf.length)
     if (projects) {
       const now = new Date()
       const in14 = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000)
@@ -180,16 +435,21 @@ export default function StudioPortal() {
         const d = new Date(p.shoot_date)
         return d >= now && d <= in14
       }).sort((a: any, b: any) => new Date(a.shoot_date).getTime() - new Date(b.shoot_date).getTime()))
-      setRecentDeliveries(projects.filter((p: any) => p.stage === 'Awaiting Confirmation' && p.progress === 100).slice(0, 3))
+      setRecentDeliveries(projects.filter((p: any) => p.drive_url && !p.archived && p.stage === 'Awaiting Confirmation').slice(0, 10))
       setScheduleProjects(projects.filter((p: any) => !p.archived))
     }
   }
 
   async function connectGoogleCalendar() {
+    setShowConnectPrompt(false)
     const res = await fetch('/api/calendar?action=auth_url')
     const { url } = await res.json()
     window.open(url, '_blank', 'width=500,height=600')
-    setTimeout(() => setCalendarConnected(true), 3000)
+    function onFocus() {
+      window.removeEventListener('focus', onFocus)
+      checkGoogleStatus()
+    }
+    window.addEventListener('focus', onFocus)
   }
 
   async function createCalendarEvent(booking: any) {
@@ -218,10 +478,10 @@ export default function StudioPortal() {
           if (proj?.id) router.push('/portal/studio/projects/' + proj.id)
         }, 1500)
       } else if (data.error === 'Not authenticated') {
-        alert('Please connect your Google Calendar first')
+        notify('Please connect your Google Calendar first', 'error')
         connectGoogleCalendar()
       } else {
-        alert('Calendar error: ' + data.error)
+        notify('Calendar error: ' + data.error, 'error')
       }
     } catch (e) {
       console.error(e)
@@ -229,8 +489,48 @@ export default function StudioPortal() {
     setCreatingEvent(false)
   }
 
-  async function confirmBooking(booking: any) {
-    await supabase.from('bookings1').update({ status: 'confirmed' }).eq('id', booking.id)
+  async function createMeetingEvent(booking: any) {
+    setCreatingEvent(true)
+    try {
+      const res = await fetch('/api/calendar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: `Example Content — Discovery call: ${booking.client_name || booking.address || booking.shoot_package || 'New enquiry'}`,
+          date: shootDate,
+          startTime,
+          endTime,
+          clientEmail: booking.client_email,
+          location: booking.address || '',
+          description: `Scoping meeting for ${booking.client_name || booking.client_email}\nProject type: ${booking.shoot_package}\nDeliverables: ${booking.deliverables}\nNotes: ${booking.notes || ''}`,
+        }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        setEventLink(data.eventLink)
+        const proj = await bookMeeting(booking)
+        setTimeout(() => {
+          setScheduleModal(false)
+          setEventLink('')
+          setMeetingMode(false)
+          if (proj?.id) router.push('/portal/studio/projects/' + proj.id)
+        }, 1500)
+      } else if (data.error === 'Not authenticated') {
+        notify('Please connect your Google Calendar first', 'error')
+        connectGoogleCalendar()
+      } else {
+        notify('Calendar error: ' + data.error, 'error')
+      }
+    } catch (e) {
+      console.error(e)
+    }
+    setCreatingEvent(false)
+  }
+
+  // Shared by confirmBooking and bookMeeting — creates the project, Drive folder and
+  // deliverables checklist from a pending booking. shootDateForProject is only set when
+  // an actual shoot date is being locked in (not for a discovery/scoping meeting).
+  async function createProjectFromBooking(booking: any, shootDateForProject: string | null, extraNotes: string) {
     const { data, error: projectError } = await supabase.from('projects1').insert([{
       title: booking.address || booking.shoot_package || 'New project',
       client: booking.client_name || booking.client_email || '',
@@ -238,14 +538,15 @@ export default function StudioPortal() {
       email: booking.client_email || '',
       category: booking.category === 'property' ? 'Property' : 'Commercial',
       address: booking.address || '',
-      stage: 'Pre-Production',
-      shoot_date: shootDate || booking.preferred_date || null,
+      stage: 'Enquiry',
+      shoot_date: shootDateForProject,
       draft_due: booking.draft_due || null,
       delivery_due: booking.delivery_due || null,
       progress: 0,
       from_booking: true,
-      general_notes: booking.notes || '',
+      general_notes: (booking.notes || '') + extraNotes,
       editor_notes: '',
+      amount: booking.total_price ?? null,
       deliverables: [
         booking.shoot_package ? 'PACKAGE: ' + booking.shoot_package : '',
         booking.deliverables ? 'DELIVERABLES: ' + booking.deliverables : '',
@@ -253,15 +554,34 @@ export default function StudioPortal() {
       ].filter(Boolean).join('\n'),
     }]).select().single()
     if (projectError) {
-      alert('Project error: ' + projectError.message)
+      notify('Project error: ' + projectError.message, 'error')
       return null
-    } else if (data) {
+    }
+    if (data) {
       const deliverables = []
       if (booking.shoot_package) deliverables.push({ id: '1', name: booking.shoot_package, done: false })
       if (booking.deliverables) deliverables.push({ id: '2', name: booking.deliverables, done: false })
       if (booking.addons) booking.addons.split(', ').filter(Boolean).forEach((a: string, i: number) => deliverables.push({ id: String(i + 3), name: a, done: false }))
       if (deliverables.length > 0) localStorage.setItem(`deliverables_${data.id}`, JSON.stringify(deliverables))
+      try {
+        const driveRes = await fetch('/api/drive/folder', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ category: booking.category, client: data.client, projectTitle: data.title }),
+        })
+        const driveData = await driveRes.json()
+        if (driveData.url) {
+          await supabase.from('projects1').update({ drive_url: driveData.url }).eq('id', data.id)
+          data.drive_url = driveData.url
+        }
+      } catch (e) { console.error('Drive folder creation error:', e) }
     }
+    return data
+  }
+
+  async function confirmBooking(booking: any) {
+    await supabase.from('bookings1').update({ status: 'confirmed' }).eq('id', booking.id)
+    const data = await createProjectFromBooking(booking, shootDate || booking.preferred_date || null, '')
     // Send notification to client
     if (data?.id) {
       await supabase.from('notifications').insert([{
@@ -269,6 +589,25 @@ export default function StudioPortal() {
         type: 'booking_confirmed',
         title: 'Shoot confirmed!',
         message: 'Your booking for ' + (booking.address || booking.shoot_package || 'your shoot') + ' has been confirmed.' + (shootDate ? ' Shoot date: ' + new Date(shootDate + 'T12:00:00').toLocaleDateString('en-NZ',{weekday:'long',day:'numeric',month:'long',year:'numeric'}) : ''),
+        project_id: data.id,
+        read: false,
+      }])
+    }
+    loadBookings()
+    return data
+  }
+
+  async function bookMeeting(booking: any) {
+    await supabase.from('bookings1').update({ status: 'meeting_booked' }).eq('id', booking.id)
+    const meetingLabel = shootDate ? new Date(shootDate + 'T12:00:00').toLocaleDateString('en-NZ',{weekday:'long',day:'numeric',month:'long',year:'numeric'}) + ' at ' + formatTime12(startTime) : ''
+    const data = await createProjectFromBooking(booking, null, meetingLabel ? '\n\nMeeting scheduled: ' + meetingLabel : '')
+    // Send notification to client
+    if (data?.id) {
+      await supabase.from('notifications').insert([{
+        user_email: booking.client_email,
+        type: 'meeting_booked',
+        title: 'Meeting booked',
+        message: 'We\'ve booked a meeting to discuss ' + (booking.shoot_package || booking.address || 'your project') + '.' + (meetingLabel ? ' Meeting date: ' + meetingLabel : ''),
         project_id: data.id,
         read: false,
       }])
@@ -338,12 +677,14 @@ export default function StudioPortal() {
 
   return (
     <main style={{ background: '#0E1014', minHeight: '100vh', fontFamily: 'Inter, sans-serif', color: '#C8C2BB', display: 'flex', fontSize: 13 }}>
+      <ToastHost />
+      <ConfirmHost />
 
       {/* SIDEBAR */}
       <StudioSidebar active={activeView} onViewChange={setActiveView} />
 
       {/* MAIN */}
-      <div style={{ flex: 1, overflowY: 'auto' }}>
+      <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
 
         {/* ===== DASHBOARD ===== */}
         {activeView === 'dashboard' && (
@@ -357,6 +698,11 @@ export default function StudioPortal() {
                     {bookingCount + changeRequestCount} new {bookingCount > 0 && changeRequestCount > 0 ? 'notifications' : bookingCount > 0 ? 'request' + (bookingCount !== 1 ? 's' : '') : 'change' + (changeRequestCount !== 1 ? 's' : '')}
                   </button>
                 )}
+                {videoFeedbackCount > 0 && (
+                  <div title="Open a delivered project's files to see and resolve it" style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, border: '0.5px solid rgba(100,150,220,0.4)', color: 'rgba(100,150,220,0.9)', background: 'rgba(100,150,220,0.08)' }}>
+                    🎬 {videoFeedbackCount} video feedback
+                  </div>
+                )}
                 <button onClick={() => router.push('/portal/studio/projects')} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>+ New project</button>
               </div>
             </div>
@@ -364,10 +710,18 @@ export default function StudioPortal() {
               <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 14 }}>Overview</div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 28 }}>
                 {[
-                  { label: 'Active projects', value: dashProjects.length, sub: dashProjects.filter((p: any) => p.stage === 'Shooting').length + ' shooting this week' },
-                  { label: 'Pending requests', value: bookingCount, sub: bookingCount > 0 ? 'Awaiting review' : 'All clear', alert: bookingCount > 0 },
+                  { label: 'Active projects', value: dashProjects.length, sub: (() => {
+                    const start = new Date(); start.setHours(0, 0, 0, 0)
+                    const end = new Date(start); end.setDate(end.getDate() + 7)
+                    const count = dashProjects.filter((p: any) => {
+                      const dates = [p.shoot_date, ...((p.shoot_dates || []).map((d: any) => d.date))].filter(Boolean)
+                      return dates.some((ds: string) => { const d = new Date(ds + 'T12:00:00'); return d >= start && d < end })
+                    }).length
+                    return count + ' shooting this week'
+                  })() },
+                  { label: 'Revision requests', value: videoFeedbackCount, sub: videoFeedbackCount > 0 ? 'Client feedback awaiting a response' : 'All clear', alert: videoFeedbackCount > 0 },
                   { label: 'In post-production', value: dashProjects.filter((p: any) => p.stage === 'Post-Production' || p.stage === 'Revisions').length, sub: 'Editing & revisions' },
-                  { label: 'Ready to invoice', value: dashProjects.filter((p: any) => p.stage === 'Awaiting Confirmation').length, sub: (() => { const now = new Date(); const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0); const days = Math.ceil((lastDay.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)); return days === 0 ? 'Last day of month!' : `${days} day${days !== 1 ? 's' : ''} until end of month` })(), alert: dashProjects.filter((p: any) => p.stage === 'Awaiting Confirmation').length > 0 },
+                  { label: 'Ready to invoice', value: dashProjects.filter((p: any) => p.stage === 'Awaiting Confirmation' && !p.invoice_id).length, sub: (() => { const now = new Date(); const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0); const days = Math.ceil((lastDay.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)); return days === 0 ? 'Last day of month!' : `${days} day${days !== 1 ? 's' : ''} until end of month` })(), alert: dashProjects.filter((p: any) => p.stage === 'Awaiting Confirmation' && !p.invoice_id).length > 0 },
                 ].map(({ label, value, sub, alert }: any) => (
                   <div key={label} style={{ background: 'linear-gradient(135deg, rgba(30,36,48,0.9) 0%, rgba(20,24,32,0.95) 100%)', border: '0.5px solid ' + (alert ? 'rgba(210,90,90,0.4)' : 'rgba(200,194,187,0.08)'), borderRadius: 12, padding: '20px 22px', position: 'relative', overflow: 'hidden', boxShadow: alert ? '0 0 20px rgba(210,90,90,0.08) inset' : '0 0 0 0 transparent' }}>
                     <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '1px', background: alert ? 'linear-gradient(90deg, transparent, rgba(210,90,90,0.5), transparent)' : 'linear-gradient(90deg, transparent, rgba(200,194,187,0.12), transparent)' }} />
@@ -380,14 +734,14 @@ export default function StudioPortal() {
                   </div>
                 ))}
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 20 }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 20, minWidth: 0 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 20, minWidth: 0 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: -6 }}>
                     <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)' }}>Active projects</div>
                     <button onClick={() => router.push('/portal/studio/projects')} style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>View all →</button>
                   </div>
                   {(() => {
-                    const SC: Record<string,any> = {'Pre-Production':{color:'rgba(100,150,220,0.9)',bg:'rgba(25,45,80,0.4)'},'Shooting':{color:'rgba(210,175,80,0.9)',bg:'rgba(65,52,18,0.4)'},'Post-Production':{color:'rgba(210,90,90,0.9)',bg:'rgba(50,25,80,0.4)'},'Revisions':{color:'rgba(220,120,60,0.9)',bg:'rgba(80,35,15,0.4)'},'Awaiting Confirmation':{color:'rgba(100,200,130,0.9)',bg:'rgba(30,70,45,0.4)'}}
+                    const SC: Record<string,any> = {'Enquiry':{color:'rgba(200,194,187,0.55)',bg:'rgba(200,194,187,0.06)'},'Pre-Production':{color:'rgba(100,150,220,0.9)',bg:'rgba(25,45,80,0.4)'},'Shooting':{color:'rgba(210,175,80,0.9)',bg:'rgba(65,52,18,0.4)'},'Post-Production':{color:'rgba(210,90,90,0.9)',bg:'rgba(50,25,80,0.4)'},'Revisions':{color:'rgba(220,120,60,0.9)',bg:'rgba(80,35,15,0.4)'},'Awaiting Confirmation':{color:'rgba(100,200,130,0.9)',bg:'rgba(30,70,45,0.4)'}}
                     const now = new Date()
                     const in14 = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000)
                     const recentBookings = [...dashProjects].filter(p => p.from_booking).sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0,5)
@@ -465,21 +819,23 @@ export default function StudioPortal() {
                   )}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-                  <div>
-                    <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 14 }}>Booking requests</div>
-                    <div style={{ background: bookingCount > 0 ? 'rgba(210,90,90,0.06)' : '#1A1F28', border: '0.5px solid ' + (bookingCount > 0 ? 'rgba(210,90,90,0.25)' : 'rgba(200,194,187,0.09)'), borderRadius: 7, padding: '16px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div>
-                        <div style={{ fontSize: 20, fontWeight: 600, color: (bookingCount + changeRequestCount) > 0 ? 'rgba(210,90,90,0.9)' : '#C8C2BB' }}>{bookingCount + changeRequestCount}</div>
-                        <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', marginTop: 2 }}>
-                          {bookingCount > 0 && <span>{bookingCount} booking request{bookingCount !== 1 ? 's' : ''}</span>}
-                          {bookingCount > 0 && changeRequestCount > 0 && <span> · </span>}
-                          {changeRequestCount > 0 && <span style={{ color: 'rgba(210,90,90,0.8)' }}>{changeRequestCount} change request{changeRequestCount !== 1 ? 's' : ''}</span>}
-                          {bookingCount === 0 && changeRequestCount === 0 && <span>No pending requests</span>}
+                  {userRole === 'studio' && (
+                    <div>
+                      <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 14 }}>Booking requests</div>
+                      <div style={{ background: bookingCount > 0 ? 'rgba(210,90,90,0.06)' : '#1A1F28', border: '0.5px solid ' + (bookingCount > 0 ? 'rgba(210,90,90,0.25)' : 'rgba(200,194,187,0.09)'), borderRadius: 7, padding: '16px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <div style={{ fontSize: 20, fontWeight: 600, color: (bookingCount + changeRequestCount) > 0 ? 'rgba(210,90,90,0.9)' : '#C8C2BB' }}>{bookingCount + changeRequestCount}</div>
+                          <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', marginTop: 2 }}>
+                            {bookingCount > 0 && <span>{bookingCount} booking request{bookingCount !== 1 ? 's' : ''}</span>}
+                            {bookingCount > 0 && changeRequestCount > 0 && <span> · </span>}
+                            {changeRequestCount > 0 && <span style={{ color: 'rgba(210,90,90,0.8)' }}>{changeRequestCount} change request{changeRequestCount !== 1 ? 's' : ''}</span>}
+                            {bookingCount === 0 && changeRequestCount === 0 && <span>No pending requests</span>}
+                          </div>
                         </div>
+                        {(bookingCount + changeRequestCount) > 0 && <button onClick={() => setActiveView('bookings')} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, border: '0.5px solid rgba(210,90,90,0.4)', color: 'rgba(210,90,90,0.9)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Review →</button>}
                       </div>
-                      {(bookingCount + changeRequestCount) > 0 && <button onClick={() => setActiveView('bookings')} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, border: '0.5px solid rgba(210,90,90,0.4)', color: 'rgba(210,90,90,0.9)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Review →</button>}
                     </div>
-                  </div>
+                  )}
                   <div>
                     <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 14 }}>4 week calendar</div>
                     <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, padding: 12 }}>
@@ -499,8 +855,10 @@ export default function StudioPortal() {
                           addEvent(p.shoot_date, 'shoot', p)
                           addEvent(p.draft_due, 'draft', p)
                           addEvent(p.delivery_due, 'delivery', p)
+                          ;(p.shoot_dates || []).forEach((d: any) => addEvent(d.date, 'shoot', p))
                         })
                         const typeColors: Record<string, string> = { shoot: 'rgba(210,175,80,0.9)', draft: 'rgba(100,150,220,0.9)', delivery: 'rgba(100,200,130,0.9)' }
+                        const typeLabels: Record<string, string> = { shoot: 'Shoot', draft: 'Brief/draft due', delivery: 'Delivery due' }
                         return (
                           <div>
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2, marginBottom: 4 }}>
@@ -515,7 +873,7 @@ export default function StudioPortal() {
                                   const isPast = day < today
                                   const hasEvents = events.length > 0
                                   return (
-                                    <div key={di} onClick={() => hasEvents && setModalProject(events[0].project)} style={{ height: 44, borderRadius: 3, background: hasEvents ? 'rgba(200,194,187,0.04)' : 'transparent', border: '0.5px solid ' + (isToday ? 'rgba(200,194,187,0.5)' : hasEvents ? 'rgba(200,194,187,0.12)' : 'rgba(200,194,187,0.05)'), padding: '3px 4px', cursor: hasEvents ? 'pointer' : 'default', display: 'flex', flexDirection: 'column' }}>
+                                    <div key={di} onClick={() => setDayTodoDate(key)} style={{ height: 44, borderRadius: 3, background: hasEvents ? 'rgba(200,194,187,0.04)' : 'transparent', border: '0.5px solid ' + (isToday ? 'rgba(200,194,187,0.5)' : hasEvents ? 'rgba(200,194,187,0.12)' : 'rgba(200,194,187,0.05)'), padding: '3px 4px', cursor: 'pointer', display: 'flex', flexDirection: 'column' }}>
                                       <div style={{ fontSize: 9, fontWeight: isToday ? 700 : 400, color: isToday ? '#fff' : isPast ? 'rgba(200,194,187,0.18)' : 'rgba(200,194,187,0.45)', lineHeight: 1 }}>{day.getDate()}</div>
                                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 2, marginTop: 3 }}>
                                         {events.slice(0, 4).map((ev: any, ei: number) => (
@@ -535,11 +893,79 @@ export default function StudioPortal() {
                                 </div>
                               ))}
                             </div>
+                            {dayTodoDate && (() => {
+                              const dayEvents = eventsByDate[dayTodoDate] || []
+                              const label = new Date(dayTodoDate + 'T12:00:00').toLocaleDateString('en-NZ', { weekday: 'long', day: 'numeric', month: 'long' })
+                              return (
+                                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }} onClick={() => setDayTodoDate(null)}>
+                                  <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 10, width: '100%', maxWidth: 380, maxHeight: '80vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderBottom: '0.5px solid rgba(200,194,187,0.09)' }}>
+                                      <div style={{ fontSize: 13, fontWeight: 500, color: '#fff' }}>{label}</div>
+                                      <button onClick={() => setDayTodoDate(null)} style={{ fontSize: 18, color: 'rgba(200,194,187,0.4)', background: 'transparent', border: 'none', cursor: 'pointer', lineHeight: 1 }}>×</button>
+                                    </div>
+                                    <div style={{ padding: '10px 14px' }}>
+                                      {dayEvents.length === 0 ? (
+                                        <div style={{ padding: '20px 6px', fontSize: 12, color: 'rgba(200,194,187,0.3)', textAlign: 'center' }}>Nothing due this day</div>
+                                      ) : dayEvents.map((ev: any, i: number) => (
+                                        <div key={i} onClick={() => { setDayTodoDate(null); setModalProject(ev.project) }} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 8px', borderRadius: 5, cursor: 'pointer', borderBottom: i < dayEvents.length - 1 ? '0.5px solid rgba(200,194,187,0.06)' : 'none' }}>
+                                          <div style={{ width: 7, height: 7, borderRadius: '50%', background: typeColors[ev.type] || '#C8C2BB', flexShrink: 0 }} />
+                                          <div style={{ flex: 1, minWidth: 0 }}>
+                                            <div style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.project.title}</div>
+                                            <div style={{ fontSize: 10, color: 'rgba(200,194,187,0.4)' }}>{typeLabels[ev.type] || ev.type} · {ev.project.client}</div>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                </div>
+                              )
+                            })()}
                           </div>
                         )
                       })()}
                     </div>
                   </div>
+                </div>
+              </div>
+              <div style={{ marginTop: 28 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                  <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)' }}>To do</div>
+                  <button onClick={() => router.push('/portal/studio/todos')} style={{ fontSize: 11, color: 'rgba(200,194,187,0.35)', background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>View all →</button>
+                </div>
+                <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, padding: '14px 18px' }}>
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' as const }}>
+                    <input value={newTodoText} onChange={e => setNewTodoText(e.target.value)} onKeyDown={e => e.key === 'Enter' && addTodo()} placeholder="Add a task..." style={{ flex: 1, minWidth: 180, background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '8px 10px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }} />
+                    {(() => {
+                      const todayStr = new Date().toISOString().split('T')[0]
+                      const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1)
+                      const tomorrowStr = tomorrow.toISOString().split('T')[0]
+                      return (
+                        <>
+                          <button onClick={() => setNewTodoDate(d => d === todayStr ? '' : todayStr)} style={{ fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '8px 12px', borderRadius: 4, border: `0.5px solid ${newTodoDate === todayStr ? '#C8C2BB' : 'rgba(200,194,187,0.15)'}`, background: newTodoDate === todayStr ? 'rgba(200,194,187,0.08)' : 'transparent', color: newTodoDate === todayStr ? '#C8C2BB' : 'rgba(200,194,187,0.4)', cursor: 'pointer', fontFamily: 'inherit' }}>Today</button>
+                          <button onClick={() => setNewTodoDate(d => d === tomorrowStr ? '' : tomorrowStr)} style={{ fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '8px 12px', borderRadius: 4, border: `0.5px solid ${newTodoDate === tomorrowStr ? '#C8C2BB' : 'rgba(200,194,187,0.15)'}`, background: newTodoDate === tomorrowStr ? 'rgba(200,194,187,0.08)' : 'transparent', color: newTodoDate === tomorrowStr ? '#C8C2BB' : 'rgba(200,194,187,0.4)', cursor: 'pointer', fontFamily: 'inherit' }}>Tomorrow</button>
+                        </>
+                      )
+                    })()}
+                    <input type="date" value={newTodoDate} onChange={e => setNewTodoDate(e.target.value)} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '8px 10px', fontSize: 11, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }} />
+                    <button onClick={addTodo} disabled={!newTodoText.trim()} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 4, background: newTodoText.trim() ? '#C8C2BB' : 'rgba(200,194,187,0.1)', color: newTodoText.trim() ? '#111' : 'rgba(200,194,187,0.3)', border: 'none', cursor: newTodoText.trim() ? 'pointer' : 'not-allowed', fontWeight: 500, fontFamily: 'inherit' }}>+ Add</button>
+                  </div>
+                  {todos.length === 0 ? (
+                    <div style={{ padding: '10px 4px', fontSize: 12, color: 'rgba(200,194,187,0.25)' }}>Nothing on the list — add a task above</div>
+                  ) : todos.slice(0, 8).map((t: any) => {
+                    const todayStr = new Date().toISOString().split('T')[0]
+                    const overdue = t.due_date && !t.done && t.due_date < todayStr
+                    const dateLabel = t.due_date ? (t.due_date === todayStr ? 'Today' : (() => { const tmw = new Date(); tmw.setDate(tmw.getDate() + 1); return t.due_date === tmw.toISOString().split('T')[0] ? 'Tomorrow' : new Date(t.due_date + 'T12:00:00').toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' }) })()) : null
+                    return (
+                      <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 4px', borderBottom: '0.5px solid rgba(200,194,187,0.06)' }}>
+                        <div onClick={() => toggleTodo(t.id, t.done)} style={{ width: 16, height: 16, borderRadius: 4, border: `1.5px solid ${t.done ? 'rgba(100,200,130,0.6)' : 'rgba(200,194,187,0.25)'}`, background: t.done ? 'rgba(100,200,130,0.15)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
+                          {t.done && <span style={{ fontSize: 10, color: 'rgba(100,200,130,0.9)' }}>✓</span>}
+                        </div>
+                        <div style={{ flex: 1, fontSize: 12, color: t.done ? 'rgba(200,194,187,0.3)' : '#C8C2BB', textDecoration: t.done ? 'line-through' : 'none' }}>{t.text}</div>
+                        {dateLabel && <span style={{ fontSize: 10, letterSpacing: '0.05em', textTransform: 'uppercase' as const, color: overdue ? 'rgba(210,90,90,0.8)' : 'rgba(200,194,187,0.35)' }}>{overdue ? '⚠ ' : ''}{dateLabel}</span>}
+                        <button onClick={() => deleteTodo(t.id)} style={{ fontSize: 14, color: 'rgba(200,194,187,0.25)', background: 'transparent', border: 'none', cursor: 'pointer', lineHeight: 1, padding: '0 2px' }}>×</button>
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
             </div>
@@ -587,19 +1013,33 @@ export default function StudioPortal() {
         {/* ===== SCHEDULE ===== */}
         {activeView === 'schedule' && (() => {
           const now = new Date()
+          // "Enquiry" stage covers both brand-new enquiries and property jobs whose
+          // brief has been sent but not yet approved by the client (approval is what
+          // advances a project to Pre-Production) — so this one filter covers both.
           const preProd = scheduleProjects
-            .filter((p: any) => p.stage === 'Pre-Production')
+            .filter((p: any) => p.stage === 'Enquiry')
             .sort((a: any, b: any) => {
               const aDate = a.draft_due || a.shoot_date || '9999'
               const bDate = b.draft_due || b.shoot_date || '9999'
               return aDate < bDate ? -1 : 1
             })
+          // Each project can contribute more than one upcoming shoot: its primary
+          // shoot_date plus any additional shoot_dates entries added for multi-day jobs.
           const upcomingShoots = scheduleProjects
-            .filter((p: any) => p.shoot_date && new Date(p.shoot_date) >= now)
-            .sort((a: any, b: any) => new Date(a.shoot_date).getTime() - new Date(b.shoot_date).getTime())
+            .flatMap((p: any) => {
+              const occurrences: { key: string; p: any; date: string; note?: string }[] = []
+              if (p.shoot_date && new Date(p.shoot_date) >= now) occurrences.push({ key: p.id, p, date: p.shoot_date })
+              ;(p.shoot_dates || []).forEach((d: any) => {
+                if (d.date && new Date(d.date) >= now) occurrences.push({ key: p.id + '-' + d.id, p, date: d.date, note: d.notes || 'Additional shoot date' })
+              })
+              return occurrences
+            })
+            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
 
-          function ProjectRow({ p, i, total }: { p: any; i: number; total: number }) {
+          function ProjectRow({ p, i, total, displayDate, note }: { p: any; i: number; total: number; displayDate?: string; note?: string }) {
+            const dateVal = displayDate || p.shoot_date
             const STAGE_C: Record<string,any> = {
+              'Enquiry': {color:'rgba(200,194,187,0.55)',bg:'rgba(200,194,187,0.06)'},
               'Pre-Production': {color:'rgba(100,150,220,0.9)',bg:'rgba(25,45,80,0.4)'},
               'Shooting': {color:'rgba(210,175,80,0.9)',bg:'rgba(65,52,18,0.4)'},
               'Post-Production': {color:'rgba(210,90,90,0.9)',bg:'rgba(50,25,80,0.4)'},
@@ -609,10 +1049,10 @@ export default function StudioPortal() {
             const sc = STAGE_C[p.stage] || {color:'#C8C2BB',bg:'rgba(200,194,187,0.1)'}
             return (
               <div onClick={() => { setModalProject(p); setModalEditing(false) }} style={{ display: 'flex', gap: 14, padding: '13px 18px', borderBottom: i < total - 1 ? '0.5px solid rgba(200,194,187,0.06)' : 'none', cursor: 'pointer', alignItems: 'center' }}>
-                {p.shoot_date ? (
+                {dateVal ? (
                   <div style={{ width: 42, flexShrink: 0, textAlign: 'center', background: 'rgba(61,71,86,0.3)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 5, padding: '6px 4px' }}>
-                    <div style={{ fontSize: 16, fontWeight: 600, color: '#fff', lineHeight: 1 }}>{new Date(p.shoot_date + 'T12:00:00').getDate()}</div>
-                    <div style={{ fontSize: 9, color: 'rgba(200,194,187,0.4)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{new Date(p.shoot_date + 'T12:00:00').toLocaleDateString('en-NZ',{month:'short'})}</div>
+                    <div style={{ fontSize: 16, fontWeight: 600, color: '#fff', lineHeight: 1 }}>{new Date(dateVal + 'T12:00:00').getDate()}</div>
+                    <div style={{ fontSize: 9, color: 'rgba(200,194,187,0.4)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{new Date(dateVal + 'T12:00:00').toLocaleDateString('en-NZ',{month:'short'})}</div>
                   </div>
                 ) : (
                   <div style={{ width: 42, flexShrink: 0, textAlign: 'center', background: 'rgba(61,71,86,0.15)', border: '0.5px solid rgba(200,194,187,0.06)', borderRadius: 5, padding: '6px 4px' }}>
@@ -624,6 +1064,7 @@ export default function StudioPortal() {
                   <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>
                     {p.client}
                     {p.address ? ' · ' + p.address.split(',')[0] : ''}
+                    {note ? ' · ' + note : ''}
                     {p.draft_due ? ' · Brief due: ' + new Date(p.draft_due + 'T12:00:00').toLocaleDateString('en-NZ',{day:'numeric',month:'short'}) : ''}
                   </div>
                 </div>
@@ -642,23 +1083,25 @@ export default function StudioPortal() {
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 28px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', background: '#14181F', position: 'sticky', top: 0, zIndex: 10 }}>
                 <div>
                   <div style={{ fontSize: 22, fontWeight: 800, color: '#fff', letterSpacing: '-0.02em', textTransform: 'uppercase', fontStyle: 'italic' }}>Shoot Schedule</div>
-                  <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', marginTop: 2 }}>{upcomingShoots.length} upcoming shoot{upcomingShoots.length !== 1 ? 's' : ''} · {preProd.length} in pre-production</div>
+                  <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', marginTop: 2 }}>{upcomingShoots.length} upcoming shoot{upcomingShoots.length !== 1 ? 's' : ''}{userRole === 'studio' ? ` · ${preProd.length} enquir${preProd.length !== 1 ? 'ies' : 'y'} / awaiting brief` : ''}</div>
                 </div>
                 <button onClick={() => setActiveView('dashboard')} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>← Dashboard</button>
               </div>
-              <div style={{ padding: 28, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-                    <div style={{ width: 7, height: 7, borderRadius: '50%', background: 'rgba(100,150,220,0.9)' }} />
-                    <span style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)' }}>Pre-production</span>
-                    <span style={{ fontSize: 11, color: 'rgba(200,194,187,0.25)', marginLeft: 4 }}>sorted by brief due then shoot date</span>
+              <div style={{ padding: 28, display: 'grid', gridTemplateColumns: userRole === 'studio' ? '1fr 1fr' : '1fr', gap: 20 }}>
+                {userRole === 'studio' && (
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                      <div style={{ width: 7, height: 7, borderRadius: '50%', background: 'rgba(100,150,220,0.9)' }} />
+                      <span style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)' }}>Enquiries & awaiting brief</span>
+                      <span style={{ fontSize: 11, color: 'rgba(200,194,187,0.25)', marginLeft: 4 }}>sorted by brief due then shoot date</span>
+                    </div>
+                    <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, overflow: 'hidden' }}>
+                      {preProd.length === 0 ? (
+                        <div style={{ padding: '28px 18px', textAlign: 'center', color: 'rgba(200,194,187,0.25)', fontSize: 12 }}>No enquiries or projects awaiting a brief</div>
+                      ) : preProd.map((p: any, i: number) => <ProjectRow key={p.id} p={p} i={i} total={preProd.length} />)}
+                    </div>
                   </div>
-                  <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, overflow: 'hidden' }}>
-                    {preProd.length === 0 ? (
-                      <div style={{ padding: '28px 18px', textAlign: 'center', color: 'rgba(200,194,187,0.25)', fontSize: 12 }}>No projects in pre-production</div>
-                    ) : preProd.map((p: any, i: number) => <ProjectRow key={p.id} p={p} i={i} total={preProd.length} />)}
-                  </div>
-                </div>
+                )}
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
                     <div style={{ width: 7, height: 7, borderRadius: '50%', background: 'rgba(210,175,80,0.9)' }} />
@@ -668,7 +1111,7 @@ export default function StudioPortal() {
                   <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, overflow: 'hidden' }}>
                     {upcomingShoots.length === 0 ? (
                       <div style={{ padding: '28px 18px', textAlign: 'center', color: 'rgba(200,194,187,0.25)', fontSize: 12 }}>No upcoming shoots scheduled</div>
-                    ) : upcomingShoots.map((p: any, i: number) => <ProjectRow key={p.id} p={p} i={i} total={upcomingShoots.length} />)}
+                    ) : upcomingShoots.map((occ, i: number) => <ProjectRow key={occ.key} p={occ.p} i={i} total={upcomingShoots.length} displayDate={occ.date} note={occ.note} />)}
                   </div>
                 </div>
               </div>
@@ -677,7 +1120,19 @@ export default function StudioPortal() {
         })()}
 
         {/* ===== BOOKINGS ===== */}
-        {activeView === 'bookings' && (
+        {activeView === 'bookings' && userRole !== 'studio' && (
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 28px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', background: '#14181F' }}>
+              <div style={{ fontSize: 14, fontWeight: 500, color: '#fff' }}>Booking Requests</div>
+              <button onClick={() => setActiveView('dashboard')} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>← Dashboard</button>
+            </div>
+            <div style={{ padding: 28, textAlign: 'center', paddingTop: 80 }}>
+              <div style={{ fontSize: 40, marginBottom: 16, opacity: 0.3 }}>🔒</div>
+              <div style={{ fontSize: 14, color: 'rgba(200,194,187,0.4)' }}>You don't have access to booking requests.</div>
+            </div>
+          </div>
+        )}
+        {activeView === 'bookings' && userRole === 'studio' && (
           <div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 28px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', background: '#14181F' }}>
               <div>
@@ -701,20 +1156,28 @@ export default function StudioPortal() {
                         <span style={{ fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '3px 9px', borderRadius: 2, background: 'rgba(200,194,187,0.1)', color: '#C8C2BB', border: '0.5px solid rgba(200,194,187,0.2)' }}>{booking.category}</span>
                         <span style={{ fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '3px 9px', borderRadius: 2, background: 'rgba(210,175,80,0.15)', color: 'rgba(210,175,80,0.9)', border: '0.5px solid rgba(210,175,80,0.25)' }}>Pending</span>
                       </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10 }}>
-                        <div><div style={{ fontSize: 10, color: 'rgba(200,194,187,0.4)', marginBottom: 2 }}>Client</div><div style={{ fontSize: 12 }}>{booking.client_email}</div></div>
-                        <div><div style={{ fontSize: 10, color: 'rgba(200,194,187,0.4)', marginBottom: 2 }}>Shoot package</div><div style={{ fontSize: 12 }}>{booking.shoot_package || '—'}</div></div>
-                        <div><div style={{ fontSize: 10, color: 'rgba(200,194,187,0.4)', marginBottom: 2 }}>Deliverables</div><div style={{ fontSize: 12 }}>{booking.deliverables || '—'}</div></div>
-                        <div><div style={{ fontSize: 10, color: 'rgba(200,194,187,0.4)', marginBottom: 2 }}>Add-ons</div><div style={{ fontSize: 12 }}>{booking.addons || 'None'}</div></div>
-                        <div><div style={{ fontSize: 10, color: 'rgba(200,194,187,0.4)', marginBottom: 2 }}>Preferred date</div><div style={{ fontSize: 12 }}>{booking.preferred_date || 'TBC'}</div></div>
-                        <div><div style={{ fontSize: 10, color: 'rgba(200,194,187,0.4)', marginBottom: 2 }}>Total</div><div style={{ fontSize: 12, color: 'rgba(100,200,130,0.85)' }}>{booking.total || '—'}</div></div>
-                        {booking.address && <div style={{ gridColumn: 'span 3' }}><div style={{ fontSize: 10, color: 'rgba(200,194,187,0.4)', marginBottom: 2 }}>Address</div><div style={{ fontSize: 12 }}>{booking.address}</div></div>}
-                        {booking.notes && <div style={{ gridColumn: 'span 3' }}><div style={{ fontSize: 10, color: 'rgba(200,194,187,0.4)', marginBottom: 2 }}>Notes</div><div style={{ fontSize: 12 }}>{booking.notes}</div></div>}
+                       <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:16, marginTop:12 }}>
+                         <div><div style={{ fontSize:9, letterSpacing:'0.14em', textTransform:'uppercase', color:'rgba(200,194,187,0.35)', marginBottom:4 }}>Client</div><div style={{ fontSize:12, color:'#C8C2BB' }}>{booking.client_name || booking.client_email}</div></div>
+                         <div><div style={{ fontSize:9, letterSpacing:'0.14em', textTransform:'uppercase', color:'rgba(200,194,187,0.35)', marginBottom:4 }}>Package</div><div style={{ fontSize:12, color:'#C8C2BB' }}>{booking.shoot_package || '-'}</div></div>
+                         <div><div style={{ fontSize:9, letterSpacing:'0.14em', textTransform:'uppercase', color:'rgba(200,194,187,0.35)', marginBottom:4 }}>Deliverables</div><div style={{ fontSize:12, color:'#C8C2BB' }}>{booking.deliverables || '-'}</div></div>
+                         <div><div style={{ fontSize:9, letterSpacing:'0.14em', textTransform:'uppercase', color:'rgba(200,194,187,0.35)', marginBottom:4 }}>Addons</div><div style={{ fontSize:12, color:'#C8C2BB' }}>{booking.addons || 'None'}</div></div>
+                         <div><div style={{ fontSize:9, letterSpacing:'0.14em', textTransform:'uppercase', color:'rgba(200,194,187,0.35)', marginBottom:4 }}>Preferred date</div><div style={{ fontSize:12, color:'#C8C2BB' }}>{booking.preferred_date || 'TBC'}{booking.preferred_time ? ' at ' + formatTime12(booking.preferred_time) : ''}</div></div>
+                         <div><div style={{ fontSize:9, letterSpacing:'0.14em', textTransform:'uppercase', color:'rgba(200,194,187,0.35)', marginBottom:4 }}>Total</div><div style={{ fontSize:12, color:'rgba(100,200,130,0.9)' }}>{booking.total || '-'}</div></div>
+                         {booking.draft_due && <div><div style={{ fontSize:9, letterSpacing:'0.14em', textTransform:'uppercase', color:'rgba(200,194,187,0.35)', marginBottom:4 }}>Draft due</div><div style={{ fontSize:12, color:'#C8C2BB' }}>{booking.draft_due}</div></div>}
+                         {booking.delivery_due && <div><div style={{ fontSize:9, letterSpacing:'0.14em', textTransform:'uppercase', color:'rgba(200,194,187,0.35)', marginBottom:4 }}>Delivery due</div><div style={{ fontSize:12, color:'#C8C2BB' }}>{booking.delivery_due}</div></div>}
+                         {booking.property_live_date && <div><div style={{ fontSize:9, letterSpacing:'0.14em', textTransform:'uppercase', color:'rgba(200,194,187,0.35)', marginBottom:4 }}>Property goes live</div><div style={{ fontSize:12, color:'#C8C2BB' }}>{booking.property_live_date}</div></div>}
+                         {booking.address && <div style={{ gridColumn:'span 3' }}><div style={{ fontSize:9, letterSpacing:'0.14em', textTransform:'uppercase', color:'rgba(200,194,187,0.35)', marginBottom:4 }}>Address</div><div style={{ fontSize:12, color:'#C8C2BB' }}>{booking.address}</div></div>}
+                       </div>
+                       {booking.notes && (
+                         <div style={{ marginTop:14, paddingTop:14, borderTop:'0.5px solid rgba(200,194,187,0.07)' }}>
+                           <div style={{ fontSize:9, letterSpacing:'0.14em', textTransform:'uppercase', color:'rgba(200,194,187,0.35)', marginBottom:6 }}>Notes</div>
+                           <div style={{ fontSize:12, color:'rgba(200,194,187,0.6)', lineHeight:1.7, whiteSpace:'pre-wrap' }}>{booking.notes}</div>
+                         </div>
+                       )}
                       </div>
-                    </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 }}>
-                      <button onClick={() => { setSelectedBooking(booking); setShootDate(booking.preferred_date || ''); setScheduleModal(true) }} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>Confirm & create project</button>
-                      <button style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Request changes</button>
+                      <button onClick={() => { setSelectedBooking(booking); setShootDate(booking.preferred_date || ''); setMeetingMode(false); setScheduleMonthOffset(0); setScheduleModal(true) }} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>Confirm + create project</button>
+                      <button onClick={() => { setSelectedBooking(booking); setShootDate(''); setMeetingMode(true); setScheduleMonthOffset(0); setScheduleModal(true) }} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 3, border: '0.5px solid rgba(100,150,220,0.35)', color: 'rgba(100,150,220,0.9)', background: 'rgba(100,150,220,0.08)', cursor: 'pointer', fontFamily: 'inherit' }}>Book a meeting</button>
                       <button onClick={() => declineBooking(booking.id)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 3, border: '0.5px solid rgba(210,90,90,0.4)', color: 'rgba(210,90,90,0.8)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Decline</button>
                     </div>
                   </div>
@@ -757,7 +1220,7 @@ export default function StudioPortal() {
         )}
 
         {/* ===== CHANGE REQUESTS (part of bookings view) ===== */}
-        {activeView === 'bookings' && changeRequests.length > 0 && (
+        {activeView === 'bookings' && userRole === 'studio' && changeRequests.length > 0 && (
           <div style={{ padding: '0 28px 28px' }}>
             <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 12 }}>Client change requests</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -774,13 +1237,13 @@ export default function StudioPortal() {
                   <div style={{ display: 'flex', gap: 8 }}>
                     {cr.type === 'cancellation' ? (
                       <>
-                        <button onClick={async () => { if (!confirm('Accept cancellation and archive this project?')) return; if (cr.project_id) await supabase.from('projects1').update({ archived: true }).eq('id', cr.project_id); await supabase.from('change_requests').update({ status: 'resolved' }).eq('id', cr.id); await supabase.from('notifications').insert([{ user_email: cr.client_email, type: 'cancellation_accepted', title: 'Booking cancelled', message: 'Your cancellation request for ' + cr.project_title + ' has been accepted.', project_id: cr.project_id, read: false }]); setChangeRequests((p) => p.filter((r) => r.id !== cr.id)); setChangeRequestCount((c) => c - 1) }} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, background: 'rgba(210,90,90,0.15)', color: 'rgba(210,90,90,0.9)', border: '0.5px solid rgba(210,90,90,0.3)', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>Accept cancellation</button>
+                        <button onClick={async () => { if (!(await confirmDialog('Accept cancellation and archive this project?'))) return; if (cr.project_id) await supabase.from('projects1').update({ archived: true }).eq('id', cr.project_id); await supabase.from('change_requests').update({ status: 'resolved' }).eq('id', cr.id); await supabase.from('notifications').insert([{ user_email: cr.client_email, type: 'cancellation_accepted', title: 'Booking cancelled', message: 'Your cancellation request for ' + cr.project_title + ' has been accepted.', project_id: cr.project_id, read: false }]); setChangeRequests((p) => p.filter((r) => r.id !== cr.id)); setChangeRequestCount((c) => c - 1) }} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, background: 'rgba(210,90,90,0.15)', color: 'rgba(210,90,90,0.9)', border: '0.5px solid rgba(210,90,90,0.3)', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>Accept cancellation</button>
                         <button onClick={async () => { await supabase.from('change_requests').update({ status: 'resolved' }).eq('id', cr.id); await supabase.from('notifications').insert([{ user_email: cr.client_email, type: 'cancellation_declined', title: 'Cancellation declined', message: 'Your cancellation request for ' + cr.project_title + ' has been declined. Please contact us to discuss.', project_id: cr.project_id, read: false }]); setChangeRequests((p) => p.filter((r) => r.id !== cr.id)); setChangeRequestCount((c) => c - 1) }} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Decline</button>
                       </>
                     ) : (
                       <>
                         <button onClick={async () => { await supabase.from('change_requests').update({ status: 'resolved' }).eq('id', cr.id); setChangeRequests((p) => p.filter((r) => r.id !== cr.id)); setChangeRequestCount((c) => c - 1) }} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>Mark resolved</button>
-                        <button onClick={() => { setRespondingToCR(cr); setShootDate(''); setStartTime('08:00'); setEndTime('17:00'); setScheduleModal(true) }} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, border: '0.5px solid rgba(210,90,90,0.3)', color: 'rgba(210,90,90,0.8)', background: 'rgba(210,90,90,0.06)', cursor: 'pointer', fontFamily: 'inherit' }}>Schedule new date</button>
+                        <button onClick={() => { setRespondingToCR(cr); setShootDate(''); setStartTime('08:00'); setEndTime('17:00'); setScheduleMonthOffset(0); setScheduleModal(true) }} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, border: '0.5px solid rgba(210,90,90,0.3)', color: 'rgba(210,90,90,0.8)', background: 'rgba(210,90,90,0.06)', cursor: 'pointer', fontFamily: 'inherit' }}>Schedule new date</button>
                       </>
                     )}
                     {cr.project_id && <button onClick={() => router.push('/portal/studio/projects?open=' + cr.project_id)} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>View project</button>}
@@ -823,39 +1286,243 @@ export default function StudioPortal() {
         )}
 
         {/* ===== FINANCE ===== */}
-        {activeView === 'finance' && (
+        {activeView === 'finance' && userRole === 'editor' && (
           <div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 28px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', background: '#14181F' }}>
-              <div><div style={{ fontSize: 14, fontWeight: 500, color: '#fff' }}>P&L Overview</div><div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>Financial year to date — Jul 2025 → Jun 2026</div></div>
+              <div style={{ fontSize: 14, fontWeight: 500, color: '#fff' }}>P&L Overview</div>
               <button onClick={() => setActiveView('dashboard')} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>← Dashboard</button>
             </div>
-            <div style={{ padding: 28 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10, marginBottom: 20 }}>
-                {[['YTD Revenue','$186,400','↑ 22% vs FY25'],['YTD Expenses','$71,200','↑ 8% vs FY25'],['Net Profit YTD','$115,200','62% margin'],['Outstanding invoices','$8,400','3 pending']].map(([label, value, sub]) => (
-                  <div key={label} style={{ ...s.panel, padding: '14px 16px' }}><div style={{ fontSize: 10, color: 'rgba(200,194,187,0.4)', marginBottom: 6 }}>{label}</div><div style={{ fontSize: 22, fontWeight: 500, color: '#fff' }}>{value}</div><div style={{ fontSize: 10, color: 'rgba(100,200,130,0.85)', marginTop: 4 }}>{sub}</div></div>
-                ))}
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
-                <div style={s.panel}>
-                  <div style={{ padding: '14px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)' }}><span style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>Revenue by category — FY26</span></div>
-                  {[['Property & Real Estate','112 projects','$149,120'],['Commercial & Brand','18 projects','$28,600'],['Events','6 projects','$8,680']].map(([label, sub, val]) => (
-                    <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.06)' }}><div><div style={{ fontSize: 12 }}>{label}</div><div style={{ fontSize: 10, color: 'rgba(200,194,187,0.4)' }}>{sub}</div></div><div style={{ fontSize: 13, fontWeight: 500, color: 'rgba(100,200,130,0.85)' }}>{val}</div></div>
-                  ))}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 18px', background: 'rgba(61,71,86,0.15)' }}><div style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>Total revenue</div><div style={{ fontSize: 15, fontWeight: 500, color: 'rgba(100,200,130,0.85)' }}>$186,400</div></div>
-                </div>
-                <div style={s.panel}>
-                  <div style={{ padding: '14px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)' }}><span style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>Expenses breakdown — FY26</span></div>
-                  {[['Labour / contractor fees','−$34,200'],['Equipment & depreciation','−$12,800'],['Software & subscriptions','−$5,040'],['Travel & vehicle','−$9,600'],['Insurance & compliance','−$5,360']].map(([label, val]) => (
-                    <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.06)' }}><div style={{ fontSize: 12 }}>{label}</div><div style={{ fontSize: 13, color: 'rgba(210,90,90,0.85)' }}>{val}</div></div>
-                  ))}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 18px', background: 'rgba(61,71,86,0.15)' }}><div style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>Total expenses</div><div style={{ fontSize: 15, fontWeight: 500, color: 'rgba(210,90,90,0.85)' }}>−$71,200</div></div>
+            <div style={{ padding: 28, textAlign: 'center', paddingTop: 80 }}>
+              <div style={{ fontSize: 40, marginBottom: 16, opacity: 0.3 }}>🔒</div>
+              <div style={{ fontSize: 14, color: 'rgba(200,194,187,0.4)' }}>You don't have access to financial information.</div>
+            </div>
+          </div>
+        )}
+        {activeView === 'finance' && userRole === 'studio' && (
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 28px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', background: '#14181F' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ width: 34, height: 34, borderRadius: 8, background: 'rgba(100,200,130,0.1)', border: '0.5px solid rgba(100,200,130,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15 }}>💰</div>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 500, color: '#fff' }}>P&L Overview</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>
+                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: xeroStatus?.connected ? 'rgba(100,200,130,0.8)' : 'rgba(200,194,187,0.25)', boxShadow: xeroStatus?.connected ? '0 0 6px rgba(100,200,130,0.6)' : 'none' }} />
+                    {xeroStatus?.connected ? `Live from Xero — ${xeroStatus.tenantName || 'connected org'}` : 'Not connected to Xero'}
+                  </div>
                 </div>
               </div>
-              <div style={{ background: 'rgba(61,71,86,0.2)', border: '0.5px solid rgba(100,200,130,0.2)', borderRadius: 7, padding: '18px 22px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div><div style={{ fontSize: 13, fontWeight: 500, color: '#C8C2BB' }}>Net profit — FY26</div><div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', marginTop: 2 }}>62% margin · ↑ 22% year on year</div></div>
-                <div style={{ fontSize: 28, fontWeight: 500, color: 'rgba(100,200,130,0.85)' }}>$115,200</div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {xeroStatus?.connected && <button onClick={disconnectXero} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, border: '0.5px solid rgba(210,90,90,0.3)', color: 'rgba(210,90,90,0.7)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Disconnect Xero</button>}
+                <button onClick={() => setActiveView('dashboard')} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>← Dashboard</button>
               </div>
             </div>
+            {!xeroStatus?.connected ? (
+              <div style={{ padding: 28, textAlign: 'center', paddingTop: 80 }}>
+                <div style={{ fontSize: 40, marginBottom: 16, opacity: 0.3 }}>📊</div>
+                <div style={{ fontSize: 14, color: 'rgba(200,194,187,0.4)', marginBottom: 16 }}>Connect Xero to see your real P&L here</div>
+                <button onClick={() => connectXero()} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '9px 20px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>Connect Xero →</button>
+              </div>
+            ) : pnlLoading || !pnl ? (
+              <div style={{ padding: 28, textAlign: 'center', paddingTop: 80, color: 'rgba(200,194,187,0.4)', fontSize: 13 }}>Loading P&L from Xero...</div>
+            ) : pnl.error ? (
+              <div style={{ padding: 28, textAlign: 'center', paddingTop: 80, color: 'rgba(210,90,90,0.8)', fontSize: 13 }}>{pnl.error}</div>
+            ) : (() => {
+              const kpiCard = (bg: string, borderCol: string) => ({ background: `linear-gradient(135deg, ${bg} 0%, rgba(20,24,32,0.95) 100%)`, border: `0.5px solid ${borderCol}`, borderRadius: 10, padding: '16px 18px', position: 'relative' as const, overflow: 'hidden' as const })
+              const glow = (color: string) => <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1, background: `linear-gradient(90deg, transparent, ${color}, transparent)` }} />
+              const unbilled = dashProjects.filter((p: any) => p.amount && !p.invoice_id)
+              const pipelineTotal = unbilled.reduce((sum: number, p: any) => sum + (p.amount || 0), 0)
+              const margin = pnl.revenueTotal ? Math.round((pnl.netProfit / pnl.revenueTotal) * 100) : 0
+              const outstandingItems = pnl.outstandingInvoices?.items || []
+              const outstandingTotal = pnl.outstandingInvoices?.outstandingTotal || 0
+              const overdueTotal = pnl.outstandingInvoices?.overdueTotal || 0
+              const recentPayments = recentInvoices.filter((i: any) => i.status === 'paid').sort((a: any, b: any) => new Date(b.paid_at || b.created_at).getTime() - new Date(a.paid_at || a.created_at).getTime()).slice(0, 6)
+              const sectionLabel = (icon: string, text: string) => (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                  <span style={{ fontSize: 12 }}>{icon}</span>
+                  <span style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase' as const, color: 'rgba(200,194,187,0.35)' }}>{text}</span>
+                </div>
+              )
+
+              return (
+                <div style={{ padding: 28 }}>
+                  {sectionLabel('📌', 'Overview')}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 28 }}>
+                    <div style={kpiCard('rgba(30,50,38,0.6)', 'rgba(100,200,130,0.2)')}>
+                      {glow('rgba(100,200,130,0.5)')}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+                        <span style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)' }}>YTD Revenue</span>
+                        <span style={{ fontSize: 14 }}>📈</span>
+                      </div>
+                      <div style={{ fontSize: 24, fontWeight: 600, color: '#fff' }}>${(pnl.revenueTotal || 0).toLocaleString()}</div>
+                    </div>
+                    <div style={kpiCard('rgba(50,30,30,0.6)', 'rgba(210,90,90,0.2)')}>
+                      {glow('rgba(210,90,90,0.5)')}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+                        <span style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)' }}>YTD Expenses</span>
+                        <span style={{ fontSize: 14 }}>📉</span>
+                      </div>
+                      <div style={{ fontSize: 24, fontWeight: 600, color: '#fff' }}>${(pnl.expensesTotal || 0).toLocaleString()}</div>
+                    </div>
+                    <div style={kpiCard('rgba(25,45,80,0.6)', 'rgba(100,150,220,0.2)')}>
+                      {glow('rgba(100,150,220,0.5)')}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+                        <span style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)' }}>Net Profit YTD</span>
+                        <span style={{ fontSize: 14 }}>💎</span>
+                      </div>
+                      <div style={{ fontSize: 24, fontWeight: 600, color: '#fff' }}>${(pnl.netProfit || 0).toLocaleString()}</div>
+                      <div style={{ fontSize: 10, color: 'rgba(100,150,220,0.7)', marginTop: 4 }}>{margin}% margin</div>
+                    </div>
+                    <div style={kpiCard('rgba(65,52,18,0.6)', 'rgba(210,175,80,0.25)')}>
+                      {glow('rgba(210,175,80,0.5)')}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+                        <span style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(210,175,80,0.6)' }}>Forecasted Pipeline</span>
+                        <span style={{ fontSize: 14 }}>⏳</span>
+                      </div>
+                      <div style={{ fontSize: 24, fontWeight: 600, color: 'rgba(210,175,80,0.95)' }}>${pipelineTotal.toLocaleString()}</div>
+                      <div style={{ fontSize: 10, color: 'rgba(200,194,187,0.3)', marginTop: 4 }}>{unbilled.length} not yet invoiced</div>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: 12 }}>📊</span>
+                      <span style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)' }}>Trends</span>
+                    </div>
+                    <div style={{ display: 'flex', gap: 3, background: 'rgba(200,194,187,0.05)', border: '0.5px solid rgba(200,194,187,0.1)', borderRadius: 6, padding: 3 }}>
+                      {[3, 6, 12].map(m => (
+                        <button key={m} onClick={() => setPnlMonths(m)} style={{ fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '6px 14px', borderRadius: 4, border: 'none', background: pnlMonths === m ? '#C8C2BB' : 'transparent', color: pnlMonths === m ? '#111' : 'rgba(200,194,187,0.4)', fontWeight: pnlMonths === m ? 600 : 400, cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s' }}>{m}mo</button>
+                      ))}
+                    </div>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 28 }}>
+                    {pnl.monthly && pnl.monthly.length > 0 && (
+                      <div style={s.panel}>
+                        <div style={{ padding: '14px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)' }}><span style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>Monthly income</span></div>
+                        <div style={{ padding: '20px 20px 16px', display: 'flex', alignItems: 'flex-end', gap: 10, height: 160, borderBottom: '0.5px solid rgba(200,194,187,0.06)', margin: '0 4px' }}>
+                          {(() => {
+                            const max = Math.max(...pnl.monthly.map((m: any) => m.revenue), 1)
+                            return pnl.monthly.map((m: any) => (
+                              <div key={m.label} title={`$${m.revenue.toLocaleString()}`} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, height: '100%', justifyContent: 'flex-end' }}>
+                                <div style={{ fontSize: 9, color: 'rgba(200,194,187,0.5)', whiteSpace: 'nowrap' }}>${m.revenue >= 1000 ? Math.round(m.revenue / 1000) + 'k' : m.revenue.toLocaleString()}</div>
+                                <div style={{ width: '100%', maxWidth: 34, height: `${Math.max(3, (m.revenue / max) * 100)}%`, background: m.net >= 0 ? 'linear-gradient(180deg, rgba(100,200,130,0.75), rgba(100,200,130,0.35))' : 'linear-gradient(180deg, rgba(210,90,90,0.75), rgba(210,90,90,0.35))', borderRadius: '4px 4px 0 0' }} />
+                              </div>
+                            ))
+                          })()}
+                        </div>
+                        <div style={{ display: 'flex', gap: 10, padding: '10px 20px 4px' }}>
+                          {pnl.monthly.map((m: any) => (
+                            <div key={m.label} style={{ flex: 1, textAlign: 'center', fontSize: 9, color: 'rgba(200,194,187,0.3)', letterSpacing: '0.03em', textTransform: 'uppercase' as const, whiteSpace: 'nowrap' as const }}>{m.label.split(' ')[0]}</div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {pnl.cashFlow && pnl.cashFlow.length > 0 && (
+                      <div style={s.panel}>
+                        <div style={{ padding: '14px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>Cash in & out</span>
+                          <div style={{ display: 'flex', gap: 12 }}>
+                            <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: 'rgba(200,194,187,0.4)' }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: 'rgba(100,200,130,0.6)' }} />In</span>
+                            <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: 'rgba(200,194,187,0.4)' }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: 'rgba(210,90,90,0.6)' }} />Out</span>
+                          </div>
+                        </div>
+                        <div style={{ padding: '20px 20px 16px', display: 'flex', alignItems: 'flex-end', gap: 10, height: 160, borderBottom: '0.5px solid rgba(200,194,187,0.06)', margin: '0 4px' }}>
+                          {(() => {
+                            const max = Math.max(...pnl.cashFlow.flatMap((m: any) => [m.cashIn, m.cashOut]), 1)
+                            return pnl.cashFlow.map((m: any) => (
+                              <div key={m.label} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, height: '100%', justifyContent: 'flex-end' }}>
+                                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: '100%' }} title={`In $${m.cashIn.toLocaleString()} / Out $${m.cashOut.toLocaleString()}`}>
+                                  <div style={{ width: 13, height: `${Math.max(3, (m.cashIn / max) * 100)}%`, background: 'linear-gradient(180deg, rgba(100,200,130,0.75), rgba(100,200,130,0.35))', borderRadius: '3px 3px 0 0' }} />
+                                  <div style={{ width: 13, height: `${Math.max(3, (m.cashOut / max) * 100)}%`, background: 'linear-gradient(180deg, rgba(210,90,90,0.75), rgba(210,90,90,0.35))', borderRadius: '3px 3px 0 0' }} />
+                                </div>
+                              </div>
+                            ))
+                          })()}
+                        </div>
+                        <div style={{ display: 'flex', gap: 10, padding: '10px 20px 4px' }}>
+                          {pnl.cashFlow.map((m: any) => (
+                            <div key={m.label} style={{ flex: 1, textAlign: 'center', fontSize: 9, color: 'rgba(200,194,187,0.3)', letterSpacing: '0.03em', textTransform: 'uppercase' as const, whiteSpace: 'nowrap' as const }}>{m.label.split(' ')[0]}</div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {sectionLabel('🧾', 'Xero P&L breakdown')}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+                    <div style={s.panel}>
+                      <div style={{ padding: '14px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)' }}><span style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>Revenue</span></div>
+                      {(pnl.revenueBreakdown || []).map((row: any) => (
+                        <div key={row.label} style={{ padding: '10px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.06)' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}><div style={{ fontSize: 12, color: '#C8C2BB' }}>{row.label}</div><div style={{ fontSize: 13, fontWeight: 500, color: 'rgba(100,200,130,0.85)' }}>${row.amount.toLocaleString()}</div></div>
+                          <div style={{ height: 3, background: 'rgba(200,194,187,0.06)', borderRadius: 2 }}><div style={{ height: '100%', width: `${pnl.revenueTotal ? Math.min(100, (row.amount / pnl.revenueTotal) * 100) : 0}%`, background: 'rgba(100,200,130,0.5)', borderRadius: 2 }} /></div>
+                        </div>
+                      ))}
+                      {(pnl.revenueBreakdown || []).length === 0 && <div style={{ padding: '10px 18px', fontSize: 12, color: 'rgba(200,194,187,0.25)' }}>No revenue lines this period</div>}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 18px', background: 'rgba(61,71,86,0.15)' }}><div style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>Total revenue</div><div style={{ fontSize: 15, fontWeight: 500, color: 'rgba(100,200,130,0.85)' }}>${(pnl.revenueTotal || 0).toLocaleString()}</div></div>
+                    </div>
+                    <div style={s.panel}>
+                      <div style={{ padding: '14px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)' }}><span style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>Expenses</span></div>
+                      {(pnl.expensesBreakdown || []).map((row: any) => (
+                        <div key={row.label} style={{ padding: '10px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.06)' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}><div style={{ fontSize: 12, color: '#C8C2BB' }}>{row.label}</div><div style={{ fontSize: 13, color: 'rgba(210,90,90,0.85)' }}>−${row.amount.toLocaleString()}</div></div>
+                          <div style={{ height: 3, background: 'rgba(200,194,187,0.06)', borderRadius: 2 }}><div style={{ height: '100%', width: `${pnl.expensesTotal ? Math.min(100, (row.amount / pnl.expensesTotal) * 100) : 0}%`, background: 'rgba(210,90,90,0.5)', borderRadius: 2 }} /></div>
+                        </div>
+                      ))}
+                      {(pnl.expensesBreakdown || []).length === 0 && <div style={{ padding: '10px 18px', fontSize: 12, color: 'rgba(200,194,187,0.25)' }}>No expense lines this period</div>}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 18px', background: 'rgba(61,71,86,0.15)' }}><div style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>Total expenses</div><div style={{ fontSize: 15, fontWeight: 500, color: 'rgba(210,90,90,0.85)' }}>−${(pnl.expensesTotal || 0).toLocaleString()}</div></div>
+                    </div>
+                  </div>
+                  <div style={{ background: 'linear-gradient(135deg, rgba(30,50,38,0.5) 0%, rgba(20,24,32,0.95) 100%)', border: '0.5px solid rgba(100,200,130,0.25)', borderRadius: 10, padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 28, position: 'relative', overflow: 'hidden' }}>
+                    <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1, background: 'linear-gradient(90deg, transparent, rgba(100,200,130,0.5), transparent)' }} />
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 500, color: '#C8C2BB' }}>Net profit</div>
+                      <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', marginTop: 2 }}>{pnl.reportDate ? `As of ${pnl.reportDate}` : ''} · {margin}% margin</div>
+                    </div>
+                    <div style={{ fontSize: 30, fontWeight: 600, color: 'rgba(100,200,130,0.9)' }}>${(pnl.netProfit || 0).toLocaleString()}</div>
+                  </div>
+
+                  {sectionLabel('💳', 'Invoicing')}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                    <div style={s.panel}>
+                      <div style={{ padding: '14px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>Outstanding invoices</span>
+                          <span style={{ fontSize: 12, fontWeight: 500, color: 'rgba(210,175,80,0.9)' }}>${outstandingTotal.toLocaleString()}</span>
+                        </div>
+                        {overdueTotal > 0 && <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 10, color: 'rgba(210,90,90,0.9)', background: 'rgba(210,90,90,0.1)', border: '0.5px solid rgba(210,90,90,0.25)', borderRadius: 3, padding: '2px 8px', marginTop: 8 }}>⚠ ${overdueTotal.toLocaleString()} overdue</div>}
+                      </div>
+                      {outstandingItems.length === 0 ? (
+                        <div style={{ padding: '14px 18px', fontSize: 12, color: 'rgba(200,194,187,0.25)' }}>Nothing outstanding</div>
+                      ) : outstandingItems.map((inv: any) => (
+                        <div key={inv.invoiceId} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.06)' }}>
+                          <div style={{ width: 28, height: 28, borderRadius: '50%', background: inv.overdue ? 'rgba(210,90,90,0.12)' : 'rgba(210,175,80,0.12)', color: inv.overdue ? 'rgba(210,90,90,0.9)' : 'rgba(210,175,80,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 600, flexShrink: 0 }}>{(inv.contact || '?').charAt(0).toUpperCase()}</div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 12, color: '#C8C2BB', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{inv.contact}{inv.invoiceNumber ? ' · ' + inv.invoiceNumber : ''}</div>
+                            <div style={{ fontSize: 10, color: inv.overdue ? 'rgba(210,90,90,0.8)' : 'rgba(200,194,187,0.35)' }}>{inv.overdue ? 'Overdue — ' : 'Due '}{inv.dueDate ? new Date(inv.dueDate).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' }) : '—'}</div>
+                          </div>
+                          <div style={{ fontSize: 13, fontWeight: 500, color: inv.overdue ? 'rgba(210,90,90,0.9)' : 'rgba(210,175,80,0.85)', whiteSpace: 'nowrap' }}>${inv.amountDue.toLocaleString()}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <div style={s.panel}>
+                      <div style={{ padding: '14px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)' }}><span style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>Recent payments</span></div>
+                      {recentPayments.length === 0 ? (
+                        <div style={{ padding: '14px 18px', fontSize: 12, color: 'rgba(200,194,187,0.25)' }}>No payments recorded yet</div>
+                      ) : recentPayments.map((inv: any) => (
+                        <div key={inv.id} onClick={() => router.push('/portal/studio/invoices')} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.06)', cursor: 'pointer' }}>
+                          <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(100,200,130,0.12)', color: 'rgba(100,200,130,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 600, flexShrink: 0 }}>{(inv.client_name || inv.client_email || '?').charAt(0).toUpperCase()}</div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 12, color: '#C8C2BB', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{inv.client_name || inv.client_email}</div>
+                            <div style={{ fontSize: 10, color: 'rgba(200,194,187,0.35)' }}>Paid {inv.paid_at ? new Date(inv.paid_at).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' }) : '—'}</div>
+                          </div>
+                          <div style={{ fontSize: 13, fontWeight: 500, color: 'rgba(100,200,130,0.85)', whiteSpace: 'nowrap' }}>${(inv.total || 0).toLocaleString()}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )
+            })()}
           </div>
         )}
 
@@ -897,7 +1564,7 @@ export default function StudioPortal() {
       {scheduleModal && (selectedBooking || respondingToCR) && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 10, padding: 28, width: 480, maxWidth: '95vw' }}>
-            <div style={{ fontSize: 14, fontWeight: 500, color: '#fff', marginBottom: 6 }}>{respondingToCR ? 'Reschedule shoot' : 'Schedule shoot'}</div>
+            <div style={{ fontSize: 14, fontWeight: 500, color: '#fff', marginBottom: 6 }}>{respondingToCR ? 'Reschedule shoot' : meetingMode ? 'Book a meeting' : 'Schedule shoot'}</div>
             <div style={{ fontSize: 12, color: 'rgba(200,194,187,0.4)', marginBottom: 20, lineHeight: 1.6 }}>
               {respondingToCR ? (respondingToCR.project_title + ' · ' + respondingToCR.client_name) : (selectedBooking?.address || selectedBooking?.shoot_package) + ' · ' + (selectedBooking?.client_name || selectedBooking?.client_email)}
             </div>
@@ -911,12 +1578,12 @@ export default function StudioPortal() {
               <>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, marginBottom: 16 }}>
                   <div style={{ gridColumn: 'span 3' }}>
-                    <label style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)', marginBottom: 6, display: 'block' }}>Shoot date {shootDate && '— ' + new Date(shootDate + 'T12:00:00').toLocaleDateString('en-NZ',{weekday:'long',day:'numeric',month:'long'})}</label>
+                    <label style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)', marginBottom: 6, display: 'block' }}>{meetingMode ? 'Meeting date' : 'Shoot date'} {shootDate && '— ' + new Date(shootDate + 'T12:00:00').toLocaleDateString('en-NZ',{weekday:'long',day:'numeric',month:'long'})}</label>
                     {(() => {
                       const today = new Date(); today.setHours(0,0,0,0)
-                      const viewMonth = new Date(today.getFullYear(), today.getMonth(), 1)
+                      const viewMonth = new Date(today.getFullYear(), today.getMonth() + scheduleMonthOffset, 1)
                       const startDay = viewMonth.getDay() === 0 ? 6 : viewMonth.getDay() - 1
-                      const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate()
+                      const daysInMonth = new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 0).getDate()
                       const shootsByDate: Record<string, any[]> = {}
                       dashProjects.forEach((p: any) => {
                         if (p.shoot_date) {
@@ -931,14 +1598,18 @@ export default function StudioPortal() {
                       const days = ['M','T','W','T','F','S','S']
                       return (
                         <div style={{ background: 'rgba(200,194,187,0.03)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 6, padding: 12, marginBottom: 10 }}>
-                          <div style={{ fontSize: 11, fontWeight: 500, color: '#C8C2BB', marginBottom: 8, textAlign: 'center' }}>{viewMonth.toLocaleDateString('en-NZ',{month:'long',year:'numeric'})}</div>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                            <button type="button" onClick={() => setScheduleMonthOffset(o => Math.max(0, o - 1))} disabled={scheduleMonthOffset === 0} style={{ background: 'transparent', border: 'none', color: scheduleMonthOffset === 0 ? 'rgba(200,194,187,0.15)' : 'rgba(200,194,187,0.6)', cursor: scheduleMonthOffset === 0 ? 'default' : 'pointer', fontSize: 13, padding: '2px 8px', fontFamily: 'inherit' }}>‹</button>
+                            <div style={{ fontSize: 11, fontWeight: 500, color: '#C8C2BB', textAlign: 'center' }}>{viewMonth.toLocaleDateString('en-NZ',{month:'long',year:'numeric'})}</div>
+                            <button type="button" onClick={() => setScheduleMonthOffset(o => o + 1)} style={{ background: 'transparent', border: 'none', color: 'rgba(200,194,187,0.6)', cursor: 'pointer', fontSize: 13, padding: '2px 8px', fontFamily: 'inherit' }}>›</button>
+                          </div>
                           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 3, marginBottom: 4 }}>
                             {days.map((d,i) => <div key={i} style={{ fontSize: 9, textAlign: 'center', color: 'rgba(200,194,187,0.3)' }}>{d}</div>)}
                           </div>
                           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 3 }}>
                             {cells.map((d, i) => {
                               if (!d) return <div key={i} />
-                              const dateStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`
+                              const dateStr = `${viewMonth.getFullYear()}-${String(viewMonth.getMonth()+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`
                               const hasShoot = shootDatesSet.has(dateStr)
                               const isSelected = shootDate === dateStr
                               const isPast = new Date(dateStr) < today
@@ -974,13 +1645,13 @@ export default function StudioPortal() {
                   <div>
                     <label style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)', marginBottom: 6, display: 'block' }}>Start time</label>
                     <select value={startTime} onChange={e => setStartTime(e.target.value)} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }}>
-                      {['06:00','06:30','07:00','07:30','08:00','08:30','09:00','09:30','10:00','10:30','11:00','11:30','12:00','12:30','13:00','13:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30','18:00'].map(t => <option key={t}>{t}</option>)}
+                      {['06:00','06:30','07:00','07:30','08:00','08:30','09:00','09:30','10:00','10:30','11:00','11:30','12:00','12:30','13:00','13:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30','18:00'].map(t => <option key={t} value={t}>{formatTime12(t)}</option>)}
                     </select>
                   </div>
                   <div>
                     <label style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)', marginBottom: 6, display: 'block' }}>End time</label>
                     <select value={endTime} onChange={e => setEndTime(e.target.value)} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }}>
-                      {['07:00','07:30','08:00','08:30','09:00','09:30','10:00','10:30','11:00','11:30','12:00','12:30','13:00','13:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30','18:00','18:30','19:00'].map(t => <option key={t}>{t}</option>)}
+                      {['07:00','07:30','08:00','08:30','09:00','09:30','10:00','10:30','11:00','11:30','12:00','12:30','13:00','13:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30','18:00','18:30','19:00'].map(t => <option key={t} value={t}>{formatTime12(t)}</option>)}
                     </select>
                   </div>
                   <div>
@@ -998,24 +1669,26 @@ export default function StudioPortal() {
                 </div>
 
                 {!calendarConnected && (
-                  <div style={{ background: 'rgba(210,175,80,0.08)', border: '0.5px solid rgba(210,175,80,0.2)', borderRadius: 5, padding: '10px 14px', marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: 11, color: 'rgba(210,175,80,0.8)' }}>Connect Google Calendar to send invites</span>
-                    <button onClick={connectGoogleCalendar} style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '5px 12px', borderRadius: 3, background: 'rgba(210,175,80,0.15)', color: 'rgba(210,175,80,0.9)', border: '0.5px solid rgba(210,175,80,0.3)', cursor: 'pointer', fontFamily: 'inherit' }}>Connect →</button>
+                  <div style={{ background: 'rgba(210,175,80,0.08)', border: '0.5px solid rgba(210,175,80,0.2)', borderRadius: 5, padding: '10px 14px', marginBottom: 16, fontSize: 11, color: 'rgba(210,175,80,0.8)' }}>
+                    Google isn't connected yet — creating this event will prompt you to connect.
                   </div>
                 )}
               </>
             )}
 
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
-              <button onClick={() => { setScheduleModal(false); setEventLink(''); setRespondingToCR(null) }} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>
+              <button onClick={() => { setScheduleModal(false); setEventLink(''); setRespondingToCR(null); setMeetingMode(false) }} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>
                 {eventLink ? 'Close' : 'Cancel'}
               </button>
               {!eventLink && (
                 <div style={{ display: 'flex', gap: 8 }}>
-                  <button onClick={async () => {
+                  <button disabled={confirmingBooking || creatingEvent} onClick={async () => {
+                    if (confirmingBooking || creatingEvent) return
+                    setConfirmingBooking(true)
+                    try {
                     if (respondingToCR && shootDate) {
                       if (respondingToCR.project_id) {
-                        await supabase.from('projects1').update({ shoot_date: shootDate, general_notes: (respondingToCR.general_notes || '') + '\n\n[RESCHEDULED ' + new Date().toLocaleDateString('en-NZ') + '] New date: ' + new Date(shootDate + 'T12:00:00').toLocaleDateString('en-NZ',{weekday:'long',day:'numeric',month:'long',year:'numeric'}) + ' at ' + startTime }).eq('id', respondingToCR.project_id)
+                        await supabase.from('projects1').update({ shoot_date: shootDate, general_notes: (respondingToCR.general_notes || '') + '\n\n[RESCHEDULED ' + new Date().toLocaleDateString('en-NZ') + '] New date: ' + new Date(shootDate + 'T12:00:00').toLocaleDateString('en-NZ',{weekday:'long',day:'numeric',month:'long',year:'numeric'}) + ' at ' + formatTime12(startTime) }).eq('id', respondingToCR.project_id)
                       }
                       await supabase.from('change_requests').update({ status: 'resolved' }).eq('id', respondingToCR.id)
                       setChangeRequests((p: any[]) => p.filter((r: any) => r.id !== respondingToCR.id))
@@ -1025,22 +1698,27 @@ export default function StudioPortal() {
         user_email: respondingToCR.client_email,
         type: 'change_confirmed',
         title: 'Shoot rescheduled',
-        message: 'Your change request for ' + respondingToCR.project_title + ' has been confirmed. New shoot date: ' + new Date(shootDate + 'T12:00:00').toLocaleDateString('en-NZ',{weekday:'long',day:'numeric',month:'long',year:'numeric'}) + ' at ' + startTime,
+        message: 'Your change request for ' + respondingToCR.project_title + ' has been confirmed. New shoot date: ' + new Date(shootDate + 'T12:00:00').toLocaleDateString('en-NZ',{weekday:'long',day:'numeric',month:'long',year:'numeric'}) + ' at ' + formatTime12(startTime),
         project_id: respondingToCR.project_id || null,
         read: false,
       }])
       setRespondingToCR(null); setScheduleModal(false); setShootDate('')
+                    } else if (meetingMode) {
+                      const proj = await bookMeeting(selectedBooking)
+                      setScheduleModal(false); setEventLink(''); setMeetingMode(false)
+                      if (proj?.id) router.push('/portal/studio/projects/' + proj.id)
                     } else {
                       const proj = await confirmBooking(selectedBooking)
-                      if (proj?.id && shootDate) { await supabase.from('projects1').update({ general_notes: (selectedBooking?.notes || '') + '\n\nShoot confirmed: ' + new Date(shootDate + 'T12:00:00').toLocaleDateString('en-NZ',{weekday:'long',day:'numeric',month:'long',year:'numeric'}) + ' at ' + startTime }).eq('id', proj.id) }
+                      if (proj?.id && shootDate) { await supabase.from('projects1').update({ general_notes: (selectedBooking?.notes || '') + '\n\nShoot confirmed: ' + new Date(shootDate + 'T12:00:00').toLocaleDateString('en-NZ',{weekday:'long',day:'numeric',month:'long',year:'numeric'}) + ' at ' + formatTime12(startTime) }).eq('id', proj.id) }
                       setScheduleModal(false); setEventLink('')
                       if (proj?.id) router.push('/portal/studio/projects/' + proj.id)
                     }
-                  }} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>
-                    {respondingToCR ? 'Confirm new date' : 'Confirm without calendar'}
+                    } finally { setConfirmingBooking(false) }
+                  }} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: confirmingBooking ? 'rgba(200,194,187,0.2)' : 'rgba(200,194,187,0.5)', background: 'transparent', cursor: confirmingBooking ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>
+                    {confirmingBooking ? 'Saving...' : respondingToCR ? 'Confirm new date' : meetingMode ? 'Book meeting without calendar' : 'Confirm without calendar'}
                   </button>
-                  {!respondingToCR && <button onClick={() => createCalendarEvent(selectedBooking)} disabled={creatingEvent || !shootDate} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, background: creatingEvent || !shootDate ? 'rgba(200,194,187,0.1)' : '#C8C2BB', color: creatingEvent || !shootDate ? 'rgba(200,194,187,0.3)' : '#111', border: 'none', cursor: creatingEvent || !shootDate ? 'not-allowed' : 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>
-                    {creatingEvent ? 'Creating event...' : '📅 Confirm & add to calendar'}
+                  {!respondingToCR && <button onClick={() => meetingMode ? createMeetingEvent(selectedBooking) : createCalendarEvent(selectedBooking)} disabled={creatingEvent || confirmingBooking || !shootDate} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, background: creatingEvent || confirmingBooking || !shootDate ? 'rgba(200,194,187,0.1)' : '#C8C2BB', color: creatingEvent || confirmingBooking || !shootDate ? 'rgba(200,194,187,0.3)' : '#111', border: 'none', cursor: creatingEvent || confirmingBooking || !shootDate ? 'not-allowed' : 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>
+                    {creatingEvent ? 'Creating event...' : meetingMode ? '📅 Book meeting & add to calendar' : '📅 Confirm & add to calendar'}
                   </button>}
                 </div>
               )}
@@ -1075,9 +1753,9 @@ export default function StudioPortal() {
             <div style={{ padding: 24 }}>
               <div style={{ marginBottom: 24 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-                  {['Pre-Production','Shooting','Post-Production','Revisions','Awaiting Confirmation'].map((stage, idx) => {
-                    const SC: Record<string,string> = {'Pre-Production':'rgba(100,150,220,0.9)','Shooting':'rgba(210,175,80,0.9)','Post-Production':'rgba(210,90,90,0.9)','Revisions':'rgba(220,120,60,0.9)','Awaiting Confirmation':'rgba(100,200,130,0.9)'}
-                    const stageIdx = ['Pre-Production','Shooting','Post-Production','Revisions','Awaiting Confirmation'].indexOf(modalProject.stage)
+                  {['Enquiry','Pre-Production','Shooting','Post-Production','Revisions','Awaiting Confirmation'].map((stage, idx) => {
+                    const SC: Record<string,string> = {'Enquiry':'rgba(200,194,187,0.55)','Pre-Production':'rgba(100,150,220,0.9)','Shooting':'rgba(210,175,80,0.9)','Post-Production':'rgba(210,90,90,0.9)','Revisions':'rgba(220,120,60,0.9)','Awaiting Confirmation':'rgba(100,200,130,0.9)'}
+                    const stageIdx = ['Enquiry','Pre-Production','Shooting','Post-Production','Revisions','Awaiting Confirmation'].indexOf(modalProject.stage)
                     const isDone = idx < stageIdx; const isCurrent = idx === stageIdx
                     return (
                       <div key={stage} onClick={() => setModalProject((p: any) => p ? { ...p, stage, progress: STAGE_PROGRESS[stage] } : p)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, cursor: 'pointer', flex: 1 }}>
@@ -1112,7 +1790,7 @@ export default function StudioPortal() {
                   <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>Stage</div>
                   {modalEditing ? (
                     <select value={modalProject.stage} onChange={e => setModalProject((p: any) => p ? { ...p, stage: e.target.value, progress: STAGE_PROGRESS[e.target.value] } : p)} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '8px 10px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }}>
-                      {['Pre-Production','Shooting','Post-Production','Revisions','Awaiting Confirmation'].map(s => <option key={s}>{s}</option>)}
+                      {['Enquiry','Pre-Production','Shooting','Post-Production','Revisions','Awaiting Confirmation'].map(s => <option key={s}>{s}</option>)}
                     </select>
                   ) : <div style={{ fontSize: 13, color: '#C8C2BB' }}>{modalProject.stage}</div>}
                 </div>
@@ -1121,7 +1799,7 @@ export default function StudioPortal() {
                 {[{ label: 'Shoot date', key: 'shoot_date' }, { label: 'Draft due', key: 'draft_due' }, { label: 'Delivery date', key: 'delivery_due' }].map(({ label, key }) => (
                   <div key={key}>
                     <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>{label}</div>
-                    {modalEditing ? <input type="date" value={modalProject[key] || ''} onChange={e => setModalProject((p: any) => p ? { ...p, [key]: e.target.value } : p)} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '8px 10px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }} /> : <div style={{ fontSize: 13, color: '#C8C2BB' }}>{modalProject[key] ? new Date(modalProject[key]).toLocaleDateString('en-NZ',{day:'numeric',month:'short',year:'numeric'}) : '—'}</div>}
+                    {modalEditing ? <input type="date" value={modalProject[key] || ''} onChange={e => setModalProject((p: any) => p ? { ...p, [key]: e.target.value } : p)} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '8px 10px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }} /> : <div style={{ fontSize: 13, color: '#C8C2BB' }}>{modalProject[key] ? new Date(modalProject[key]).toLocaleDateString('en-NZ',{day:'numeric',month:'short',year:'numeric'}) : '-'}</div>}
                   </div>
                 ))}
               </div>
@@ -1212,9 +1890,9 @@ export default function StudioPortal() {
             <div style={{ padding: 24 }}>
               <div style={{ marginBottom: 24 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-                  {['Pre-Production','Shooting','Post-Production','Revisions','Awaiting Confirmation'].map((stage, idx) => {
-                    const SC: Record<string,string> = {'Pre-Production':'rgba(100,150,220,0.9)','Shooting':'rgba(210,175,80,0.9)','Post-Production':'rgba(210,90,90,0.9)','Revisions':'rgba(220,120,60,0.9)','Awaiting Confirmation':'rgba(100,200,130,0.9)'}
-                    const stageIdx = ['Pre-Production','Shooting','Post-Production','Revisions','Awaiting Confirmation'].indexOf(modalProject.stage)
+                  {['Enquiry','Pre-Production','Shooting','Post-Production','Revisions','Awaiting Confirmation'].map((stage, idx) => {
+                    const SC: Record<string,string> = {'Enquiry':'rgba(200,194,187,0.55)','Pre-Production':'rgba(100,150,220,0.9)','Shooting':'rgba(210,175,80,0.9)','Post-Production':'rgba(210,90,90,0.9)','Revisions':'rgba(220,120,60,0.9)','Awaiting Confirmation':'rgba(100,200,130,0.9)'}
+                    const stageIdx = ['Enquiry','Pre-Production','Shooting','Post-Production','Revisions','Awaiting Confirmation'].indexOf(modalProject.stage)
                     const isDone = idx < stageIdx; const isCurrent = idx === stageIdx
                     return (
                       <div key={stage} onClick={() => setModalProject((p: any) => p ? { ...p, stage, progress: STAGE_PROGRESS[stage] } : p)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, cursor: 'pointer', flex: 1 }}>
@@ -1249,7 +1927,7 @@ export default function StudioPortal() {
                   <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>Stage</div>
                   {modalEditing ? (
                     <select value={modalProject.stage} onChange={e => setModalProject((p: any) => p ? { ...p, stage: e.target.value, progress: STAGE_PROGRESS[e.target.value] } : p)} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '8px 10px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }}>
-                      {['Pre-Production','Shooting','Post-Production','Revisions','Awaiting Confirmation'].map(s => <option key={s}>{s}</option>)}
+                      {['Enquiry','Pre-Production','Shooting','Post-Production','Revisions','Awaiting Confirmation'].map(s => <option key={s}>{s}</option>)}
                     </select>
                   ) : <div style={{ fontSize: 13, color: '#C8C2BB' }}>{modalProject.stage}</div>}
                 </div>
@@ -1342,6 +2020,21 @@ export default function StudioPortal() {
               ) : (
                 <div style={{ textAlign:'center', color:'rgba(200,194,187,0.25)', fontSize:13, padding:'40px 0' }}>No files uploaded yet</div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+      {/* GOOGLE CONNECT PROMPT */}
+      {showConnectPrompt && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }} onClick={() => setShowConnectPrompt(false)}>
+          <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 10, width: '100%', maxWidth: 420, padding: 28 }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: 15, fontWeight: 500, color: '#fff', marginBottom: 8 }}>Connect Google</div>
+            <div style={{ fontSize: 12, color: 'rgba(200,194,187,0.5)', lineHeight: 1.7, marginBottom: 20 }}>
+              Link your Google account to send calendar invites for shoots and automatically create project folders in Drive. You can do this anytime — booking confirmations and folder creation will prompt you again if you skip it.
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button onClick={() => setShowConnectPrompt(false)} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '9px 16px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Not now</button>
+              <button onClick={connectGoogleCalendar} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '9px 16px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>Connect Google →</button>
             </div>
           </div>
         </div>

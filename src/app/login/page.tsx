@@ -1,7 +1,9 @@
 'use client'
 import { useState } from 'react'
-import { supabase } from '@/lib/supabase'
+import { supabase, ensureClientProfile } from '@/lib/supabase'
+import { notify, ToastHost } from '@/lib/notify'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -32,23 +34,21 @@ export default function LoginPage() {
       .eq('id', data.user.id)
       .single()
 
-    if (profile?.role === 'studio') {
+    if (profile?.role === 'studio' || profile?.role === 'editor') {
       router.push('/portal/studio')
     } else {
+      if (!profile) await ensureClientProfile(data.user)
       router.push('/portal/client')
     }
   }
 
   return (
     <main style={{ background: '#0E1014', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Inter, sans-serif' }}>
+      <ToastHost />
       <div style={{ width: '100%', maxWidth: 420, padding: '0 24px' }}>
 
         {/* LOGO */}
         <div style={{ textAlign: 'center', marginBottom: 40 }}>
-          <svg width="36" height="36" viewBox="0 0 120 120" fill="none" style={{ margin: '0 auto 16px' }}>
-            <path d="M25 15 L75 15 L95 40 L75 40 L75 28 L42 28 L42 92 L75 92 L75 80 L95 105 L25 105 Z" fill="#C8C2BB" opacity="0.85"/>
-            <path d="M52 46 L95 46 L95 74 L52 74 L52 63 L84 63 L84 57 L52 57 Z" fill="#C8C2BB" opacity="0.55"/>
-          </svg>
           <img src='/images/Pale_logo_EX.png' alt='Example Content' style={{ height: 48, objectFit: 'contain' }} />
         </div>
 
@@ -102,7 +102,7 @@ export default function LoginPage() {
 
           <div style={{ textAlign: 'center', marginTop: 8 }}>
             <button onClick={async () => {
-                if (!email) { alert('Enter your email address first'); return }
+                if (!email) { notify('Enter your email address first', 'error'); return }
                 setResetLoading(true)
                 await supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + '/reset-password' })
                 setResetSent(true)
@@ -113,8 +113,14 @@ export default function LoginPage() {
           </div>
         </form>
 
+        {mode === 'client' && (
+          <div style={{ textAlign: 'center', marginTop: 16, fontSize: 12, color: 'rgba(200,194,187,0.35)' }}>
+            New client? <Link href="/signup" style={{ color: 'rgba(200,194,187,0.7)', textDecoration: 'none', fontWeight: 500 }}>Create an account</Link>
+          </div>
+        )}
+
         <div style={{ textAlign: 'center', marginTop: 40 }}>
-          <a href="/" style={{ fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.25)', textDecoration: 'none' }}>← Back to website</a>
+          <Link href="/" style={{ fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.25)', textDecoration: 'none' }}>← Back to website</Link>
         </div>
 
       </div>

@@ -1,6 +1,8 @@
 'use client'
 import StudioSidebar from '../StudioSidebar'
 import { supabase } from '@/lib/supabase'
+import { formatTime12 } from '@/lib/time'
+import { notify, confirmDialog, ToastHost, ConfirmHost } from '@/lib/notify'
 import React, { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 
@@ -58,7 +60,7 @@ export default function PitchDeckPage() {
   const [sendModal, setSendModal] = useState(false)
   const [sendClient, setSendClient] = useState('')
   const [sendEmail, setSendEmail] = useState('')
-  const [deckLink] = useState(`https://example-content.vercel.app/deck/${Math.random().toString(36).slice(2,8)}`)
+  const [deckLink] = useState(() => `https://example-content.vercel.app/deck/${Math.random().toString(36).slice(2,8)}`)
   const [linkCopied, setLinkCopied] = useState(false)
 
   const [clientName, setClientName] = useState('Elephant Hill Winery')
@@ -243,18 +245,18 @@ export default function PitchDeckPage() {
       message: 'Your brief for ' + projectName + ' is ready to review and approve.',
       read: false,
     }])
-    alert('Brief sent to ' + clientEmail)
+    notify('Brief sent to ' + clientEmail, 'success')
   }
 
   async function convertToProject() {
-    if (!confirm('Convert this brief to a project?')) return
+    if (!(await confirmDialog('Convert this brief to a project?'))) return
     const { data } = await supabase.from('projects1').insert([{
       title: projectName,
       client: clientName,
       email: clientEmail,
       category: category === 'Commercial' ? 'Commercial' : 'Property',
-      stage: 'Pre-Production',
-      progress: 10,
+      stage: 'Enquiry',
+      progress: 0,
       shoot_date: shootDates || null,
       draft_due: draftDue || null,
       delivery_due: finalsDue || null,
@@ -264,7 +266,7 @@ export default function PitchDeckPage() {
     }]).select().single()
     if (data) {
       if (briefId) await supabase.from('briefs').update({ project_id: data.id, status: 'approved' }).eq('id', briefId)
-      alert('Project created successfully!')
+      notify('Project created successfully!', 'success')
     }
   }
 
@@ -418,7 +420,7 @@ export default function PitchDeckPage() {
         <div style={{ height:0.5, background:t.border, margin:`${scale*5}px 0` }} />
         <div style={{ display:'flex', gap:scale*10 }}>
           {shootDates && <div><div style={{ fontSize:scale*3.5, letterSpacing:'0.16em', textTransform:'uppercase', color:t.muted, marginBottom:scale*1.5 }}>Shoot Date</div><div style={{ fontSize:scale*5.5, color:t.accent, fontWeight:600 }}>{shootDates}</div></div>}
-          {shootStartTime && <div><div style={{ fontSize:scale*3.5, letterSpacing:'0.16em', textTransform:'uppercase', color:t.muted, marginBottom:scale*1.5 }}>Time</div><div style={{ fontSize:scale*5.5, color:t.accent, fontWeight:600 }}>{shootStartTime}{shootEndTime?' – '+shootEndTime:''}</div></div>}
+          {shootStartTime && <div><div style={{ fontSize:scale*3.5, letterSpacing:'0.16em', textTransform:'uppercase', color:t.muted, marginBottom:scale*1.5 }}>Time</div><div style={{ fontSize:scale*5.5, color:t.accent, fontWeight:600 }}>{formatTime12(shootStartTime)}{shootEndTime?' – '+formatTime12(shootEndTime):''}</div></div>}
           {draftDue && <div><div style={{ fontSize:scale*3.5, letterSpacing:'0.16em', textTransform:'uppercase', color:t.muted, marginBottom:scale*1.5 }}>Draft Due</div><div style={{ fontSize:scale*5.5, color:t.accent, fontWeight:600 }}>{draftDue}</div></div>}
           {finalsDue && <div><div style={{ fontSize:scale*3.5, letterSpacing:'0.16em', textTransform:'uppercase', color:t.muted, marginBottom:scale*1.5 }}>Finals Due</div><div style={{ fontSize:scale*5.5, color:t.accent, fontWeight:600 }}>{finalsDue}</div></div>}
         </div>
@@ -601,6 +603,8 @@ export default function PitchDeckPage() {
 
   return (
     <main style={{ background: '#0E1014', minHeight: '100vh', fontFamily: 'Inter, sans-serif', color: '#C8C2BB', fontSize: 13, display: 'flex' }}>
+      <ToastHost />
+      <ConfirmHost />
       <StudioSidebar active="pitches" />
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
@@ -789,12 +793,12 @@ export default function PitchDeckPage() {
                 <div><label style={lbl}>Shoot date</label><input style={inp} type="date" value={shootDates} onChange={e => setShootDates(e.target.value)} /></div>
                 <div><label style={lbl}>Start time</label>
                   <select style={inp} value={shootStartTime} onChange={e => setShootStartTime(e.target.value)}>
-                    {['06:00','06:30','07:00','07:30','08:00','08:30','09:00','09:30','10:00','10:30','11:00','11:30','12:00','13:00','14:00','15:00','16:00','17:00','18:00'].map(t => <option key={t}>{t}</option>)}
+                    {['06:00','06:30','07:00','07:30','08:00','08:30','09:00','09:30','10:00','10:30','11:00','11:30','12:00','13:00','14:00','15:00','16:00','17:00','18:00'].map(t => <option key={t} value={t}>{formatTime12(t)}</option>)}
                   </select>
                 </div>
                 <div><label style={lbl}>End time</label>
                   <select style={inp} value={shootEndTime} onChange={e => setShootEndTime(e.target.value)}>
-                    {['08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00'].map(t => <option key={t}>{t}</option>)}
+                    {['08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00'].map(t => <option key={t} value={t}>{formatTime12(t)}</option>)}
                   </select>
                 </div>
                 <div><label style={lbl}>Draft due</label><input style={inp} type="date" value={draftDue} onChange={e => setDraftDue(e.target.value)} /></div>
@@ -947,7 +951,7 @@ export default function PitchDeckPage() {
             {slides.map((slide, idx) => (
               <div key={slide.id} onClick={() => setActiveSlide(idx)} style={{ marginBottom: 10, cursor: 'pointer' }}>
                 <div style={{ border: `1.5px solid ${activeSlide === idx ? '#C8C2BB' : 'transparent'}`, borderRadius: 4, overflow: 'hidden', opacity: activeSlide === idx ? 1 : 0.5, transition: 'all 0.15s', aspectRatio: '16/9', position: 'relative' }}>
-                  <SlidePreview slideItem={slide} scale={0.3} />
+                  {SlidePreview({ slideItem: slide, scale: 0.3 })}
                 </div>
                 <div style={{ padding: '4px 4px 0', display: 'flex', gap: 6, alignItems: 'center' }}>
                   <span style={{ fontSize: 10, color: 'rgba(200,194,187,0.22)' }}>{idx + 1}</span>
@@ -965,7 +969,7 @@ export default function PitchDeckPage() {
           {/* CENTRE CANVAS */}
           <div style={{ background: '#07090C', overflowY: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 32px' }}>
             <div style={{ width: '100%', maxWidth: 860, aspectRatio: '16/9', position: 'relative', borderRadius: 6, overflow: 'hidden', border: `0.5px solid ${t.border}` }}>
-              {currentSlide && <SlidePreview slideItem={currentSlide} scale={1} />}
+              {currentSlide && SlidePreview({ slideItem: currentSlide, scale: 1 })}
             </div>
             <div style={{ display: 'flex', gap: 10, marginTop: 20, alignItems: 'center' }}>
               <button onClick={() => setActiveSlide(s => Math.max(0,s-1))} disabled={activeSlide===0} style={{ ...btnG, opacity: activeSlide===0?0.3:1, padding: '6px 14px' }}>←</button>
