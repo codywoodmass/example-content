@@ -60,7 +60,7 @@ export default function StudioSidebar({ active, onViewChange }: { active?: strin
   return (
     <aside style={{ width: 210, flexShrink: 0, background: '#14181F', borderRight: '0.5px solid rgba(200,194,187,0.09)', display: 'flex', flexDirection: 'column', position: 'sticky', top: 0, height: '100vh', fontFamily: 'Inter, sans-serif' }}>
       <div style={{ padding: '16px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)' }}>
-        <img src="/images/Pale_logo_EX.png" alt="Example Content" style={{ height: 44, objectFit: 'contain', maxWidth: 160 }} />
+        <img src="/images/Pale_logo_EX.png" alt="Example Content" style={{ height: 44, objectFit: 'contain', maxWidth: 174 }} />
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 16px', borderBottom: '0.5px solid rgba(200,194,187,0.09)' }}>
         <div style={{ width: 30, height: 30, borderRadius: '50%', background: 'rgba(200,194,187,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 12, fontWeight: 600, color: '#C8C2BB' }}>{initial}</div>
