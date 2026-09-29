@@ -104,21 +104,13 @@ export default function InvoicesPage() {
     notify('Project removed from invoice and restored to active', 'success')
   }
 
+  // Purely internal bookkeeping — the client is only ever notified when you send
+  // the invoice yourself from inside Xero. This never emails or notifies them.
   async function markSent(invoice: Invoice) {
     setBusyId(invoice.id)
     try {
       const items = lineItems[invoice.id] || []
       const sent_at = new Date().toISOString()
-      try {
-        await xeroAuthedFetch('/api/send-invoice', {
-          method: 'POST',
-          body: JSON.stringify({
-            invoiceId: invoice.id, clientEmail: invoice.client_email, clientName: invoice.client_name,
-            items: items.map(i => ({ title: i.title || i.address, amount: i.amount || 0 })),
-            subtotal: invoice.subtotal, gst: invoice.gst, total: invoice.total,
-          }),
-        })
-      } catch (e) { console.error('send-invoice error:', e) }
       await supabase.from('invoices1').update({ status: 'sent', sent_at }).eq('id', invoice.id)
       await supabase.from('projects1').update({ archived: true }).in('id', items.map(i => i.id))
       setInvoices(p => p.map(inv => inv.id === invoice.id ? { ...inv, status: 'sent', sent_at } : inv))
