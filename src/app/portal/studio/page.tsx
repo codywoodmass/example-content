@@ -1316,7 +1316,9 @@ export default function StudioPortal() {
                 <button onClick={() => setActiveView('dashboard')} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>← Dashboard</button>
               </div>
             </div>
-            {!xeroStatus?.connected ? (
+            {xeroStatus === null ? (
+              <div style={{ padding: 28, textAlign: 'center', paddingTop: 80, color: 'rgba(200,194,187,0.4)', fontSize: 13 }}>Checking Xero connection...</div>
+            ) : !xeroStatus?.connected ? (
               <div style={{ padding: 28, textAlign: 'center', paddingTop: 80 }}>
                 <div style={{ fontSize: 40, marginBottom: 16, opacity: 0.3 }}>📊</div>
                 <div style={{ fontSize: 14, color: 'rgba(200,194,187,0.4)', marginBottom: 16 }}>Connect Xero to see your real P&L here</div>

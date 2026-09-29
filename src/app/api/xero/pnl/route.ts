@@ -165,6 +165,18 @@ export async function GET(req: NextRequest) {
   const monthsParam = parseInt(req.nextUrl.searchParams.get('months') || '6', 10)
   const months = [3, 6, 12].includes(monthsParam) ? monthsParam : 6
 
+  // The monthly breakdown, cash flow (6 calls) and outstanding invoices don't
+  // depend on the financial-year start date, so kick them off immediately instead
+  // of waiting on the main YTD report — this alone roughly halves wall-clock time
+  // since cash flow's 6 Xero calls were previously the slowest link in a fully
+  // sequential chain.
+  const monthlyPromise = xeroFetch(token.accessToken, token.tenantId, `/api.xro/2.0/Reports/ProfitAndLoss?periods=${months - 1}&timeframe=MONTH`)
+    .then(res => res.ok ? parseMonthly(res.data?.Reports?.[0]?.Rows || []) : [])
+    .catch((e) => { console.error('Xero monthly P&L error:', e); return [] })
+  const cashFlowPromise = getCashFlow(token.accessToken, token.tenantId, months)
+    .catch((e) => { console.error('Xero cash flow error:', e); return [] })
+  const outstandingPromise = getOutstandingInvoices(token.accessToken, token.tenantId)
+
   const fyStart = await getFinancialYearStart(token.accessToken, token.tenantId)
   const todayStr = toDateStr(new Date())
   const { ok, status, data } = await xeroFetch(token.accessToken, token.tenantId, `/api.xro/2.0/Reports/ProfitAndLoss?fromDate=${fyStart}&toDate=${todayStr}`)
@@ -196,24 +208,7 @@ export async function GET(req: NextRequest) {
   }
   if (!netProfit) netProfit = revenue.total - expenses.total
 
-  // Best-effort — if the monthly breakdown or cash flow fails for any reason, the
-  // YTD figures above still matter more and shouldn't be blocked by either of them.
-  let monthly: { label: string; revenue: number; net: number }[] = []
-  try {
-    const monthlyRes = await xeroFetch(token.accessToken, token.tenantId, `/api.xro/2.0/Reports/ProfitAndLoss?periods=${months - 1}&timeframe=MONTH`)
-    if (monthlyRes.ok) monthly = parseMonthly(monthlyRes.data?.Reports?.[0]?.Rows || [])
-  } catch (e) {
-    console.error('Xero monthly P&L error:', e)
-  }
-
-  let cashFlow: { label: string; cashIn: number; cashOut: number }[] = []
-  try {
-    cashFlow = await getCashFlow(token.accessToken, token.tenantId, months)
-  } catch (e) {
-    console.error('Xero cash flow error:', e)
-  }
-
-  const outstandingInvoices = await getOutstandingInvoices(token.accessToken, token.tenantId)
+  const [monthly, cashFlow, outstandingInvoices] = await Promise.all([monthlyPromise, cashFlowPromise, outstandingPromise])
 
   return NextResponse.json({
     connected: true,
