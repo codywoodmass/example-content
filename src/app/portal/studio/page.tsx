@@ -573,6 +573,10 @@ export default function StudioPortal() {
         if (driveData.url) {
           await supabase.from('projects1').update({ drive_url: driveData.url }).eq('id', data.id)
           data.drive_url = driveData.url
+        } else if (driveData.error === 'Not authenticated') {
+          notify('Project created, but Google Drive isn\'t connected — no folder was made. Connect Google Drive from the dashboard, then create the folder manually from the project.', 'error')
+        } else if (driveData.error) {
+          notify('Project created, but the Drive folder failed: ' + driveData.error, 'error')
         }
       } catch (e) { console.error('Drive folder creation error:', e) }
     }

@@ -15,7 +15,6 @@ type Client = {
   company: string
   category: string
   notes: string
-  total_bookings: number
 }
 
 export default function ClientsPage() {

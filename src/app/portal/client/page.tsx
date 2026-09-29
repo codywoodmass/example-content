@@ -1375,7 +1375,7 @@ export default function ClientPortal() {
                             bookingNotes ? 'Notes: ' + bookingNotes : '',
                             accessNotes ? 'Access: ' + accessNotes : '',
                             suggestedStoryline ? 'Storyline: ' + suggestedStoryline : '',
-                            shotList ? 'Shot list:\n' + shotList : '',
+                            shotList.replace(/[•\s]/g, '') ? 'Shot list:\n' + shotList : '',
                             prePlanning ? 'Pre-planning required' : '',
                           ].filter(Boolean).join('\n\n'),
                           total: `$${((selectedShoot?.price || 0) + (selectedDel?.price || 0) + selectedAddons.reduce((s: number, a: any) => s + a.price, 0)).toLocaleString()} + GST`,
@@ -1389,7 +1389,6 @@ export default function ClientPortal() {
                           email: clientEmail2 || user?.email,
                           name: clientContactName || '',
                           category: selectedCat === 'property' ? 'Property' : 'Commercial',
-                          total_bookings: 1,
                         }], { onConflict: 'email', ignoreDuplicates: false })
                       } catch (e) { console.error('Client upsert error:', e) }
                       try {
