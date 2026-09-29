@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { xeroAuthedFetch } from '@/lib/xeroClient'
+import { notify, confirmDialog, ToastHost, ConfirmHost } from '@/lib/notify'
 
 type InvoiceProject = { id: string; title: string; address: string; amount: number | null; email: string }
 type Invoice = {
@@ -86,13 +87,21 @@ export default function InvoicesPage() {
   }
 
   async function removeLineItem(invoiceId: string, projectId: string) {
-    await supabase.from('projects1').update({ invoice_id: null }).eq('id', projectId)
+    const invoice = invoices.find(inv => inv.id === invoiceId)
+    if (invoice && invoice.status !== 'draft') {
+      if (!(await confirmDialog('This invoice was already marked as sent. Removing this line won\'t un-send anything already sent to the client, but it will free this project up to be invoiced separately (e.g. if it was swept onto the wrong invoice). Continue?'))) return
+    }
+    // Restore the project to active/visible so it can actually be re-invoiced —
+    // marking an invoice sent archives every project on it, so without this the
+    // project would just vanish from the normal views after being unlinked.
+    await supabase.from('projects1').update({ invoice_id: null, archived: false }).eq('id', projectId)
     const items = (lineItems[invoiceId] || []).filter(i => i.id !== projectId)
     setLineItems(p => ({ ...p, [invoiceId]: items }))
     const totals = recompute(items)
     await supabase.from('invoices1').update(totals).eq('id', invoiceId)
     setInvoices(p => p.map(inv => inv.id === invoiceId ? { ...inv, ...totals } : inv))
     syncXero(invoiceId)
+    notify('Project removed from invoice and restored to active', 'success')
   }
 
   async function markSent(invoice: Invoice) {
@@ -147,6 +156,8 @@ export default function InvoicesPage() {
 
   return (
     <main style={{ background: '#0E1014', minHeight: '100vh', fontFamily: 'Inter, sans-serif', color: '#C8C2BB', fontSize: 13, display: 'flex' }}>
+      <ToastHost />
+      <ConfirmHost />
       <StudioSidebar active="invoices" />
       <div style={{ flex: 1, overflowX: 'hidden' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 28px', height: 57, borderBottom: '0.5px solid rgba(200,194,187,0.09)', background: '#14181F', position: 'sticky', top: 0, zIndex: 20 }}>
@@ -177,7 +188,7 @@ export default function InvoicesPage() {
                           {items.map(item => (
                             <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', background: 'rgba(200,194,187,0.03)', borderRadius: 4 }}>
                               <span style={{ flex: 1, fontSize: 12, color: '#C8C2BB' }}>{item.title || item.address || 'Untitled project'}</span>
-                              {invoice.status === 'draft' ? (
+                              {invoice.status !== 'paid' ? (
                                 <>
                                   <input type="number" min="0" step="0.01" value={item.amount ?? ''} onChange={e => setLineAmountLocal(invoice.id, item.id, e.target.value === '' ? 0 : parseFloat(e.target.value))} onBlur={e => commitLineAmount(invoice.id, item.id, e.target.value === '' ? 0 : parseFloat(e.target.value))} style={{ width: 90, background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 3, padding: '5px 8px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', textAlign: 'right' }} />
                                   <button onClick={() => removeLineItem(invoice.id, item.id)} style={{ fontSize: 10, color: 'rgba(210,90,90,0.7)', background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>✕</button>
