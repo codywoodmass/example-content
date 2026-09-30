@@ -68,7 +68,7 @@ function StatementSection() {
   })
 
   return (
-    <div ref={ref} style={{ padding: '72px 48px', borderTop: '0.5px solid rgba(200,194,187,0.1)', background: '#0E1014' }}>
+    <div ref={ref} style={{ padding: 'clamp(44px, 10vw, 72px) clamp(20px, 5vw, 48px)', borderTop: '0.5px solid rgba(200,194,187,0.1)', background: '#0E1014' }}>
       <div style={{ maxWidth: 1100 }}>
         <h2 style={lineStyle(0)}>
           {visible && <ScrambleText text="CONTENT THAT LOOKS GOOD GETS LIKES." delay={0} />}
@@ -86,10 +86,10 @@ function StatementSection() {
 }
 
 export default function Home() {
-
+  const [navOpen, setNavOpen] = React.useState(false)
 
   return (
-    <main style={{ background: '#0E1014', minHeight: '100vh', color: '#C8C2BB', fontFamily: "'Inter', sans-serif" }}>
+    <main style={{ background: '#0E1014', minHeight: '100vh', color: '#C8C2BB', fontFamily: "'Inter', sans-serif", overflowX: 'hidden' }}>
 
       <link rel="preconnect" href="https://fonts.googleapis.com" />
       <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500&display=swap" rel="stylesheet" />
@@ -102,21 +102,49 @@ export default function Home() {
         .nav-cta:hover { background: rgba(200,194,187,0.12) !important; color: #fff !important; }
         .nav-logo { transition: opacity 0.2s ease; cursor: pointer; }
         .nav-logo:hover { opacity: 0.75; }
+        .ec-nav { padding: 18px clamp(20px, 5vw, 48px); }
+        .ec-nav-links { display: flex; gap: 36px; }
+        .ec-nav-cta { display: block; }
+        .ec-nav-burger { display: none; }
+        .ec-mobile-menu { display: none; }
+        @media (max-width: 900px) {
+          .ec-nav-links { display: none; }
+          .ec-nav-cta { display: none; }
+          .ec-nav-burger { display: flex !important; }
+          .ec-mobile-menu.open { display: flex !important; }
+        }
+        .ec-grid-2 { display: grid; grid-template-columns: 1fr 1fr; }
+        .ec-row-stack { display: flex; }
+        @media (max-width: 860px) {
+          .ec-grid-2 { grid-template-columns: 1fr !important; }
+          .ec-row-stack { flex-direction: column; align-items: flex-start !important; gap: 16px; }
+        }
       `}</style>
-      <nav style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 48px', borderBottom: '0.5px solid rgba(200,194,187,0.1)', position: 'fixed', top: 0, left: 0, right: 0, zIndex: 50, background: 'rgba(14,16,20,0.75)', backdropFilter: 'blur(12px)' }}>
+      <nav className="ec-nav" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '0.5px solid rgba(200,194,187,0.1)', position: 'fixed', top: 0, left: 0, right: 0, zIndex: 50, background: 'rgba(14,16,20,0.75)', backdropFilter: 'blur(12px)' }}>
         <Link href="/" className="nav-logo">
           <img src="/images/Pale_logo_EX.png" alt="Example Content" style={{ height: 40, objectFit: 'contain', display: 'block' }} />
         </Link>
-        <div style={{ display: 'flex', gap: 36 }}>
+        <div className="ec-nav-links">
           {['Work', 'Property', 'Services', 'About'].map(item => (
             <a key={item} href={`#${item.toLowerCase()}`} className="nav-link" style={{ fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.6)', textDecoration: 'none' }}>{item}</a>
           ))}
         </div>
-        <a href="/contact" className="nav-cta" style={{ fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', border: '0.5px solid rgba(200,194,187,0.4)', color: '#C8C2BB', padding: '10px 22px', borderRadius: 2, textDecoration: 'none' }}>Get in touch</a>
+        <a href="/contact" className="nav-cta ec-nav-cta" style={{ fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', border: '0.5px solid rgba(200,194,187,0.4)', color: '#C8C2BB', padding: '10px 22px', borderRadius: 2, textDecoration: 'none' }}>Get in touch</a>
+        <button className="ec-nav-burger" onClick={() => setNavOpen(o => !o)} aria-label="Menu" style={{ display: 'none', background: 'transparent', border: 'none', width: 32, height: 24, flexDirection: 'column', justifyContent: 'space-between', cursor: 'pointer', padding: 0 }}>
+          <span style={{ height: 1.5, background: '#C8C2BB', width: '100%', transform: navOpen ? 'translateY(9px) rotate(45deg)' : 'none', transition: 'transform 0.2s' }} />
+          <span style={{ height: 1.5, background: '#C8C2BB', width: '100%', opacity: navOpen ? 0 : 1, transition: 'opacity 0.2s' }} />
+          <span style={{ height: 1.5, background: '#C8C2BB', width: '100%', transform: navOpen ? 'translateY(-9px) rotate(-45deg)' : 'none', transition: 'transform 0.2s' }} />
+        </button>
       </nav>
+      <div className={`ec-mobile-menu ${navOpen ? 'open' : ''}`} style={{ display: 'none', flexDirection: 'column', position: 'fixed', top: 60, left: 0, right: 0, zIndex: 49, background: '#0E1014', borderBottom: '0.5px solid rgba(200,194,187,0.1)', padding: '20px clamp(20px, 5vw, 48px) 28px' }}>
+        {['Work', 'Property', 'Services', 'About'].map(item => (
+          <a key={item} href={`#${item.toLowerCase()}`} onClick={() => setNavOpen(false)} style={{ fontSize: 14, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.7)', textDecoration: 'none', padding: '12px 0', borderBottom: '0.5px solid rgba(200,194,187,0.06)' }}>{item}</a>
+        ))}
+        <a href="/contact" onClick={() => setNavOpen(false)} style={{ marginTop: 16, textAlign: 'center', fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', border: '0.5px solid rgba(200,194,187,0.4)', color: '#C8C2BB', padding: '12px 22px', borderRadius: 2, textDecoration: 'none' }}>Get in touch</a>
+      </div>
 
       {/* HERO */}
-      <div style={{ position: 'relative', height: '100vh', minHeight: 600, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', padding: '0 48px 60px', overflow: 'hidden' }}>
+      <div style={{ position: 'relative', height: '100vh', minHeight: 600, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', padding: '0 clamp(20px, 5vw, 48px) clamp(36px, 8vh, 60px)', overflow: 'hidden' }}>
         <div style={{ position: 'absolute', inset: 0, zIndex: 0, overflow: 'hidden', pointerEvents: 'none', userSelect: 'none' }}>
           <iframe
             src="https://player.vimeo.com/video/1216748448?background=1&autoplay=1&loop=1&muted=1&title=0&byline=0&portrait=0&controls=0&badge=0&autopause=0"
@@ -128,16 +156,16 @@ export default function Home() {
         <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(10,12,16,0.92) 0%, rgba(10,12,16,0.2) 40%, rgba(10,12,16,0.5) 100%)', zIndex: 1 }} />
         <div style={{ position: 'relative', zIndex: 2 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 18 }}>
-            <div style={{ width: 32, height: 1, background: '#C8C2BB', opacity: 0.5 }} />
+            <div style={{ width: 32, height: 1, background: '#C8C2BB', opacity: 0.5, flexShrink: 0 }} />
             <span style={{ fontSize: 11, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.6)' }}>Property & architectural film specialists</span>
           </div>
-          <h1 style={{ fontSize: 80, fontWeight: 400, lineHeight: 1.0, letterSpacing: '0.02em', color: '#fff', maxWidth: 800, margin: 0, fontFamily: "'Bebas Neue', sans-serif", textTransform: 'uppercase' }}>
+          <h1 style={{ fontSize: 'clamp(40px, 9vw, 80px)', fontWeight: 400, lineHeight: 1.05, letterSpacing: '0.02em', color: '#fff', maxWidth: 800, margin: 0, fontFamily: "'Bebas Neue', sans-serif", textTransform: 'uppercase' }}>
             We create content that <span style={{ color: '#C8C2BB' }}>moves</span> people.
           </h1>
           <p style={{ fontSize: 15, color: 'rgba(200,194,187,0.5)', marginTop: 20, maxWidth: 460, lineHeight: 1.65 }}>
             High-end video production and photography for property developers, real estate agents and architects across New Zealand.
           </p>
-          <div style={{ display: 'flex', gap: 20, marginTop: 38, alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: 20, marginTop: 38, alignItems: 'center', flexWrap: 'wrap' }}>
             <a href="/work" style={{ background: '#C8C2BB', color: '#111', fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', padding: '14px 28px', borderRadius: 2, textDecoration: 'none', fontWeight: 500 }}>View our work</a>
             <a href="#reel" style={{ color: 'rgba(200,194,187,0.65)', fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', textDecoration: 'none' }}>Watch showreel →</a>
           </div>
@@ -151,11 +179,11 @@ export default function Home() {
       <StatementSection />
 
       {/* WORK SECTION */}
-      <div style={{ padding: '80px 0 0', borderTop: '0.5px solid rgba(200,194,187,0.1)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', padding: '0 48px', paddingBottom: 40, borderBottom: '0.5px solid rgba(200,194,187,0.1)', marginBottom: 48 }}>
+      <div style={{ padding: 'clamp(48px, 10vw, 80px) 0 0', borderTop: '0.5px solid rgba(200,194,187,0.1)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 16, padding: '0 clamp(20px, 5vw, 48px)', paddingBottom: 40, borderBottom: '0.5px solid rgba(200,194,187,0.1)', marginBottom: 48 }}>
           <div>
             <p style={{ fontSize: 11, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)', marginBottom: 10 }}>Selected work</p>
-            <h2 style={{ fontSize: 52, fontWeight: 400, color: '#fff', letterSpacing: '0.02em', margin: 0, fontFamily: "'Bebas Neue', sans-serif", textTransform: 'uppercase' }}>Property. Architecture. <span style={{ color: '#C8C2BB' }}>Commercial.</span></h2>
+            <h2 style={{ fontSize: 'clamp(32px, 6vw, 52px)', fontWeight: 400, color: '#fff', letterSpacing: '0.02em', margin: 0, fontFamily: "'Bebas Neue', sans-serif", textTransform: 'uppercase' }}>Property. Architecture. <span style={{ color: '#C8C2BB' }}>Commercial.</span></h2>
           </div>
 
         </div>
@@ -164,7 +192,7 @@ export default function Home() {
         <style>{`
           .carousel-wrap { overflow: hidden; padding-bottom: 48px; cursor: none; position: relative; }
           .carousel-track { display: flex; gap: 20px; width: max-content; transition: transform 0.1s linear; }
-          .carousel-item { flex-shrink: 0; width: 560px; }
+          .carousel-item { flex-shrink: 0; width: min(560px, 82vw); }
           .carousel-item iframe { pointer-events: none; }
           .carousel-item:hover iframe { pointer-events: auto; }
           .carousel-cursor { position: fixed; top: 0; left: 0; pointer-events: none; z-index: 9999; width: 64px; height: 64px; border-radius: 50%; background: rgba(200,194,187,0.15); border: 1px solid rgba(200,194,187,0.4); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; font-size: 16px; opacity: 0; transition: opacity 0.2s ease; transform: translate(-50%, -50%); }
@@ -207,7 +235,7 @@ export default function Home() {
           style={{ overflowX: 'scroll', scrollbarWidth: 'none' as const }}
         >
           <div id="carousel-cursor" className="carousel-cursor">⟵ ⟶</div>
-          <div id="carousel-track" className="carousel-track" style={{ padding: '0 48px' }}>
+          <div id="carousel-track" className="carousel-track" style={{ padding: '0 clamp(20px, 5vw, 48px)' }}>
             {[
               { id: '1216750682', title: 'What We Do', client: 'Example Content · Showreel', type: 'Showreel', thumb: 'https://i.vimeocdn.com/video/2188265524-4fb9e0ca30cc6d8acb3df1a1c4259eee688d7929c486e1f353c4f0858475be60-d_1280x720?region=us' },
               { id: '1182465760', title: '23 Sullivan Road', client: 'Luxury Residential · Hawkes Bay', type: 'Property Film', thumb: 'https://i.vimeocdn.com/video/2145085364-8d9dea98f801df737866495fc8d2a5478fa035bacadf0b509fe24095202d4f0f-d_1280x720?region=us' },
@@ -234,8 +262,8 @@ export default function Home() {
       </div>
 
       {/* TEAM SECTION */}
-      <div style={{ padding: '100px 48px', borderTop: '0.5px solid rgba(200,194,187,0.1)', background: '#0E1014' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 80, alignItems: 'center', maxWidth: 1200, margin: '0 auto' }}>
+      <div style={{ padding: 'clamp(56px, 12vw, 100px) clamp(20px, 5vw, 48px)', borderTop: '0.5px solid rgba(200,194,187,0.1)', background: '#0E1014' }}>
+        <div className="ec-grid-2" style={{ gap: 'clamp(40px, 6vw, 80px)', alignItems: 'center', maxWidth: 1200, margin: '0 auto' }}>
           {/* LEFT — IMAGE */}
           <div style={{ position: 'relative' }}>
             <div style={{ position: 'absolute', top: -20, left: -20, width: '100%', height: '100%', border: '0.5px solid rgba(200,194,187,0.1)', borderRadius: 4, zIndex: 0 }} />
@@ -296,12 +324,12 @@ export default function Home() {
       </div>
 
       {/* SPECIALTY */}
-      <div style={{ padding: '80px 48px', borderTop: '0.5px solid rgba(200,194,187,0.1)' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 64, alignItems: 'center' }}>
+      <div style={{ padding: 'clamp(48px, 10vw, 80px) clamp(20px, 5vw, 48px)', borderTop: '0.5px solid rgba(200,194,187,0.1)' }}>
+        <div className="ec-grid-2" style={{ gap: 'clamp(32px, 6vw, 64px)', alignItems: 'center' }}>
           <div style={{ aspectRatio: '4/3', background: 'linear-gradient(145deg,#1e2d3a,#0d1620)', borderRadius: 4 }} />
           <div>
             <p style={{ fontSize: 11, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)', marginBottom: 16 }}>Our specialty</p>
-            <h2 style={{ fontSize: 38, fontWeight: 500, lineHeight: 1.08, color: '#fff', letterSpacing: '-0.02em', marginBottom: 20 }}>Cinematic property film for <span style={{ color: '#C8C2BB' }}>premium</span> listings.</h2>
+            <h2 style={{ fontSize: 'clamp(28px, 5vw, 38px)', fontWeight: 500, lineHeight: 1.08, color: '#fff', letterSpacing: '-0.02em', marginBottom: 20 }}>Cinematic property film for <span style={{ color: '#C8C2BB' }}>premium</span> listings.</h2>
             <p style={{ fontSize: 14, lineHeight: 1.75, color: 'rgba(200,194,187,0.5)', marginBottom: 32 }}>We work closely with real estate agents, developers and architects to produce content that sells — not just shows. 80% of our work is property, so we understand what buyers and investors respond to.</p>
             {['Luxury residential & lifestyle properties','Multi-unit development pre-sale campaigns','Architectural documentation & portfolio shoots','Aerial cinematography & drone coverage','Interior & lifestyle photography'].map(item => (
               <div key={item} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 0', borderBottom: '0.5px solid rgba(200,194,187,0.08)', fontSize: 13, color: 'rgba(200,194,187,0.65)' }}>
@@ -314,17 +342,24 @@ export default function Home() {
       </div>
 
       {/* SERVICES */}
-      <div style={{ padding: '0 48px 80px', borderTop: '0.5px solid rgba(200,194,187,0.1)' }}>
-        <div style={{ paddingTop: 60, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 44 }}>
+      <style>{`
+        .ec-services-item { border-left: 0.5px solid rgba(200,194,187,0.08) !important; padding-left: 40px !important; }
+        .ec-services-item:nth-child(odd) { border-left: none !important; padding-left: 0 !important; }
+        @media (max-width: 860px) {
+          .ec-services-item { border-left: none !important; padding-left: 0 !important; }
+        }
+      `}</style>
+      <div style={{ padding: '0 clamp(20px, 5vw, 48px) clamp(48px, 10vw, 80px)', borderTop: '0.5px solid rgba(200,194,187,0.1)' }}>
+        <div className="ec-row-stack" style={{ paddingTop: 60, justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 44 }}>
           <div>
             <p style={{ fontSize: 11, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)', marginBottom: 10 }}>What we offer</p>
-            <h2 style={{ fontSize: 36, fontWeight: 500, color: '#fff', letterSpacing: '-0.02em', margin: 0 }}>Full-service production, <span style={{ color: '#C8C2BB' }}>start to finish.</span></h2>
+            <h2 style={{ fontSize: 'clamp(26px, 5vw, 36px)', fontWeight: 500, color: '#fff', letterSpacing: '-0.02em', margin: 0 }}>Full-service production, <span style={{ color: '#C8C2BB' }}>start to finish.</span></h2>
           </div>
-          <a href="/services" style={{ background: '#C8C2BB', color: '#111', fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', padding: '14px 28px', borderRadius: 2, textDecoration: 'none', fontWeight: 500 }}>All services</a>
+          <a href="/services" style={{ background: '#C8C2BB', color: '#111', fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', padding: '14px 28px', borderRadius: 2, textDecoration: 'none', fontWeight: 500, whiteSpace: 'nowrap' }}>All services</a>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0 }}>
-          {[['01','Property & Real Estate Film'],['02','Architectural Photography'],['03','Development Campaigns'],['04','Brand & Commercial Film'],['05','Aerial & Drone Cinematography'],['06','Event Coverage']].map(([num, title], i) => (
-            <div key={num} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '24px 40px 24px 0', borderBottom: '0.5px solid rgba(200,194,187,0.08)', borderLeft: i % 2 === 1 ? '0.5px solid rgba(200,194,187,0.08)' : 'none', paddingLeft: i % 2 === 1 ? 40 : 0, cursor: 'pointer' }}>
+        <div className="ec-grid-2" style={{ gap: 0 }}>
+          {[['01','Property & Real Estate Film'],['02','Architectural Photography'],['03','Development Campaigns'],['04','Brand & Commercial Film'],['05','Aerial & Drone Cinematography'],['06','Event Coverage']].map(([num, title]) => (
+            <div key={num} className="ec-services-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '24px 24px 24px 0', borderBottom: '0.5px solid rgba(200,194,187,0.08)', cursor: 'pointer' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                 <span style={{ fontSize: 11, color: 'rgba(200,194,187,0.25)', letterSpacing: '0.1em' }}>{num}</span>
                 <span style={{ fontSize: 18, fontWeight: 500, color: 'rgba(255,255,255,0.8)' }}>{title}</span>
@@ -336,17 +371,17 @@ export default function Home() {
       </div>
 
       {/* CTA */}
-      <div style={{ padding: '96px 48px', textAlign: 'center', borderTop: '0.5px solid rgba(200,194,187,0.1)' }}>
-        <h2 style={{ fontSize: 50, fontWeight: 500, color: '#fff', letterSpacing: '-0.02em', marginBottom: 20 }}>Got a property to <span style={{ color: '#C8C2BB' }}>showcase?</span></h2>
+      <div style={{ padding: 'clamp(56px, 12vw, 96px) clamp(20px, 5vw, 48px)', textAlign: 'center', borderTop: '0.5px solid rgba(200,194,187,0.1)' }}>
+        <h2 style={{ fontSize: 'clamp(30px, 7vw, 50px)', fontWeight: 500, color: '#fff', letterSpacing: '-0.02em', marginBottom: 20 }}>Got a property to <span style={{ color: '#C8C2BB' }}>showcase?</span></h2>
         <p style={{ fontSize: 15, color: 'rgba(200,194,187,0.4)', marginBottom: 38 }}>Tell us about your listing or project and we'll be in touch within 24 hours.</p>
-        <div style={{ display: 'flex', gap: 16, justifyContent: 'center', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 16, justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap' }}>
           <a href="/contact" style={{ background: '#C8C2BB', color: '#111', fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', padding: '14px 28px', borderRadius: 2, textDecoration: 'none', fontWeight: 500 }}>Start a project</a>
           <a href="/portal/client" style={{ color: 'rgba(200,194,187,0.55)', fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', textDecoration: 'none' }}>Client portal →</a>
         </div>
       </div>
 
       {/* PORTAL STRIP */}
-      <div style={{ background: 'rgba(61,71,86,0.2)', borderTop: '0.5px solid rgba(200,194,187,0.1)', borderBottom: '0.5px solid rgba(200,194,187,0.1)', padding: '20px 48px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div className="ec-row-stack" style={{ background: 'rgba(61,71,86,0.2)', borderTop: '0.5px solid rgba(200,194,187,0.1)', borderBottom: '0.5px solid rgba(200,194,187,0.1)', padding: 'clamp(16px, 4vw, 20px) clamp(20px, 5vw, 48px)', justifyContent: 'space-between', alignItems: 'center' }}>
         <p style={{ fontSize: 12, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.45)' }}><strong style={{ color: '#C8C2BB' }}>Client Portal</strong> — Access your projects, deliverables & shoot bookings</p>
         <div style={{ display: 'flex', gap: 10 }}>
           <a href="/portal/client" style={{ fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', padding: '9px 20px', borderRadius: 2, border: '0.5px solid rgba(200,194,187,0.25)', color: 'rgba(200,194,187,0.55)', textDecoration: 'none' }}>Client login</a>
@@ -355,9 +390,9 @@ export default function Home() {
       </div>
 
       {/* FOOTER */}
-      <footer style={{ padding: '32px 48px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <footer className="ec-row-stack" style={{ padding: 'clamp(24px, 6vw, 32px) clamp(20px, 5vw, 48px)', justifyContent: 'space-between', alignItems: 'center' }}>
         <p style={{ fontSize: 11, color: 'rgba(200,194,187,0.28)', letterSpacing: '0.08em' }}>© 2026 Example Content Ltd. Hawke's Bay, New Zealand.</p>
-        <div style={{ display: 'flex', gap: 28 }}>
+        <div style={{ display: 'flex', gap: 28, flexWrap: 'wrap' }}>
           {['Instagram','Vimeo','LinkedIn','Privacy'].map(link => (
             <a key={link} href="#" style={{ fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', textDecoration: 'none' }}>{link}</a>
           ))}
