@@ -430,15 +430,19 @@ function ProjectsPageInner() {
       progress: 100,
     }).eq('id', project.id)
 
-    // Send notification to client
-    await supabase.from('notifications').insert([{
-      user_email: project.email,
-      type: 'content_delivered',
-      title: 'Your content is ready',
-      message: 'Your content for ' + (project.title || project.address || 'your project') + ' has been delivered. Click to view your files in Google Drive.',
-      project_id: project.id,
-      read: false,
-    }])
+    // Notify the client — in-portal notification + email, both handled server-side
+    try {
+      await fetch('/api/notify-content-delivered', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectId: project.id,
+          projectTitle: project.title || project.address,
+          clientName: project.client,
+          clientEmail: project.email,
+        }),
+      })
+    } catch (e) { console.error('notify-content-delivered error:', e) }
 
     // A redelivery is the studio's own signal that requested changes have been
     // made — close out any pending revision requests for this project rather
@@ -1032,6 +1036,19 @@ function ProjectsPageInner() {
                   ) : null}
                 </div>
               </div>
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>Google Drive</div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <input value={modalProject.drive_url || ''} onChange={e => setModalProject(p => { const u = p ? { ...p, drive_url: e.target.value } : p; if (u) triggerAutoSave(u); return u })} placeholder="https://drive.google.com/drive/folders/..." style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '8px 10px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', flex: 1 }} />
+                  {modalProject.drive_url ? (
+                    <a href={modalProject.drive_url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 12px', borderRadius: 3, border: '0.5px solid rgba(100,150,220,0.3)', color: 'rgba(100,150,220,0.9)', background: 'rgba(100,150,220,0.08)', textDecoration: 'none', whiteSpace: 'nowrap' }}>Open ↗</a>
+                  ) : (
+                    <button disabled={creatingFolder} onClick={() => createProjectFolder(modalProject)} style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 12px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.6)', background: 'transparent', cursor: creatingFolder ? 'not-allowed' : 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                      {creatingFolder ? 'Creating...' : '+ Create folder'}
+                    </button>
+                  )}
+                </div>
+              </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, marginBottom: 20 }}>
                 {[{ label: 'Shoot date', key: 'shoot_date' as const }, { label: 'Draft due', key: 'draft_due' as const }, { label: 'Delivery date', key: 'delivery_due' as const }].map(({ label, key }) => (
                   <div key={key}>
@@ -1110,19 +1127,6 @@ function ProjectsPageInner() {
               )}
               {modalTab === 'notes' && (
               <>
-              <div style={{ marginBottom: 20 }}>
-                <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>Google Drive</div>
-                {modalEditing ? (
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <input value={modalProject.drive_url || ''} onChange={e => setModalProject(p => { const u = p ? { ...p, drive_url: e.target.value } : p; if (u) triggerAutoSave(u); return u })} placeholder="https://drive.google.com/drive/folders/..." style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '8px 10px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', flex: 1 }} />
-                    {!modalProject.drive_url && (
-                      <button disabled={creatingFolder} onClick={() => createProjectFolder(modalProject)} style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 12px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.6)', background: 'transparent', cursor: creatingFolder ? 'not-allowed' : 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
-                        {creatingFolder ? 'Creating...' : '+ Create folder'}
-                      </button>
-                    )}
-                  </div>
-                ) : modalProject.drive_url ? <a href={modalProject.drive_url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13, color: 'rgba(100,150,220,0.8)', textDecoration: 'none' }}>📁 Open project folder →</a> : <div style={{ fontSize: 13, color: 'rgba(200,194,187,0.25)' }}>No folder linked</div>}
-              </div>
               {projectFeedback.length > 0 && (
                 <div style={{ marginBottom: 20 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
