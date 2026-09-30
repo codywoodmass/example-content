@@ -85,8 +85,39 @@ function StatementSection() {
   )
 }
 
+// Flip to false when the site is ready to go live — this only gates the
+// public marketing homepage, not the portal or auth pages.
+const UNDER_CONSTRUCTION = true
+
+function UnderConstructionScreen() {
+  return (
+    <main style={{ background: '#0E1014', minHeight: '100vh', color: '#C8C2BB', fontFamily: "'Inter', sans-serif", display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '0 24px' }}>
+      <link rel="preconnect" href="https://fonts.googleapis.com" />
+      <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500&display=swap" rel="stylesheet" />
+      <img src="/images/Pale_logo_EX.png" alt="Example Content" style={{ height: 48, objectFit: 'contain', display: 'block', margin: '0 auto 40px' }} />
+      <p style={{ fontSize: 11, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.45)', marginBottom: 18 }}>Something new is coming</p>
+      <h1 style={{ fontSize: 'clamp(32px, 6vw, 56px)', fontWeight: 400, color: '#fff', letterSpacing: '0.02em', margin: '0 0 20px', fontFamily: "'Bebas Neue', sans-serif", textTransform: 'uppercase' }}>
+        We're building our new site.
+      </h1>
+      <p style={{ fontSize: 15, color: 'rgba(200,194,187,0.55)', maxWidth: 440, lineHeight: 1.7, margin: '0 0 36px' }}>
+        Example Content is currently rebuilding our website. In the meantime, get in touch with us directly, or head to your portal below.
+      </p>
+      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center', marginBottom: 44 }}>
+        <a href="mailto:cody@examplecontent.co.nz" style={{ background: '#C8C2BB', color: '#111', fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', padding: '14px 28px', borderRadius: 2, textDecoration: 'none', fontWeight: 500 }}>Email us</a>
+        <a href="/portal/client" style={{ color: 'rgba(200,194,187,0.6)', fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', textDecoration: 'none' }}>Client portal →</a>
+        <a href="/portal/studio" style={{ color: 'rgba(200,194,187,0.6)', fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', textDecoration: 'none' }}>Studio login →</a>
+      </div>
+      <p style={{ fontSize: 11, color: 'rgba(200,194,187,0.28)', letterSpacing: '0.08em' }}>© 2026 Example Content Ltd. Hawke's Bay, New Zealand.</p>
+    </main>
+  )
+}
+
 export default function Home() {
   const [navOpen, setNavOpen] = React.useState(false)
+
+  if (UNDER_CONSTRUCTION) {
+    return <UnderConstructionScreen />
+  }
 
   return (
     <main style={{ background: '#0E1014', minHeight: '100vh', color: '#C8C2BB', fontFamily: "'Inter', sans-serif", overflowX: 'hidden' }}>
