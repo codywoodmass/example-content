@@ -114,8 +114,8 @@ function ProjectsPageInner() {
   const [dragId, setDragId] = useState<string | null>(null)
   const searchParams = useSearchParams()
   const [modalProject, setModalProject] = useState<Project | null>(null)
-  const [modalEditing, setModalEditing] = useState(true)
-  const [modalTab, setModalTab] = useState<'overview' | 'dates' | 'notes'>('overview')
+  const [modalEditing, setModalEditing] = useState(false)
+  const [modalTab, setModalTab] = useState<'overview' | 'notes'>('overview')
   useEffect(() => { setModalTab('overview') }, [modalProject?.id])
   const [modalSaving, setModalSaving] = useState(false)
   const [modalSaved, setModalSaved] = useState(false)
@@ -308,7 +308,7 @@ function ProjectsPageInner() {
       const openId = searchParams.get('open')
       if (openId) {
         const proj = data.find((p: Project) => p.id === openId)
-        if (proj) { setModalProject(proj); setModalEditing(true) }
+        if (proj) { setModalProject(proj); setModalEditing(false) }
       }
     }
     setLoading(false)
@@ -636,7 +636,7 @@ function ProjectsPageInner() {
           </thead>
           <tbody>
             {list.map((project, i) => (
-              <tr key={project.id} onClick={() => { setModalProject(project); setModalEditing(true) }} style={{ cursor: 'pointer', background: i % 2 === 0 ? 'transparent' : 'rgba(200,194,187,0.02)' }}>
+              <tr key={project.id} onClick={() => { setModalProject(project); setModalEditing(false) }} style={{ cursor: 'pointer', background: i % 2 === 0 ? 'transparent' : 'rgba(200,194,187,0.02)' }}>
                 <td style={{ padding: '12px 16px', borderBottom: '0.5px solid rgba(200,194,187,0.05)' }}>
                   <div style={{ fontSize: 13, fontWeight: 500, color: '#C8C2BB' }}>{project.title}</div>
                   {project.from_booking && <span style={{ fontSize: 9, color: 'rgba(100,150,220,0.7)' }}>From booking</span>}
@@ -694,7 +694,7 @@ function ProjectsPageInner() {
         if (targetStage) moveProject(project.id, targetStage)
       } else {
         setModalProject(project)
-        setModalEditing(true)
+        setModalEditing(false)
       }
     }
     window.addEventListener('mousemove', onMove)
@@ -831,7 +831,7 @@ function ProjectsPageInner() {
                       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                         <tbody>
                           {stageProjects.map((project, i) => (
-                            <tr key={project.id} onClick={() => { setModalProject(project); setModalEditing(true) }} style={{ cursor: 'pointer', background: i % 2 === 0 ? 'transparent' : 'rgba(200,194,187,0.02)' }}>
+                            <tr key={project.id} onClick={() => { setModalProject(project); setModalEditing(false) }} style={{ cursor: 'pointer', background: i % 2 === 0 ? 'transparent' : 'rgba(200,194,187,0.02)' }}>
                               <td style={{ padding: '11px 16px', borderBottom: '0.5px solid rgba(200,194,187,0.05)', fontSize: 13, fontWeight: 500, color: '#C8C2BB' }}>{project.title}</td>
                               <td style={{ padding: '11px 16px', borderBottom: '0.5px solid rgba(200,194,187,0.05)', fontSize: 12, color: 'rgba(200,194,187,0.5)' }}>{project.client}</td>
                               <td style={{ padding: '11px 16px', borderBottom: '0.5px solid rgba(200,194,187,0.05)', fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>{formatDate(project.shoot_date)}</td>
@@ -936,6 +936,7 @@ function ProjectsPageInner() {
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 {modalSaved && <span style={{ fontSize: 11, color: 'rgba(100,200,130,0.8)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>✓ Saved</span>}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <button onClick={() => setModalEditing(e => !e)} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '6px 12px', borderRadius: 3, border: `0.5px solid ${modalEditing ? 'rgba(100,150,220,0.35)' : 'rgba(200,194,187,0.2)'}`, color: modalEditing ? 'rgba(100,150,220,0.9)' : 'rgba(200,194,187,0.4)', background: modalEditing ? 'rgba(100,150,220,0.08)' : 'rgba(200,194,187,0.06)', cursor: 'pointer', fontFamily: 'inherit' }}>{modalEditing ? 'Done editing' : 'Edit project'}</button>
                   <button onClick={() => { setShowBriefDoc(true); setBriefDocContent(modalProject.studio_brief && modalProject.studio_brief.startsWith('<') ? modalProject.studio_brief : briefTemplate(modalProject.title)) }} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '6px 12px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.4)', background: 'rgba(200,194,187,0.06)', cursor: 'pointer', fontFamily: 'inherit' }}>Brief</button>
                   <button onClick={() => deleteProject(modalProject)} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '6px 12px', borderRadius: 3, border: '0.5px solid rgba(210,90,90,0.3)', color: 'rgba(210,90,90,0.7)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Delete</button>
                   <button onClick={async () => { await saveModalProject(); setModalProject(null); setModalEditing(false) }} style={{ fontSize: 20, color: 'rgba(200,194,187,0.4)', background: 'transparent', border: 'none', cursor: 'pointer', lineHeight: 1, padding: '0 4px' }}>×</button>
@@ -943,21 +944,8 @@ function ProjectsPageInner() {
               </div>
             </div>
             <div style={{ padding: 24 }}>
-              {modalProject.attachment_urls && modalProject.attachment_urls.length > 0 && (
-                <div style={{ marginBottom: 20, background: 'rgba(100,150,220,0.06)', border: '0.5px solid rgba(100,150,220,0.2)', borderRadius: 6, padding: '14px 16px' }}>
-                  <div style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(100,150,220,0.85)', marginBottom: 10 }}>Client attachments ({modalProject.attachment_urls.length})</div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                    {modalProject.attachment_urls.map((a, ai) => (
-                      <a key={ai} href={a.url} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#C8C2BB', textDecoration: 'none', background: 'rgba(200,194,187,0.06)', border: '0.5px solid rgba(200,194,187,0.12)', borderRadius: 4, padding: '6px 10px', maxWidth: 240 }}>
-                        <span>{attachmentIcon(a.name)}</span>
-                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.name}</span>
-                      </a>
-                    ))}
-                  </div>
-                </div>
-              )}
               <div style={{ display: 'flex', gap: 4, marginBottom: 20, borderBottom: '0.5px solid rgba(200,194,187,0.09)' }}>
-                {[{ id: 'overview', label: 'Overview' }, { id: 'dates', label: 'Dates & Deliverables' }, { id: 'notes', label: 'Notes & Files' }].map(tab => (
+                {[{ id: 'overview', label: 'Overview' }, { id: 'notes', label: 'Notes & Files' }].map(tab => (
                   <button key={tab.id} onClick={() => setModalTab(tab.id as any)} style={{ fontSize: 12, padding: '10px 14px', background: 'transparent', border: 'none', borderBottom: `2px solid ${modalTab === tab.id ? '#C8C2BB' : 'transparent'}`, color: modalTab === tab.id ? '#C8C2BB' : 'rgba(200,194,187,0.35)', cursor: 'pointer', fontFamily: 'inherit', marginBottom: -1 }}>{tab.label}</button>
                 ))}
               </div>
@@ -990,6 +978,19 @@ function ProjectsPageInner() {
                   })
                 }} style={{ width: '100%', accentColor: '#C8C2BB', cursor: 'pointer' }} />
               </div>
+              {modalProject.attachment_urls && modalProject.attachment_urls.length > 0 && (
+                <div style={{ marginBottom: 20, background: 'rgba(100,150,220,0.06)', border: '0.5px solid rgba(100,150,220,0.2)', borderRadius: 6, padding: '14px 16px' }}>
+                  <div style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(100,150,220,0.85)', marginBottom: 10 }}>Client attachments ({modalProject.attachment_urls.length})</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                    {modalProject.attachment_urls.map((a, ai) => (
+                      <a key={ai} href={a.url} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#C8C2BB', textDecoration: 'none', background: 'rgba(200,194,187,0.06)', border: '0.5px solid rgba(200,194,187,0.12)', borderRadius: 4, padding: '6px 10px', maxWidth: 240 }}>
+                        <span>{attachmentIcon(a.name)}</span>
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.name}</span>
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
                 {[
                   { label: 'Client', key: 'client' as const },
@@ -1021,26 +1022,16 @@ function ProjectsPageInner() {
                   ) : null}
                 </div>
               </div>
-              </>
-              )}
-              {modalTab === 'dates' && (
-              <>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, marginBottom: 20 }}>
                 {[{ label: 'Shoot date', key: 'shoot_date' as const }, { label: 'Draft due', key: 'draft_due' as const }, { label: 'Delivery date', key: 'delivery_due' as const }].map(({ label, key }) => (
                   <div key={key}>
                     <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>{label}</div>
-                    {modalEditing ? <input type="date" value={modalProject[key] || ''} onChange={e => setModalProject(p => { const u = p ? { ...p, [key]: e.target.value } : p; if (u) { triggerAutoSave(u); if (key === 'shoot_date') triggerCalendarSync(u) } return u })} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '8px 10px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }} /> : <div style={{ fontSize: 13, color: '#C8C2BB' }}>{modalProject[key] ? new Date(modalProject[key]).toLocaleDateString('en-NZ',{day:'numeric',month:'short',year:'numeric'}) : '—'}</div>}
+                    <input type="date" value={modalProject[key] || ''} onChange={e => setModalProject(p => { const u = p ? { ...p, [key]: e.target.value } : p; if (u) { triggerAutoSave(u); if (key === 'shoot_date') triggerCalendarSync(u) } return u })} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '8px 10px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }} />
                     {key === 'shoot_date' && (
-                      modalEditing ? (
-                        <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
-                          <input type="time" value={modalProject.shoot_window_start || ''} onChange={e => setModalProject(p => { const u = p ? { ...p, shoot_window_start: e.target.value } : p; if (u) { triggerAutoSave(u); triggerCalendarSync(u) } return u })} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '6px 8px', fontSize: 11, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }} />
-                          <input type="time" value={modalProject.shoot_window_end || ''} onChange={e => setModalProject(p => { const u = p ? { ...p, shoot_window_end: e.target.value } : p; if (u) { triggerAutoSave(u); triggerCalendarSync(u) } return u })} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '6px 8px', fontSize: 11, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }} />
-                        </div>
-                      ) : (
-                        <div style={{ fontSize: 11, color: modalProject.shoot_window_start ? 'rgba(200,194,187,0.4)' : 'rgba(200,194,187,0.25)', marginTop: 4 }}>
-                          {modalProject.shoot_window_start ? formatTime12(modalProject.shoot_window_start) + (modalProject.shoot_window_end ? ' – ' + formatTime12(modalProject.shoot_window_end) : '') : 'No time set'}
-                        </div>
-                      )
+                      <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+                        <input type="time" value={modalProject.shoot_window_start || ''} onChange={e => setModalProject(p => { const u = p ? { ...p, shoot_window_start: e.target.value } : p; if (u) { triggerAutoSave(u); triggerCalendarSync(u) } return u })} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '6px 8px', fontSize: 11, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }} />
+                        <input type="time" value={modalProject.shoot_window_end || ''} onChange={e => setModalProject(p => { const u = p ? { ...p, shoot_window_end: e.target.value } : p; if (u) { triggerAutoSave(u); triggerCalendarSync(u) } return u })} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '6px 8px', fontSize: 11, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }} />
+                      </div>
                     )}
                   </div>
                 ))}
@@ -1048,7 +1039,7 @@ function ProjectsPageInner() {
               <div style={{ marginBottom: 20 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                   <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)' }}>Additional shoot dates <span style={{ color: 'rgba(200,194,187,0.2)', textTransform: 'none', letterSpacing: 0 }}>— for shoots spanning multiple days</span></div>
-                  {modalEditing && <button onClick={addShootDate} style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '4px 10px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>+ Add date</button>}
+                  <button onClick={addShootDate} style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '4px 10px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>+ Add date</button>
                 </div>
                 {(modalProject.shoot_dates || []).length === 0 ? (
                   <div style={{ fontSize: 12, color: 'rgba(200,194,187,0.2)' }}>No additional dates — just the single shoot date above</div>
@@ -1056,28 +1047,17 @@ function ProjectsPageInner() {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {(modalProject.shoot_dates || []).map(d => (
                       <div key={d.id} style={{ display: 'grid', gridTemplateColumns: '1fr 100px 100px 1fr 24px', gap: 8, alignItems: 'center', background: 'rgba(200,194,187,0.03)', border: '0.5px solid rgba(200,194,187,0.07)', borderRadius: 5, padding: '8px 10px' }}>
-                        {modalEditing ? (
-                          <>
-                            <input type="date" value={d.date} onChange={e => updateShootDate(d.id, 'date', e.target.value)} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '6px 8px', fontSize: 11, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }} />
-                            <select value={d.start_time} onChange={e => updateShootDate(d.id, 'start_time', e.target.value)} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '6px 8px', fontSize: 11, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }}>
-                              <option value=''>Start</option>
-                              {['06:00','06:30','07:00','07:30','08:00','08:30','09:00','09:30','10:00','10:30','11:00','11:30','12:00','12:30','13:00','13:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30','18:00'].map(t => <option key={t} value={t}>{formatTime12(t)}</option>)}
-                            </select>
-                            <select value={d.end_time} onChange={e => updateShootDate(d.id, 'end_time', e.target.value)} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '6px 8px', fontSize: 11, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }}>
-                              <option value=''>End</option>
-                              {['07:00','07:30','08:00','08:30','09:00','09:30','10:00','10:30','11:00','11:30','12:00','12:30','13:00','13:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30','18:00','18:30','19:00'].map(t => <option key={t} value={t}>{formatTime12(t)}</option>)}
-                            </select>
-                            <input value={d.notes} onChange={e => updateShootDate(d.id, 'notes', e.target.value)} placeholder="Notes — e.g. exterior, level 2..." style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '6px 8px', fontSize: 11, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }} />
-                            <button onClick={() => removeShootDate(d.id)} style={{ fontSize: 13, color: 'rgba(210,90,90,0.6)', background: 'transparent', border: 'none', cursor: 'pointer' }}>✕</button>
-                          </>
-                        ) : (
-                          <>
-                            <div style={{ fontSize: 12, color: '#C8C2BB' }}>{d.date ? new Date(d.date + 'T12:00:00').toLocaleDateString('en-NZ', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }) : '—'}</div>
-                            <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', gridColumn: 'span 2' }}>{d.start_time ? formatTime12(d.start_time) + (d.end_time ? ' – ' + formatTime12(d.end_time) : '') : ''}</div>
-                            <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>{d.notes}</div>
-                            <div />
-                          </>
-                        )}
+                        <input type="date" value={d.date} onChange={e => updateShootDate(d.id, 'date', e.target.value)} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '6px 8px', fontSize: 11, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }} />
+                        <select value={d.start_time} onChange={e => updateShootDate(d.id, 'start_time', e.target.value)} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '6px 8px', fontSize: 11, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }}>
+                          <option value=''>Start</option>
+                          {['06:00','06:30','07:00','07:30','08:00','08:30','09:00','09:30','10:00','10:30','11:00','11:30','12:00','12:30','13:00','13:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30','18:00'].map(t => <option key={t} value={t}>{formatTime12(t)}</option>)}
+                        </select>
+                        <select value={d.end_time} onChange={e => updateShootDate(d.id, 'end_time', e.target.value)} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '6px 8px', fontSize: 11, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }}>
+                          <option value=''>End</option>
+                          {['07:00','07:30','08:00','08:30','09:00','09:30','10:00','10:30','11:00','11:30','12:00','12:30','13:00','13:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30','18:00','18:30','19:00'].map(t => <option key={t} value={t}>{formatTime12(t)}</option>)}
+                        </select>
+                        <input value={d.notes} onChange={e => updateShootDate(d.id, 'notes', e.target.value)} placeholder="Notes — e.g. exterior, level 2..." style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '6px 8px', fontSize: 11, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }} />
+                        <button onClick={() => removeShootDate(d.id)} style={{ fontSize: 13, color: 'rgba(210,90,90,0.6)', background: 'transparent', border: 'none', cursor: 'pointer' }}>✕</button>
                       </div>
                     ))}
                   </div>
