@@ -270,6 +270,18 @@ export default function StudioPortal() {
   const [eventLink, setEventLink] = useState("")
   const [showConnectPrompt, setShowConnectPrompt] = useState(false)
 
+  // Date/time negotiation — propose a slot to the client against a real
+  // Google Calendar week view, rather than confirming directly.
+  const [proposeModal, setProposeModal] = useState(false)
+  const [proposeBooking, setProposeBooking] = useState<any>(null)
+  const [proposeWeekOffset, setProposeWeekOffset] = useState(0)
+  const [proposeDate, setProposeDate] = useState("")
+  const [proposeStart, setProposeStart] = useState("07:30")
+  const [proposeEnd, setProposeEnd] = useState("12:00")
+  const [weekBusy, setWeekBusy] = useState<Record<string, { start: string; end: string; title?: string }[]>>({})
+  const [loadingWeekBusy, setLoadingWeekBusy] = useState(false)
+  const [proposingDate, setProposingDate] = useState(false)
+
 
   const [loading, setLoading] = useState(true)
   const [activeView, setActiveView] = useState(() => {
@@ -415,14 +427,17 @@ export default function StudioPortal() {
 
   async function loadBookings() {
     const [{ data, error }, { data: projects }, { data: crs }, { data: vf }] = await Promise.all([
-      supabase.from('bookings1').select('*').eq('status', 'pending').order('created_at', { ascending: false }),
+      supabase.from('bookings1').select('*').in('status', ['pending', 'date_proposed', 'alt_requested', 'confirmed']).order('created_at', { ascending: false }),
       supabase.from('projects1').select('*').order('created_at', { ascending: false }),
       supabase.from('change_requests').select('*').eq('status', 'pending').order('created_at', { ascending: false }),
       supabase.from('video_feedback').select('*').eq('status', 'pending').order('created_at', { ascending: false }),
     ])
     if (!error && data) {
-      setBookings(data)
-      setBookingCount(data.length)
+      // A 'confirmed' booking that already has a project is done — only surface
+      // ones still waiting on some studio action.
+      const actionable = data.filter((b: any) => b.status !== 'confirmed' || !b.project_id)
+      setBookings(actionable)
+      setBookingCount(actionable.length)
     }
     if (crs) { setChangeRequests(crs); setChangeRequestCount(crs.length) }
     if (vf) setVideoFeedbackCount(vf.length)
@@ -547,6 +562,7 @@ export default function StudioPortal() {
       general_notes: (booking.notes || '') + extraNotes,
       editor_notes: '',
       amount: booking.total_price ?? null,
+      attachment_urls: booking.attachment_urls || [],
       deliverables: [
         booking.shoot_package ? 'PACKAGE: ' + booking.shoot_package : '',
         booking.deliverables ? 'DELIVERABLES: ' + booking.deliverables : '',
@@ -584,8 +600,10 @@ export default function StudioPortal() {
   }
 
   async function confirmBooking(booking: any) {
-    await supabase.from('bookings1').update({ status: 'confirmed' }).eq('id', booking.id)
     const data = await createProjectFromBooking(booking, shootDate || booking.preferred_date || null, '')
+    // Fast path (no negotiation) — set project_id in the same write so this
+    // booking never also shows up in the "ready to create project" queue.
+    await supabase.from('bookings1').update({ status: 'confirmed', project_id: data?.id || null }).eq('id', booking.id)
     // Send notification to client
     if (data?.id) {
       await supabase.from('notifications').insert([{
@@ -623,6 +641,124 @@ export default function StudioPortal() {
   async function declineBooking(id: string) {
     await supabase.from('bookings1').update({ status: 'declined' }).eq('id', id)
     loadBookings()
+  }
+
+  function mondayOf(d: Date): Date {
+    const day = d.getDay() === 0 ? 7 : d.getDay()
+    const monday = new Date(d)
+    monday.setDate(d.getDate() - (day - 1))
+    monday.setHours(0, 0, 0, 0)
+    return monday
+  }
+
+  // Opens the week-calendar modal for proposing (or re-proposing) a date/time,
+  // defaulting to the week containing whatever date is already on the booking.
+  function openProposeModal(booking: any) {
+    const base = booking.proposed_date || booking.preferred_date || new Date().toISOString().split('T')[0]
+    const thisMonday = mondayOf(new Date())
+    const targetMonday = mondayOf(new Date(base + 'T12:00:00'))
+    const weeks = Math.round((targetMonday.getTime() - thisMonday.getTime()) / (7 * 86400000))
+    setProposeBooking(booking)
+    setProposeDate(base)
+    setProposeStart(booking.proposed_start_time || booking.preferred_time || '07:30')
+    setProposeEnd(booking.proposed_end_time || '12:00')
+    setProposeWeekOffset(Math.max(0, weeks))
+    setProposeModal(true)
+  }
+
+  async function loadWeekBusyFor(weekOffset: number) {
+    setLoadingWeekBusy(true)
+    const monday = mondayOf(new Date())
+    monday.setDate(monday.getDate() + weekOffset * 7)
+    const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6)
+    const from = monday.toISOString().split('T')[0]
+    const to = sunday.toISOString().split('T')[0]
+    try {
+      const res = await fetch(`/api/calendar?action=availability&from=${from}&to=${to}`)
+      const data = await res.json()
+      setWeekBusy(data.busyByDate || {})
+    } catch (e) {
+      console.error('Week availability error:', e)
+      setWeekBusy({})
+    }
+    setLoadingWeekBusy(false)
+  }
+
+  useEffect(() => { if (proposeModal) loadWeekBusyFor(proposeWeekOffset) }, [proposeModal, proposeWeekOffset])
+
+  // Studio proposes a date/time — the booking stays unconfirmed (no project
+  // yet) until the client accepts it.
+  async function submitProposal() {
+    if (!proposeBooking || !proposeDate) return
+    setProposingDate(true)
+    try {
+      const { error } = await supabase.from('bookings1').update({
+        status: 'date_proposed',
+        proposed_date: proposeDate,
+        proposed_start_time: proposeStart,
+        proposed_end_time: proposeEnd,
+      }).eq('id', proposeBooking.id)
+      if (error) { notify('Error proposing date: ' + error.message, 'error'); return }
+      await supabase.from('notifications').insert([{
+        user_email: proposeBooking.client_email,
+        type: 'date_proposed',
+        title: 'A shoot time has been proposed',
+        message: 'We\'ve proposed ' + new Date(proposeDate + 'T12:00:00').toLocaleDateString('en-NZ', { weekday: 'long', day: 'numeric', month: 'long' }) + ' at ' + formatTime12(proposeStart) + ' for ' + (proposeBooking.address || proposeBooking.shoot_package || 'your shoot') + '. Please confirm or request another time.',
+        project_id: null,
+        read: false,
+      }])
+      try {
+        await fetch('/api/notify-date-proposed', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            clientEmail: proposeBooking.client_email,
+            clientName: proposeBooking.client_name,
+            title: proposeBooking.address || proposeBooking.shoot_package || 'your shoot',
+            date: proposeDate,
+            startTime: proposeStart,
+            endTime: proposeEnd,
+          }),
+        })
+      } catch (e) { console.error('notify-date-proposed error:', e) }
+      setProposeModal(false)
+      notify('Proposed time sent to client', 'success')
+      loadBookings()
+    } finally {
+      setProposingDate(false)
+    }
+  }
+
+  // The client has accepted a proposed time — create the project + calendar
+  // event now (only the studio's own browser session has the Google cookies
+  // needed for either), then link the booking to the new project.
+  async function finalizeBooking(booking: any) {
+    const data = await createProjectFromBooking(booking, booking.proposed_date || booking.preferred_date || null, '')
+    if (!data) return
+    if (booking.proposed_date && booking.proposed_start_time && booking.proposed_end_time) {
+      try {
+        const res = await fetch('/api/calendar', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: `Example Content — ${booking.address || booking.shoot_package || 'Shoot'}`,
+            date: booking.proposed_date,
+            startTime: booking.proposed_start_time,
+            endTime: booking.proposed_end_time,
+            clientEmail: booking.client_email,
+            location: booking.address || '',
+            description: `Confirmed shoot for ${booking.client_name || booking.client_email}\nPackage: ${booking.shoot_package || ''}\nDeliverables: ${booking.deliverables || ''}`,
+          }),
+        })
+        const calData = await res.json()
+        if (!calData.success && calData.error !== 'Not authenticated') {
+          notify('Project created, but the calendar event failed: ' + calData.error, 'error')
+        }
+      } catch (e) { console.error('Calendar event error:', e) }
+    }
+    await supabase.from('bookings1').update({ project_id: data.id }).eq('id', booking.id)
+    loadBookings()
+    router.push('/portal/studio/projects/' + data.id)
   }
 
   async function handleSignOut() {
@@ -1158,8 +1294,29 @@ export default function StudioPortal() {
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
                         <span style={{ fontSize: 13, fontWeight: 500, color: '#C8C2BB' }}>{booking.address || booking.shoot_package || 'New booking'}</span>
                         <span style={{ fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '3px 9px', borderRadius: 2, background: 'rgba(200,194,187,0.1)', color: '#C8C2BB', border: '0.5px solid rgba(200,194,187,0.2)' }}>{booking.category}</span>
-                        <span style={{ fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '3px 9px', borderRadius: 2, background: 'rgba(210,175,80,0.15)', color: 'rgba(210,175,80,0.9)', border: '0.5px solid rgba(210,175,80,0.25)' }}>Pending</span>
+                        {(() => {
+                          const statusLabel: Record<string, string> = { pending: 'Pending', date_proposed: 'Awaiting client', alt_requested: 'Wants a different time', confirmed: 'Confirmed — create project' }
+                          const statusColor: Record<string, { bg: string; color: string; border: string }> = {
+                            pending: { bg: 'rgba(210,175,80,0.15)', color: 'rgba(210,175,80,0.9)', border: 'rgba(210,175,80,0.25)' },
+                            date_proposed: { bg: 'rgba(100,150,220,0.15)', color: 'rgba(100,150,220,0.9)', border: 'rgba(100,150,220,0.25)' },
+                            alt_requested: { bg: 'rgba(210,90,90,0.15)', color: 'rgba(210,90,90,0.9)', border: 'rgba(210,90,90,0.25)' },
+                            confirmed: { bg: 'rgba(100,200,130,0.15)', color: 'rgba(100,200,130,0.9)', border: 'rgba(100,200,130,0.25)' },
+                          }
+                          const sc = statusColor[booking.status] || statusColor.pending
+                          return <span style={{ fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '3px 9px', borderRadius: 2, background: sc.bg, color: sc.color, border: `0.5px solid ${sc.border}` }}>{statusLabel[booking.status] || booking.status}</span>
+                        })()}
                       </div>
+                      {booking.status === 'date_proposed' && (
+                        <div style={{ marginBottom: 10, padding: '10px 14px', background: 'rgba(100,150,220,0.06)', border: '0.5px solid rgba(100,150,220,0.2)', borderRadius: 5, fontSize: 12, color: 'rgba(100,150,220,0.9)' }}>
+                          Proposed {new Date(booking.proposed_date + 'T12:00:00').toLocaleDateString('en-NZ', { weekday: 'long', day: 'numeric', month: 'long' })} · {formatTime12(booking.proposed_start_time)}–{formatTime12(booking.proposed_end_time)} — waiting on the client
+                        </div>
+                      )}
+                      {booking.status === 'alt_requested' && (
+                        <div style={{ marginBottom: 10, padding: '10px 14px', background: 'rgba(210,90,90,0.06)', border: '0.5px solid rgba(210,90,90,0.2)', borderRadius: 5, fontSize: 12, color: 'rgba(210,90,90,0.9)' }}>
+                          Client asked for a different time than {new Date(booking.proposed_date + 'T12:00:00').toLocaleDateString('en-NZ', { day: 'numeric', month: 'long' })} at {formatTime12(booking.proposed_start_time)}
+                          {booking.client_response_message && <div style={{ marginTop: 6, color: 'rgba(200,194,187,0.7)', fontStyle: 'italic' }}>"{booking.client_response_message}"</div>}
+                        </div>
+                      )}
                        <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:16, marginTop:12 }}>
                          <div><div style={{ fontSize:9, letterSpacing:'0.14em', textTransform:'uppercase', color:'rgba(200,194,187,0.35)', marginBottom:4 }}>Client</div><div style={{ fontSize:12, color:'#C8C2BB' }}>{booking.client_name || booking.client_email}</div></div>
                          <div><div style={{ fontSize:9, letterSpacing:'0.14em', textTransform:'uppercase', color:'rgba(200,194,187,0.35)', marginBottom:4 }}>Package</div><div style={{ fontSize:12, color:'#C8C2BB' }}>{booking.shoot_package || '-'}</div></div>
@@ -1178,11 +1335,34 @@ export default function StudioPortal() {
                            <div style={{ fontSize:12, color:'rgba(200,194,187,0.6)', lineHeight:1.7, whiteSpace:'pre-wrap' }}>{booking.notes}</div>
                          </div>
                        )}
+                       {booking.attachment_urls && booking.attachment_urls.length > 0 && (
+                         <div style={{ marginTop:14, paddingTop:14, borderTop:'0.5px solid rgba(200,194,187,0.07)' }}>
+                           <div style={{ fontSize:9, letterSpacing:'0.14em', textTransform:'uppercase', color:'rgba(200,194,187,0.35)', marginBottom:6 }}>Attachments</div>
+                           <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                             {booking.attachment_urls.map((a: any, ai: number) => (
+                               <a key={ai} href={a.url} target="_blank" rel="noopener noreferrer" style={{ fontSize:12, color:'rgba(100,150,220,0.9)', textDecoration:'none', display:'flex', alignItems:'center', gap:6 }}>
+                                 <span>📎</span><span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{a.name}</span>
+                               </a>
+                             ))}
+                           </div>
+                         </div>
+                       )}
                       </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 }}>
-                      <button onClick={() => { setSelectedBooking(booking); setShootDate(booking.preferred_date || ''); setMeetingMode(false); setScheduleMonthOffset(0); setScheduleModal(true) }} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>Confirm + create project</button>
-                      <button onClick={() => { setSelectedBooking(booking); setShootDate(''); setMeetingMode(true); setScheduleMonthOffset(0); setScheduleModal(true) }} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 3, border: '0.5px solid rgba(100,150,220,0.35)', color: 'rgba(100,150,220,0.9)', background: 'rgba(100,150,220,0.08)', cursor: 'pointer', fontFamily: 'inherit' }}>Book a meeting</button>
-                      <button onClick={() => declineBooking(booking.id)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 3, border: '0.5px solid rgba(210,90,90,0.4)', color: 'rgba(210,90,90,0.8)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Decline</button>
+                      {booking.status === 'confirmed' ? (
+                        <button onClick={() => finalizeBooking(booking)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>Create project →</button>
+                      ) : booking.status === 'date_proposed' ? (
+                        <button onClick={() => openProposeModal(booking)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Change proposal</button>
+                      ) : booking.status === 'alt_requested' ? (
+                        <button onClick={() => openProposeModal(booking)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>Propose new time</button>
+                      ) : (
+                        <>
+                          <button onClick={() => openProposeModal(booking)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>Propose date/time</button>
+                          <button onClick={() => { setSelectedBooking(booking); setShootDate(booking.preferred_date || ''); setMeetingMode(false); setScheduleMonthOffset(0); setScheduleModal(true) }} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Confirm directly</button>
+                          <button onClick={() => { setSelectedBooking(booking); setShootDate(''); setMeetingMode(true); setScheduleMonthOffset(0); setScheduleModal(true) }} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 3, border: '0.5px solid rgba(100,150,220,0.35)', color: 'rgba(100,150,220,0.9)', background: 'rgba(100,150,220,0.08)', cursor: 'pointer', fontFamily: 'inherit' }}>Book a meeting</button>
+                          <button onClick={() => declineBooking(booking.id)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 3, border: '0.5px solid rgba(210,90,90,0.4)', color: 'rgba(210,90,90,0.8)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Decline</button>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1728,6 +1908,108 @@ export default function StudioPortal() {
                   </button>}
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PROPOSE / RE-PROPOSE DATE-TIME MODAL — real Google Calendar week view */}
+      {proposeModal && proposeBooking && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 10, padding: 28, width: 620, maxWidth: '95vw', maxHeight: '90vh', overflowY: 'auto' }}>
+            <div style={{ fontSize: 14, fontWeight: 500, color: '#fff', marginBottom: 6 }}>{proposeBooking.status === 'alt_requested' || proposeBooking.status === 'date_proposed' ? 'Propose a new time' : 'Propose a date/time'}</div>
+            <div style={{ fontSize: 12, color: 'rgba(200,194,187,0.4)', marginBottom: 20, lineHeight: 1.6 }}>
+              {(proposeBooking.address || proposeBooking.shoot_package) + ' · ' + (proposeBooking.client_name || proposeBooking.client_email)}
+            </div>
+
+            {proposeBooking.client_response_message && (
+              <div style={{ background: 'rgba(210,175,80,0.08)', border: '0.5px solid rgba(210,175,80,0.2)', borderRadius: 6, padding: '10px 14px', marginBottom: 16, fontSize: 11, color: 'rgba(210,175,80,0.85)', lineHeight: 1.6 }}>
+                <div style={{ fontWeight: 500, marginBottom: 2 }}>Client's note:</div>
+                <div style={{ fontStyle: 'italic' }}>"{proposeBooking.client_response_message}"</div>
+              </div>
+            )}
+
+            {(() => {
+              const today = new Date(); today.setHours(0, 0, 0, 0)
+              const monday = mondayOf(new Date())
+              monday.setDate(monday.getDate() + proposeWeekOffset * 7)
+              const days = []
+              for (let i = 0; i < 7; i++) { const d = new Date(monday); d.setDate(monday.getDate() + i); days.push(d) }
+              const shootDatesSet = new Set(dashProjects.filter((p: any) => p.shoot_date).map((p: any) => p.shoot_date))
+              const dayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+              return (
+                <div style={{ background: 'rgba(200,194,187,0.03)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 6, padding: 12, marginBottom: 16 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                    <button type="button" onClick={() => setProposeWeekOffset(o => Math.max(0, o - 1))} disabled={proposeWeekOffset === 0} style={{ background: 'transparent', border: 'none', color: proposeWeekOffset === 0 ? 'rgba(200,194,187,0.15)' : 'rgba(200,194,187,0.6)', cursor: proposeWeekOffset === 0 ? 'default' : 'pointer', fontSize: 13, padding: '2px 8px', fontFamily: 'inherit' }}>‹</button>
+                    <div style={{ fontSize: 11, fontWeight: 500, color: '#C8C2BB', textAlign: 'center' }}>
+                      {days[0].toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' })} – {days[6].toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      {loadingWeekBusy && <span style={{ color: 'rgba(200,194,187,0.3)', marginLeft: 8 }}>loading…</span>}
+                    </div>
+                    <button type="button" onClick={() => setProposeWeekOffset(o => o + 1)} style={{ background: 'transparent', border: 'none', color: 'rgba(200,194,187,0.6)', cursor: 'pointer', fontSize: 13, padding: '2px 8px', fontFamily: 'inherit' }}>›</button>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 6 }}>
+                    {days.map((d, i) => {
+                      const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+                      const isPast = d < today
+                      const isSelected = proposeDate === dateStr
+                      const busy = weekBusy[dateStr] || []
+                      const hasInternalShoot = shootDatesSet.has(dateStr)
+                      return (
+                        <div key={i} onClick={() => !isPast && setProposeDate(dateStr)} style={{ borderRadius: 5, padding: '8px 6px', minHeight: 100, cursor: isPast ? 'default' : 'pointer', background: isSelected ? 'rgba(200,194,187,0.12)' : 'rgba(200,194,187,0.02)', border: '0.5px solid ' + (isSelected ? '#C8C2BB' : 'rgba(200,194,187,0.07)'), opacity: isPast ? 0.35 : 1 }}>
+                          <div style={{ fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 2 }}>{dayLabels[i]}</div>
+                          <div style={{ fontSize: 13, fontWeight: isSelected ? 700 : 400, color: isSelected ? '#fff' : '#C8C2BB', marginBottom: 6 }}>{d.getDate()}</div>
+                          {hasInternalShoot && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 3 }}>
+                              <div style={{ width: 5, height: 5, borderRadius: '50%', background: 'rgba(210,175,80,0.9)', flexShrink: 0 }} />
+                              <span style={{ fontSize: 8, color: 'rgba(210,175,80,0.8)' }}>Shoot</span>
+                            </div>
+                          )}
+                          {busy.slice(0, 3).map((b, bi) => (
+                            <div key={bi} title={b.title || 'Busy'} style={{ fontSize: 8, color: 'rgba(220,120,120,0.9)', background: 'rgba(220,120,120,0.1)', border: '0.5px solid rgba(220,120,120,0.25)', borderRadius: 3, padding: '2px 4px', marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {new Date(b.start).toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit', timeZone: 'Pacific/Auckland' })}{b.title ? ' ' + b.title : ''}
+                            </div>
+                          ))}
+                          {busy.length > 3 && <div style={{ fontSize: 8, color: 'rgba(200,194,187,0.35)' }}>+{busy.length - 3} more</div>}
+                        </div>
+                      )
+                    })}
+                  </div>
+                  <div style={{ display: 'flex', gap: 12, marginTop: 10, paddingTop: 8, borderTop: '0.5px solid rgba(200,194,187,0.07)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}><div style={{ width: 8, height: 8, borderRadius: 2, background: 'rgba(220,120,120,0.15)', border: '0.5px solid rgba(220,120,120,0.4)' }} /><span style={{ fontSize: 9, color: 'rgba(200,194,187,0.4)' }}>Busy (Google Calendar)</span></div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}><div style={{ width: 6, height: 6, borderRadius: '50%', background: 'rgba(210,175,80,0.9)' }} /><span style={{ fontSize: 9, color: 'rgba(200,194,187,0.4)' }}>Internal shoot</span></div>
+                  </div>
+                </div>
+              )
+            })()}
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, marginBottom: 20 }}>
+              <div>
+                <label style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)', marginBottom: 6, display: 'block' }}>Start time</label>
+                <select value={proposeStart} onChange={e => setProposeStart(e.target.value)} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }}>
+                  {['06:00','06:30','07:00','07:30','08:00','08:30','09:00','09:30','10:00','10:30','11:00','11:30','12:00','12:30','13:00','13:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30','18:00'].map(t => <option key={t} value={t}>{formatTime12(t)}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)', marginBottom: 6, display: 'block' }}>End time</label>
+                <select value={proposeEnd} onChange={e => setProposeEnd(e.target.value)} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }}>
+                  {['07:00','07:30','08:00','08:30','09:00','09:30','10:00','10:30','11:00','11:30','12:00','12:30','13:00','13:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30','18:00','18:30','19:00'].map(t => <option key={t} value={t}>{formatTime12(t)}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)', marginBottom: 6, display: 'block' }}>Duration</label>
+                <div style={{ fontSize: 12, color: '#C8C2BB', padding: '9px 0' }}>
+                  {(() => { const s = proposeStart.split(':').map(Number); const e = proposeEnd.split(':').map(Number); const mins = (e[0] * 60 + e[1]) - (s[0] * 60 + s[1]); return mins > 0 ? `${Math.floor(mins / 60)}h ${mins % 60 > 0 ? mins % 60 + 'm' : ''}`.trim() : '—' })()}
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
+              <button onClick={() => { setProposeModal(false); setProposeBooking(null) }} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>
+                Cancel
+              </button>
+              <button disabled={proposingDate || !proposeDate} onClick={submitProposal} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, background: proposingDate || !proposeDate ? 'rgba(200,194,187,0.1)' : '#C8C2BB', color: proposingDate || !proposeDate ? 'rgba(200,194,187,0.3)' : '#111', border: 'none', cursor: proposingDate || !proposeDate ? 'not-allowed' : 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>
+                {proposingDate ? 'Sending...' : 'Propose this time to client'}
+              </button>
             </div>
           </div>
         </div>

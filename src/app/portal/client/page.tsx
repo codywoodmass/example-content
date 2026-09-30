@@ -332,6 +332,30 @@ function DriveFolder({ project, clientEmail, clientName }: { project: any; clien
   )
 }
 
+function AttachmentUploader({ attachments, uploading, onUpload, onRemove }: { attachments: { name: string; url: string; size: number }[]; uploading: boolean; onUpload: (files: FileList) => void; onRemove: (url: string) => void }) {
+  return (
+    <div>
+      <label style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)', display: 'block', marginBottom: 6 }}>Attachments <span style={{ textTransform: 'none', letterSpacing: 0, color: 'rgba(200,194,187,0.28)' }}>— vendor templates, existing photos or videos of the property</span></label>
+      {attachments.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
+          {attachments.map(a => (
+            <div key={a.url} style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '8px 12px' }}>
+              <span style={{ fontSize: 13 }}>📎</span>
+              <a href={a.url} target="_blank" rel="noopener noreferrer" style={{ flex: 1, fontSize: 12, color: '#C8C2BB', textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.name}</a>
+              <span style={{ fontSize: 10, color: 'rgba(200,194,187,0.3)', flexShrink: 0 }}>{a.size > 1024 * 1024 ? (a.size / (1024 * 1024)).toFixed(1) + ' MB' : Math.round(a.size / 1024) + ' KB'}</span>
+              <button onClick={() => onRemove(a.url)} style={{ fontSize: 13, color: 'rgba(210,90,90,0.6)', background: 'transparent', border: 'none', cursor: 'pointer', flexShrink: 0 }}>✕</button>
+            </div>
+          ))}
+        </div>
+      )}
+      <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '9px 16px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: uploading ? 'rgba(200,194,187,0.25)' : 'rgba(200,194,187,0.5)', cursor: uploading ? 'default' : 'pointer', fontFamily: 'inherit' }}>
+        {uploading ? 'Uploading...' : '+ Add files'}
+        <input type="file" multiple accept="image/*,video/*,.pdf,.doc,.docx" disabled={uploading} onChange={e => { if (e.target.files && e.target.files.length > 0) onUpload(e.target.files); e.target.value = '' }} style={{ display: 'none' }} />
+      </label>
+    </div>
+  )
+}
+
 export default function ClientPortal() {
   const router = useRouter()
   const [user, setUser] = useState<any>(null)
@@ -365,6 +389,8 @@ export default function ClientPortal() {
   const [shotList, setShotList] = useState("• \n• \n• \n• \n• ")
   const [prePlanning, setPrePlanning] = useState(false)
   const [deliveryDue, setDeliveryDue] = useState("")
+  const [bookingAttachments, setBookingAttachments] = useState<{ name: string; url: string; size: number }[]>([])
+  const [uploadingAttachment, setUploadingAttachment] = useState(false)
 
   // Commercial & Events — request-a-quote brief fields
   const [projectType, setProjectType] = useState('')
@@ -393,6 +419,9 @@ export default function ClientPortal() {
   const [clientProfile, setClientProfile] = useState<any>(null)
   const [selectedProject, setSelectedProject] = useState<any>(null)
   const [notifications, setNotifications] = useState<any[]>([])
+  const [respondingBookingId, setRespondingBookingId] = useState<string | null>(null)
+  const [altTimeBookingId, setAltTimeBookingId] = useState<string | null>(null)
+  const [altTimeMessage, setAltTimeMessage] = useState('')
   const [showNotifications, setShowNotifications] = useState(false)
   const [changeRequest, setChangeRequest] = useState('')
   const [changeRequestSent, setChangeRequestSent] = useState(false)
@@ -456,6 +485,84 @@ export default function ClientPortal() {
   async function handleSignOut() {
     await supabase.auth.signOut()
     router.push('/login')
+  }
+
+  // Client accepts the studio's proposed date/time — a plain DB write, since
+  // only the studio's own browser session holds the Google cookies needed to
+  // actually create the project + calendar event (that happens once the
+  // studio sees this booking under "Ready to create project").
+  async function confirmProposedTime(booking: any) {
+    setRespondingBookingId(booking.id)
+    try {
+      const { error } = await supabase.from('bookings1').update({ status: 'confirmed' }).eq('id', booking.id)
+      if (error) { console.error('Confirm time error:', error); return }
+      setClientBookings(prev => prev.map(b => b.id === booking.id ? { ...b, status: 'confirmed' } : b))
+      try {
+        await fetch('/api/notify-time-confirmed', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            clientName: booking.client_name,
+            clientEmail: booking.client_email,
+            title: booking.address || booking.shoot_package || '',
+            date: booking.proposed_date,
+            startTime: booking.proposed_start_time,
+          }),
+        })
+      } catch (e) { console.error('Notify-time-confirmed error:', e) }
+    } finally {
+      setRespondingBookingId(null)
+    }
+  }
+
+  async function submitAltTimeRequest(booking: any) {
+    setRespondingBookingId(booking.id)
+    try {
+      const { error } = await supabase.from('bookings1').update({
+        status: 'alt_requested',
+        client_response_message: altTimeMessage || null,
+      }).eq('id', booking.id)
+      if (error) { console.error('Request another time error:', error); return }
+      setClientBookings(prev => prev.map(b => b.id === booking.id ? { ...b, status: 'alt_requested', client_response_message: altTimeMessage || null } : b))
+      try {
+        await fetch('/api/notify-alt-time-requested', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            clientName: booking.client_name,
+            clientEmail: booking.client_email,
+            title: booking.address || booking.shoot_package || '',
+            proposedDate: booking.proposed_date,
+            proposedStartTime: booking.proposed_start_time,
+            message: altTimeMessage || null,
+          }),
+        })
+      } catch (e) { console.error('Notify-alt-time-requested error:', e) }
+      setAltTimeBookingId(null)
+      setAltTimeMessage('')
+    } finally {
+      setRespondingBookingId(null)
+    }
+  }
+
+  async function uploadBookingAttachments(files: FileList) {
+    setUploadingAttachment(true)
+    try {
+      for (const file of Array.from(files)) {
+        const safeName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_')
+        const path = `${Date.now()}-${safeName}`
+        const { error } = await supabase.storage.from('booking-attachments').upload(path, file)
+        if (error) { console.error('Attachment upload error:', error); continue }
+        const { data: { publicUrl } } = supabase.storage.from('booking-attachments').getPublicUrl(path)
+        setBookingAttachments(prev => [...prev, { name: file.name, url: publicUrl, size: file.size }])
+      }
+    } finally {
+      setUploadingAttachment(false)
+    }
+  }
+
+  function removeBookingAttachment(url: string) {
+    setBookingAttachments(prev => prev.filter(a => a.url !== url))
   }
 
   async function searchAddresses(query: string) {
@@ -605,7 +712,7 @@ export default function ClientPortal() {
             { id: 'pitches', label: 'Our Briefs' },
             { id: 'invoices', label: 'Invoices' },
           ].map(item => (
-            <button key={item.id} onClick={() => { setActiveView(item.id); setBookingStep(1); setSelectedCat(''); setSelectedShoot(null); setSelectedDel(null); setSelectedAddons([]); setTcAccepted(false); setPreferredDate(''); setDraftDue(''); setDeliveryDue(''); setBookingNotes(''); setAccessNotes(''); setPropertyAddress(''); setProjectType(''); setProjectTitle(''); setProjectDescription(''); setTargetAudience(''); setKeyMessage(''); setTalentDetails(''); setBriefDeliverables([{ id: '1', name: '', quantity: 1, duration: '', formats: [], notes: '' }]); setDateFlexible(false); setShootDuration(''); setReferenceLinks(''); setBudgetRange('') }} style={{ display: 'flex', alignItems: 'center', width: '100%', padding: '13px 14px', borderRadius: 6, fontSize: 13, letterSpacing: '0.01em', fontWeight: activeView === item.id ? 600 : 500, color: activeView === item.id ? '#fff' : 'rgba(200,194,187,0.5)', background: activeView === item.id ? 'rgba(61,71,86,0.4)' : 'transparent', border: activeView === item.id ? '0.5px solid rgba(200,194,187,0.15)' : '0.5px solid transparent', cursor: 'pointer', marginBottom: 8, textAlign: 'left', fontFamily: 'var(--font-space-grotesk), Inter, sans-serif' }}>
+            <button key={item.id} onClick={() => { setActiveView(item.id); setBookingStep(1); setSelectedCat(''); setSelectedShoot(null); setSelectedDel(null); setSelectedAddons([]); setTcAccepted(false); setPreferredDate(''); setDraftDue(''); setDeliveryDue(''); setBookingNotes(''); setAccessNotes(''); setPropertyAddress(''); setProjectType(''); setProjectTitle(''); setProjectDescription(''); setTargetAudience(''); setKeyMessage(''); setTalentDetails(''); setBriefDeliverables([{ id: '1', name: '', quantity: 1, duration: '', formats: [], notes: '' }]); setDateFlexible(false); setShootDuration(''); setReferenceLinks(''); setBudgetRange(''); setBookingAttachments([]) }} style={{ display: 'flex', alignItems: 'center', width: '100%', padding: '13px 14px', borderRadius: 6, fontSize: 13, letterSpacing: '0.01em', fontWeight: activeView === item.id ? 600 : 500, color: activeView === item.id ? '#fff' : 'rgba(200,194,187,0.5)', background: activeView === item.id ? 'rgba(61,71,86,0.4)' : 'transparent', border: activeView === item.id ? '0.5px solid rgba(200,194,187,0.15)' : '0.5px solid transparent', cursor: 'pointer', marginBottom: 8, textAlign: 'left', fontFamily: 'var(--font-space-grotesk), Inter, sans-serif' }}>
               {item.label}
             </button>
           ))}
@@ -627,12 +734,20 @@ export default function ClientPortal() {
           const clientName = clientProfile?.name || user?.email?.split('@')[0] || 'there'
           const confirmedShoots = clientProjects.filter((p: any) => p.shoot_date && new Date(p.shoot_date) >= now)
           const confirmedShootDates = new Set(clientProjects.map((p: any) => p.shoot_date).filter(Boolean))
-          const pendingShootBookings = clientBookings.filter((b: any) => b.preferred_date && new Date(b.preferred_date) >= now && b.status === 'pending' && !confirmedShootDates.has(b.preferred_date)).map((b: any) => ({ id: b.id, title: b.address || b.shoot_package || 'Pending booking', shoot_date: b.preferred_date, stage: 'Pending', client: b.client_name, address: b.address, progress: 0, isPending: true, shoot_package: b.shoot_package, deliverables_type: b.deliverables, addons: b.addons, total: b.total }))
+          // A booking is still "in flight" (not yet a project) across three statuses:
+          // pending (no studio response yet), date_proposed (waiting on us to answer),
+          // alt_requested (we asked for another time, waiting on the studio).
+          const isUnresolved = (s: string) => s === 'pending' || s === 'date_proposed' || s === 'alt_requested'
+          // A confirmed booking with no project yet is also still "in flight" — the
+          // studio hasn't finalized it into a project/calendar event — so it shouldn't
+          // vanish from these lists in the gap between the client confirming and that.
+          const isAwaitingProject = (b: any) => isUnresolved(b.status) || (b.status === 'confirmed' && !b.project_id)
+          const pendingShootBookings = clientBookings.filter((b: any) => (b.proposed_date || b.preferred_date) && new Date(b.proposed_date || b.preferred_date) >= now && isAwaitingProject(b) && !confirmedShootDates.has(b.proposed_date || b.preferred_date)).map((b: any) => ({ id: b.id, title: b.address || b.shoot_package || 'Pending booking', shoot_date: b.proposed_date || b.preferred_date, stage: b.status === 'date_proposed' ? 'Time proposed' : b.status === 'alt_requested' ? 'Awaiting new time' : b.status === 'confirmed' ? 'Confirmed' : 'Pending', client: b.client_name, address: b.address, progress: 0, isPending: true, shoot_package: b.shoot_package, deliverables_type: b.deliverables, addons: b.addons, total: b.total }))
           const upcomingShoots = [...confirmedShoots, ...pendingShootBookings].sort((a: any, b: any) => new Date(a.shoot_date).getTime() - new Date(b.shoot_date).getTime())
           const activeProjects = clientProjects.filter((p: any) => p.stage !== 'Awaiting Confirmation')
-          const awaitingSchedule = clientBookings.filter((b: any) => !b.preferred_date && b.status === 'pending')
+          const awaitingSchedule = clientBookings.filter((b: any) => !b.preferred_date && !b.proposed_date && isUnresolved(b.status))
           const completedProjects = clientProjects.filter((p: any) => p.stage === 'Awaiting Confirmation' || p.drive_url)
-          const pendingBookings = clientBookings.filter((b: any) => b.status === 'pending')
+          const pendingBookings = clientBookings.filter((b: any) => isUnresolved(b.status))
 
           // Calendar
           const startOfWeek = new Date(now)
@@ -710,7 +825,7 @@ export default function ClientPortal() {
                         <div style={{ padding: '24px 18px', fontSize: 12, color: 'rgba(200,194,187,0.25)', textAlign: 'center' }}>No upcoming shoots — book one above</div>
                       ) : upcomingShoots.map((p: any, i: number) => {
                         const d = new Date(p.shoot_date + 'T12:00:00')
-                        const STAGE_C: Record<string,any> = { 'Pre-Production': {color:'rgba(100,150,220,0.9)',bg:'rgba(25,45,80,0.4)'}, 'Shooting': {color:'rgba(210,175,80,0.9)',bg:'rgba(65,52,18,0.4)'}, 'Post-Production': {color:'rgba(160,100,220,0.9)',bg:'rgba(50,25,80,0.4)'}, 'Revisions': {color:'rgba(220,120,60,0.9)',bg:'rgba(80,35,15,0.4)'}, 'Awaiting Confirmation': {color:'rgba(100,200,130,0.9)',bg:'rgba(30,70,45,0.4)'}, 'Pending': {color:'rgba(210,175,80,0.9)',bg:'rgba(65,52,18,0.4)'} }
+                        const STAGE_C: Record<string,any> = { 'Pre-Production': {color:'rgba(100,150,220,0.9)',bg:'rgba(25,45,80,0.4)'}, 'Shooting': {color:'rgba(210,175,80,0.9)',bg:'rgba(65,52,18,0.4)'}, 'Post-Production': {color:'rgba(160,100,220,0.9)',bg:'rgba(50,25,80,0.4)'}, 'Revisions': {color:'rgba(220,120,60,0.9)',bg:'rgba(80,35,15,0.4)'}, 'Awaiting Confirmation': {color:'rgba(100,200,130,0.9)',bg:'rgba(30,70,45,0.4)'}, 'Pending': {color:'rgba(210,175,80,0.9)',bg:'rgba(65,52,18,0.4)'}, 'Time proposed': {color:'rgba(100,150,220,0.9)',bg:'rgba(25,45,80,0.4)'}, 'Awaiting new time': {color:'rgba(160,100,220,0.9)',bg:'rgba(50,25,80,0.4)'}, 'Confirmed': {color:'rgba(100,200,130,0.9)',bg:'rgba(30,70,45,0.4)'} }
                         const sc = STAGE_C[p.stage] || {color:'#C8C2BB',bg:'rgba(200,194,187,0.1)'}
                         return (
                           <div key={p.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '13px 18px', borderBottom: i < upcomingShoots.length - 1 ? '0.5px solid rgba(200,194,187,0.06)' : 'none' }}>
@@ -1107,6 +1222,9 @@ export default function ClientPortal() {
                       <label style={cLbl}>Additional notes / special requirements</label>
                       <textarea rows={3} value={bookingNotes} onChange={e => setBookingNotes(e.target.value)} placeholder="Anything else we should know?" style={{ ...cInp, resize: 'vertical', lineHeight: 1.65 }} />
                     </div>
+                    <div style={{ gridColumn: 'span 2' }}>
+                      <AttachmentUploader attachments={bookingAttachments} uploading={uploadingAttachment} onUpload={uploadBookingAttachments} onRemove={removeBookingAttachment} />
+                    </div>
                   </div>
 
                   <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 16, borderTop: '0.5px solid rgba(200,194,187,0.09)' }}>
@@ -1263,6 +1381,9 @@ export default function ClientPortal() {
                       <div style={{ width:18, height:18, borderRadius:4, border:`1px solid ${prePlanning ? '#C8C2BB' : 'rgba(200,194,187,0.2)'}`, background: prePlanning ? 'rgba(200,194,187,0.15)' : 'transparent', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>{prePlanning && <span style={{ fontSize:11, color:'#C8C2BB' }}>✓</span>}</div>
                       <span style={{ fontSize:12, color:'rgba(200,194,187,0.55)' }}>Does this project involve pre-planning?</span>
                     </div>
+                    <div style={{ marginTop:16 }}>
+                      <AttachmentUploader attachments={bookingAttachments} uploading={uploadingAttachment} onUpload={uploadBookingAttachments} onRemove={removeBookingAttachment} />
+                    </div>
                   </div>
 
                   <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 16, borderTop: '0.5px solid rgba(200,194,187,0.09)' }}>
@@ -1285,12 +1406,14 @@ export default function ClientPortal() {
                       { key: 'Preferred date', val: dateFlexible ? 'Flexible' : (preferredDate ? preferredDate + (preferredTime ? ' at ' + formatTime12(preferredTime) : '') : 'TBC') },
                       { key: 'Deliverables', val: briefDeliverables.filter(d => d.name).length ? briefDeliverables.filter(d => d.name).map(d => `${d.quantity}x ${d.name}`).join(', ') : 'To be discussed' },
                       { key: 'Budget range', val: budgetRange || 'Not specified' },
+                      { key: 'Attachments', val: bookingAttachments.length ? `${bookingAttachments.length} file${bookingAttachments.length !== 1 ? 's' : ''} attached` : 'None' },
                     ] : [
                       { key: 'Category', val: 'Property & Architecture' },
                       { key: 'Shoot package', val: `${selectedShoot?.name} — $${selectedShoot?.price?.toLocaleString()} + GST` },
                       { key: 'Deliverable package', val: `${selectedDel?.name} — $${selectedDel?.price} + GST` },
                       { key: 'Add-ons', val: selectedAddons.length ? selectedAddons.map(a => `${a.name} (+$${a.price})`).join(', ') : 'None' },
                       { key: 'Preferred date', val: 'TBC — confirmed within 24 hrs' },
+                      { key: 'Attachments', val: bookingAttachments.length ? `${bookingAttachments.length} file${bookingAttachments.length !== 1 ? 's' : ''} attached` : 'None' },
                     ]).map(({ key, val }) => (
                       <div key={key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '8px 0', borderBottom: '0.5px solid rgba(200,194,187,0.06)' }}>
                         <span style={{ fontSize: 12, color: 'rgba(200,194,187,0.4)' }}>{key}</span>
@@ -1357,6 +1480,7 @@ export default function ClientPortal() {
                           total_price: null,
                           tc_accepted: true,
                           status: 'pending',
+                          attachment_urls: bookingAttachments,
                         } : {
                           client_id: user?.id,
                           client_name: clientContactName || user?.email,
@@ -1382,6 +1506,7 @@ export default function ClientPortal() {
                           total_price: (selectedShoot?.price || 0) + (selectedDel?.price || 0) + selectedAddons.reduce((s: number, a: any) => s + a.price, 0),
                           tc_accepted: true,
                           status: 'pending',
+                          attachment_urls: bookingAttachments,
                         }])
                       } catch (e) { console.error('Booking save error:', e) }
                       try {
@@ -1406,6 +1531,7 @@ export default function ClientPortal() {
                           { label: 'Reference links', value: referenceLinks },
                           { label: 'Description', value: projectDescription },
                           { label: 'Additional notes', value: bookingNotes },
+                          { label: 'Attachments', value: bookingAttachments.map(a => `${a.name}: ${a.url}`).join('\n') },
                         ] : [
                           { label: 'Listing agent', value: clientContactName },
                           { label: 'Package', value: selectedShoot?.name ? `${selectedShoot.name} — $${selectedShoot.price?.toLocaleString()} + GST` : '' },
@@ -1414,6 +1540,7 @@ export default function ClientPortal() {
                           { label: 'Address', value: propertyAddress },
                           { label: 'Preferred date', value: preferredDate ? preferredDate + (preferredTime ? ' at ' + formatTime12(preferredTime) : '') : 'TBC' },
                           { label: 'Notes', value: bookingNotes },
+                          { label: 'Attachments', value: bookingAttachments.map(a => `${a.name}: ${a.url}`).join('\n') },
                         ]
                         await fetch('/api/notify-booking', {
                           method: 'POST',
@@ -1441,7 +1568,7 @@ export default function ClientPortal() {
                   <div style={{ fontSize: 14, color: 'rgba(200,194,187,0.4)', lineHeight: 1.7, maxWidth: 400, margin: '0 auto 32px' }}>We've received your request and will confirm availability within 24 hours. You'll hear from the Example Content team shortly.</div>
                   <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
                     <button onClick={() => setActiveView('dashboard')} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Back to dashboard</button>
-                    <button onClick={() => { setBookingStep(1); setSelectedCat(''); setSelectedShoot(null); setSelectedDel(null); setSelectedAddons([]); setTcAccepted(false); setPreferredDate(''); setDraftDue(''); setDeliveryDue(''); setBookingNotes(''); setAccessNotes(''); setPropertyAddress(''); setProjectType(''); setProjectTitle(''); setProjectDescription(''); setTargetAudience(''); setKeyMessage(''); setTalentDetails(''); setBriefDeliverables([{ id: '1', name: '', quantity: 1, duration: '', formats: [], notes: '' }]); setDateFlexible(false); setShootDuration(''); setReferenceLinks(''); setBudgetRange('') }} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>Book another shoot</button>
+                    <button onClick={() => { setBookingStep(1); setSelectedCat(''); setSelectedShoot(null); setSelectedDel(null); setSelectedAddons([]); setTcAccepted(false); setPreferredDate(''); setDraftDue(''); setDeliveryDue(''); setBookingNotes(''); setAccessNotes(''); setPropertyAddress(''); setProjectType(''); setProjectTitle(''); setProjectDescription(''); setTargetAudience(''); setKeyMessage(''); setTalentDetails(''); setBriefDeliverables([{ id: '1', name: '', quantity: 1, duration: '', formats: [], notes: '' }]); setDateFlexible(false); setShootDuration(''); setReferenceLinks(''); setBudgetRange(''); setBookingAttachments([]) }} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>Book another shoot</button>
                   </div>
                 </div>
               )}
@@ -1454,7 +1581,7 @@ export default function ClientPortal() {
           const now = new Date()
           const upcomingProjects = clientProjects.filter((p: any) => p.shoot_date && new Date(p.shoot_date) >= now).sort((a: any, b: any) => new Date(a.shoot_date).getTime() - new Date(b.shoot_date).getTime())
           const deliveredProjects = clientProjects.filter((p: any) => p.stage === 'Awaiting Confirmation').sort((a: any, b: any) => new Date(b.delivery_due || b.created_at).getTime() - new Date(a.delivery_due || a.created_at).getTime())
-          const pendingBookings = clientBookings.filter((b: any) => b.status === 'pending')
+          const pendingBookings = clientBookings.filter((b: any) => b.status === 'pending' || b.status === 'date_proposed' || b.status === 'alt_requested' || (b.status === 'confirmed' && !b.project_id))
           return (
             <div>
               <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'16px 28px', borderBottom:'0.5px solid rgba(200,194,187,0.09)', background:'#14181F', position:'sticky', top:0, zIndex:10 }}>
@@ -1470,18 +1597,79 @@ export default function ClientPortal() {
                   <div>
                     <div style={{ fontSize:10, letterSpacing:'0.16em', textTransform:'uppercase', color:'rgba(200,194,187,0.3)', marginBottom:12 }}>Pending confirmation</div>
                     <div style={{ background:'#1A1F28', border:'0.5px solid rgba(200,194,187,0.09)', borderRadius:7, overflow:'hidden' }}>
-                      {pendingBookings.map((b: any, i: number) => (
-                        <div key={b.id} style={{ display:'flex', alignItems:'center', gap:14, padding:'14px 18px', borderBottom: i < pendingBookings.length-1 ? '0.5px solid rgba(200,194,187,0.06)':'none' }}>
-                          <div style={{ width:42, flexShrink:0, textAlign:'center', background:'rgba(210,175,80,0.08)', border:'0.5px solid rgba(210,175,80,0.2)', borderRadius:5, padding:'6px 4px' }}>
-                            <div style={{ fontSize:16, opacity:0.5 }}>⏳</div>
+                      {pendingBookings.map((b: any, i: number) => {
+                        const isLast = i === pendingBookings.length - 1
+                        if (b.status === 'date_proposed') {
+                          return (
+                            <div key={b.id} style={{ padding:'14px 18px', borderBottom: isLast ? 'none' : '0.5px solid rgba(200,194,187,0.06)' }}>
+                              <div style={{ display:'flex', alignItems:'center', gap:14, marginBottom:12 }}>
+                                <div style={{ width:42, flexShrink:0, textAlign:'center', background:'rgba(100,150,220,0.08)', border:'0.5px solid rgba(100,150,220,0.2)', borderRadius:5, padding:'6px 4px' }}>
+                                  <div style={{ fontSize:16, opacity:0.6 }}>📅</div>
+                                </div>
+                                <div style={{ flex:1 }}>
+                                  <div style={{ fontSize:13, fontWeight:500, color:'#C8C2BB', marginBottom:2 }}>{b.address || b.shoot_package || 'Booking request'}</div>
+                                  <div style={{ fontSize:11, color:'rgba(100,150,220,0.9)' }}>Proposed: {new Date(b.proposed_date+'T12:00:00').toLocaleDateString('en-NZ',{weekday:'long',day:'numeric',month:'long'})} · {formatTime12(b.proposed_start_time)}{b.proposed_end_time ? ' – ' + formatTime12(b.proposed_end_time) : ''}</div>
+                                </div>
+                                <span style={{ fontSize:9, letterSpacing:'0.08em', textTransform:'uppercase', padding:'3px 9px', borderRadius:2, background:'rgba(100,150,220,0.12)', color:'rgba(100,150,220,0.9)', border:'0.5px solid rgba(100,150,220,0.25)' }}>Time proposed</span>
+                              </div>
+                              {altTimeBookingId === b.id ? (
+                                <div style={{ paddingLeft:56 }}>
+                                  <textarea value={altTimeMessage} onChange={e => setAltTimeMessage(e.target.value)} placeholder="Optional — let us know what times work better" rows={2} style={{ width:'100%', background:'rgba(200,194,187,0.04)', border:'0.5px solid rgba(200,194,187,0.09)', borderRadius:4, padding:'8px 10px', fontSize:12, color:'#C8C2BB', fontFamily:'inherit', outline:'none', resize:'vertical', marginBottom:8 }} />
+                                  <div style={{ display:'flex', gap:8 }}>
+                                    <button onClick={() => { setAltTimeBookingId(null); setAltTimeMessage('') }} style={{ fontSize:11, letterSpacing:'0.09em', textTransform:'uppercase', padding:'7px 14px', borderRadius:3, border:'0.5px solid rgba(200,194,187,0.2)', color:'rgba(200,194,187,0.5)', background:'transparent', cursor:'pointer', fontFamily:'inherit' }}>Cancel</button>
+                                    <button disabled={respondingBookingId === b.id} onClick={() => submitAltTimeRequest(b)} style={{ fontSize:11, letterSpacing:'0.09em', textTransform:'uppercase', padding:'7px 14px', borderRadius:3, background: respondingBookingId === b.id ? 'rgba(200,194,187,0.1)' : '#C8C2BB', color: respondingBookingId === b.id ? 'rgba(200,194,187,0.3)' : '#111', border:'none', cursor: respondingBookingId === b.id ? 'not-allowed' : 'pointer', fontWeight:500, fontFamily:'inherit' }}>{respondingBookingId === b.id ? 'Sending...' : 'Send request'}</button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div style={{ display:'flex', gap:8, paddingLeft:56 }}>
+                                  <button disabled={respondingBookingId === b.id} onClick={() => confirmProposedTime(b)} style={{ fontSize:11, letterSpacing:'0.09em', textTransform:'uppercase', padding:'7px 14px', borderRadius:3, background: respondingBookingId === b.id ? 'rgba(200,194,187,0.1)' : '#C8C2BB', color: respondingBookingId === b.id ? 'rgba(200,194,187,0.3)' : '#111', border:'none', cursor: respondingBookingId === b.id ? 'not-allowed' : 'pointer', fontWeight:500, fontFamily:'inherit' }}>{respondingBookingId === b.id ? 'Saving...' : 'Confirm this time'}</button>
+                                  <button disabled={respondingBookingId === b.id} onClick={() => { setAltTimeBookingId(b.id); setAltTimeMessage('') }} style={{ fontSize:11, letterSpacing:'0.09em', textTransform:'uppercase', padding:'7px 14px', borderRadius:3, border:'0.5px solid rgba(200,194,187,0.2)', color:'rgba(200,194,187,0.5)', background:'transparent', cursor:'pointer', fontFamily:'inherit' }}>Request another time</button>
+                                </div>
+                              )}
+                            </div>
+                          )
+                        }
+                        if (b.status === 'alt_requested') {
+                          return (
+                            <div key={b.id} style={{ display:'flex', alignItems:'center', gap:14, padding:'14px 18px', borderBottom: isLast ? 'none' : '0.5px solid rgba(200,194,187,0.06)' }}>
+                              <div style={{ width:42, flexShrink:0, textAlign:'center', background:'rgba(160,100,220,0.08)', border:'0.5px solid rgba(160,100,220,0.2)', borderRadius:5, padding:'6px 4px' }}>
+                                <div style={{ fontSize:16, opacity:0.6 }}>⏳</div>
+                              </div>
+                              <div style={{ flex:1 }}>
+                                <div style={{ fontSize:13, fontWeight:500, color:'#C8C2BB', marginBottom:2 }}>{b.address || b.shoot_package || 'Booking request'}</div>
+                                <div style={{ fontSize:11, color:'rgba(200,194,187,0.4)' }}>Waiting on Example Content for a new time{b.client_response_message ? ' · "' + b.client_response_message + '"' : ''}</div>
+                              </div>
+                              <span style={{ fontSize:9, letterSpacing:'0.08em', textTransform:'uppercase', padding:'3px 9px', borderRadius:2, background:'rgba(160,100,220,0.12)', color:'rgba(160,100,220,0.9)', border:'0.5px solid rgba(160,100,220,0.25)' }}>Awaiting new time</span>
+                            </div>
+                          )
+                        }
+                        if (b.status === 'confirmed') {
+                          return (
+                            <div key={b.id} style={{ display:'flex', alignItems:'center', gap:14, padding:'14px 18px', borderBottom: isLast ? 'none' : '0.5px solid rgba(200,194,187,0.06)' }}>
+                              <div style={{ width:42, flexShrink:0, textAlign:'center', background:'rgba(100,200,130,0.08)', border:'0.5px solid rgba(100,200,130,0.2)', borderRadius:5, padding:'6px 4px' }}>
+                                <div style={{ fontSize:16, opacity:0.6 }}>✓</div>
+                              </div>
+                              <div style={{ flex:1 }}>
+                                <div style={{ fontSize:13, fontWeight:500, color:'#C8C2BB', marginBottom:2 }}>{b.address || b.shoot_package || 'Booking request'}</div>
+                                <div style={{ fontSize:11, color:'rgba(200,194,187,0.4)' }}>{b.proposed_date ? new Date(b.proposed_date+'T12:00:00').toLocaleDateString('en-NZ',{weekday:'long',day:'numeric',month:'long'}) + (b.proposed_start_time ? ' · ' + formatTime12(b.proposed_start_time) : '') + ' — ' : ''}We're setting up your project</div>
+                              </div>
+                              <span style={{ fontSize:9, letterSpacing:'0.08em', textTransform:'uppercase', padding:'3px 9px', borderRadius:2, background:'rgba(100,200,130,0.12)', color:'rgba(100,200,130,0.9)', border:'0.5px solid rgba(100,200,130,0.25)' }}>Confirmed</span>
+                            </div>
+                          )
+                        }
+                        return (
+                          <div key={b.id} style={{ display:'flex', alignItems:'center', gap:14, padding:'14px 18px', borderBottom: isLast ? 'none' : '0.5px solid rgba(200,194,187,0.06)' }}>
+                            <div style={{ width:42, flexShrink:0, textAlign:'center', background:'rgba(210,175,80,0.08)', border:'0.5px solid rgba(210,175,80,0.2)', borderRadius:5, padding:'6px 4px' }}>
+                              <div style={{ fontSize:16, opacity:0.5 }}>⏳</div>
+                            </div>
+                            <div style={{ flex:1 }}>
+                              <div style={{ fontSize:13, fontWeight:500, color:'#C8C2BB', marginBottom:2 }}>{b.address || b.shoot_package || 'Booking request'}</div>
+                              <div style={{ fontSize:11, color:'rgba(200,194,187,0.4)' }}>{b.shoot_package} {b.preferred_date ? '· ' + new Date(b.preferred_date+'T12:00:00').toLocaleDateString('en-NZ',{day:'numeric',month:'short',year:'numeric'}) : ''}</div>
+                            </div>
+                            <span style={{ fontSize:9, letterSpacing:'0.08em', textTransform:'uppercase', padding:'3px 9px', borderRadius:2, background:'rgba(210,175,80,0.12)', color:'rgba(210,175,80,0.9)', border:'0.5px solid rgba(210,175,80,0.25)' }}>Pending</span>
                           </div>
-                          <div style={{ flex:1 }}>
-                            <div style={{ fontSize:13, fontWeight:500, color:'#C8C2BB', marginBottom:2 }}>{b.address || b.shoot_package || 'Booking request'}</div>
-                            <div style={{ fontSize:11, color:'rgba(200,194,187,0.4)' }}>{b.shoot_package} {b.preferred_date ? '· ' + new Date(b.preferred_date+'T12:00:00').toLocaleDateString('en-NZ',{day:'numeric',month:'short',year:'numeric'}) : ''}</div>
-                          </div>
-                          <span style={{ fontSize:9, letterSpacing:'0.08em', textTransform:'uppercase', padding:'3px 9px', borderRadius:2, background:'rgba(210,175,80,0.12)', color:'rgba(210,175,80,0.9)', border:'0.5px solid rgba(210,175,80,0.25)' }}>Pending</span>
-                        </div>
-                      ))}
+                        )
+                      })}
                     </div>
                   </div>
                 )}
