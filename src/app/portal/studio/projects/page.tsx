@@ -115,7 +115,7 @@ function ProjectsPageInner() {
   const searchParams = useSearchParams()
   const [modalProject, setModalProject] = useState<Project | null>(null)
   const [modalEditing, setModalEditing] = useState(false)
-  const [modalTab, setModalTab] = useState<'overview' | 'notes'>('overview')
+  const [modalTab, setModalTab] = useState<'overview' | 'notes' | 'brief'>('overview')
   useEffect(() => { setModalTab('overview') }, [modalProject?.id])
   const [modalSaving, setModalSaving] = useState(false)
   const [modalSaved, setModalSaved] = useState(false)
@@ -191,7 +191,6 @@ function ProjectsPageInner() {
   }
 
   const [modalFullscreen, setModalFullscreen] = useState(false)
-  const [showBriefDoc, setShowBriefDoc] = useState(false)
   const [projectFeedback, setProjectFeedback] = useState<any[]>([])
 
   useEffect(() => {
@@ -243,14 +242,9 @@ function ProjectsPageInner() {
     setCreatingFolder(false)
   }
 
-  useEffect(() => {
-    if (showBriefDoc && briefEditorRef.current) {
-      briefEditorRef.current.innerHTML = briefDocContent
-      briefEditorRef.current.focus()
-    }
-  }, [showBriefDoc])
   const [briefDocContent, setBriefDocContent] = useState('')
   const briefEditorRef = useRef<HTMLDivElement>(null)
+  const briefContentRef = useRef('') // always holds the latest edited HTML, for the flush-on-leave below (state/refs tied to the editor's DOM node go stale/null once the tab unmounts)
   const briefSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [briefSaving, setBriefSaving] = useState(false)
   const [briefSaved, setBriefSaved] = useState(false)
@@ -262,24 +256,35 @@ function ProjectsPageInner() {
       await supabase.from('projects1').update({ studio_brief: html }).eq('id', projectId)
       setModalProject(p => p ? { ...p, studio_brief: html } : p)
       setProjects(ps => ps.map(pr => pr.id === projectId ? { ...pr, studio_brief: html } : pr))
+      briefSaveTimerRef.current = null
       setBriefSaving(false)
       setBriefSaved(true)
       setTimeout(() => setBriefSaved(false), 2000)
     }, 800)
   }
 
-  async function closeBriefDoc() {
-    if (briefSaveTimerRef.current) clearTimeout(briefSaveTimerRef.current)
-    const html = briefEditorRef.current?.innerHTML ?? briefDocContent
-    if (modalProject) {
-      await supabase.from('projects1').update({ studio_brief: html }).eq('id', modalProject.id)
-      setModalProject(p => p ? { ...p, studio_brief: html } : p)
-      setProjects(ps => ps.map(pr => pr.id === modalProject.id ? { ...pr, studio_brief: html } : pr))
+  // Loads the brief into the editor when its tab becomes active, and flushes
+  // any not-yet-autosaved edit when leaving the tab or switching projects —
+  // otherwise up to 800ms of typing could be lost on a fast tab switch.
+  useEffect(() => {
+    if (modalTab === 'brief' && modalProject && briefEditorRef.current) {
+      const content = modalProject.studio_brief && modalProject.studio_brief.startsWith('<') ? modalProject.studio_brief : briefTemplate(modalProject.title)
+      setBriefDocContent(content)
+      briefContentRef.current = content
+      briefEditorRef.current.innerHTML = content
+      briefEditorRef.current.focus()
     }
-    setBriefDocContent(html)
-    setBriefSaving(false)
-    setShowBriefDoc(false)
-  }
+    const projectId = modalProject?.id
+    return () => {
+      if (briefSaveTimerRef.current && projectId) {
+        clearTimeout(briefSaveTimerRef.current)
+        briefSaveTimerRef.current = null
+        const html = briefContentRef.current
+        supabase.from('projects1').update({ studio_brief: html }).eq('id', projectId)
+        setProjects(ps => ps.map(pr => pr.id === projectId ? { ...pr, studio_brief: html } : pr))
+      }
+    }
+  }, [modalTab, modalProject?.id])
   const [briefLoading, setBriefLoading] = useState(false)
   const [briefGenerated, setBriefGenerated] = useState(false)
   const [showArchived, setShowArchived] = useState(false)
@@ -943,7 +948,6 @@ function ProjectsPageInner() {
                 {modalSaved && <span style={{ fontSize: 11, color: 'rgba(100,200,130,0.8)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>✓ Saved</span>}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <button onClick={() => setModalEditing(e => !e)} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '6px 12px', borderRadius: 3, border: `0.5px solid ${modalEditing ? 'rgba(100,150,220,0.35)' : 'rgba(200,194,187,0.2)'}`, color: modalEditing ? 'rgba(100,150,220,0.9)' : 'rgba(200,194,187,0.4)', background: modalEditing ? 'rgba(100,150,220,0.08)' : 'rgba(200,194,187,0.06)', cursor: 'pointer', fontFamily: 'inherit' }}>{modalEditing ? 'Done editing' : 'Edit project'}</button>
-                  <button onClick={() => { setShowBriefDoc(true); setBriefDocContent(modalProject.studio_brief && modalProject.studio_brief.startsWith('<') ? modalProject.studio_brief : briefTemplate(modalProject.title)) }} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '6px 12px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.4)', background: 'rgba(200,194,187,0.06)', cursor: 'pointer', fontFamily: 'inherit' }}>Brief</button>
                   <button onClick={() => deleteProject(modalProject)} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '6px 12px', borderRadius: 3, border: '0.5px solid rgba(210,90,90,0.3)', color: 'rgba(210,90,90,0.7)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Delete</button>
                   <button onClick={async () => { await saveModalProject(); setModalProject(null); setModalEditing(false) }} style={{ fontSize: 20, color: 'rgba(200,194,187,0.4)', background: 'transparent', border: 'none', cursor: 'pointer', lineHeight: 1, padding: '0 4px' }}>×</button>
                 </div>
@@ -991,7 +995,7 @@ function ProjectsPageInner() {
                 </div>
               )}
               <div style={{ display: 'flex', gap: 4, marginBottom: 20, borderBottom: '0.5px solid rgba(200,194,187,0.09)' }}>
-                {[{ id: 'overview', label: 'Overview' }, { id: 'notes', label: 'Notes & Files' }].map(tab => (
+                {[{ id: 'overview', label: 'Overview' }, { id: 'notes', label: 'Notes & Files' }, { id: 'brief', label: 'Brief' }].map(tab => (
                   <button key={tab.id} onClick={() => setModalTab(tab.id as any)} style={{ fontSize: 12, padding: '10px 14px', background: 'transparent', border: 'none', borderBottom: `2px solid ${modalTab === tab.id ? '#C8C2BB' : 'transparent'}`, color: modalTab === tab.id ? '#C8C2BB' : 'rgba(200,194,187,0.35)', cursor: 'pointer', fontFamily: 'inherit', marginBottom: -1 }}>{tab.label}</button>
                 ))}
               </div>
@@ -1154,6 +1158,96 @@ function ProjectsPageInner() {
               </div>
               </>
               )}
+              {modalTab === 'brief' && (
+                <div style={{ marginBottom: 20 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                    <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>Internal document · visible to studio only</div>
+                    {(briefSaving || briefSaved) && <span style={{ fontSize: 11, color: briefSaving ? 'rgba(210,175,80,0.8)' : 'rgba(100,200,130,0.8)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>{briefSaving ? 'Saving...' : '✓ Saved'}</span>}
+                  </div>
+                  {/* TOOLBAR */}
+                  <style>{`
+                    .brief-tb-btn { font-family: inherit; cursor: pointer; transition: background 0.12s, color 0.12s, border-color 0.12s; }
+                    .brief-tb-btn:hover { background: rgba(200,194,187,0.1) !important; color: #C8C2BB !important; border-color: rgba(200,194,187,0.25) !important; }
+                    .brief-tb-select { font-family: inherit; cursor: pointer; transition: border-color 0.12s; }
+                    .brief-tb-select:hover, .brief-tb-select:focus { border-color: rgba(200,194,187,0.3) !important; }
+                    .brief-tb-swatch { cursor: pointer; transition: transform 0.12s, border-color 0.12s; }
+                    .brief-tb-swatch:hover { transform: scale(1.15); border-color: rgba(255,255,255,0.5) !important; }
+                  `}</style>
+                  <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' as const, alignItems: 'center', padding: '10px 14px', background: 'rgba(200,194,187,0.035)', borderRadius: 8, border: '0.5px solid rgba(200,194,187,0.09)' }}>
+                    <select className="brief-tb-select" onChange={e => { document.execCommand('formatBlock', false, e.target.value); e.target.value = 'p' }} style={{ fontSize: 11, background: 'rgba(0,0,0,0.2)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '5px 8px', color: 'rgba(200,194,187,0.7)', outline: 'none' }}>
+                      <option value="p">Paragraph</option>
+                      <option value="h1">Heading 1</option>
+                      <option value="h2">Heading 2</option>
+                      <option value="h3">Heading 3</option>
+                      <option value="h4">Heading 4</option>
+                    </select>
+                    <select className="brief-tb-select" onChange={e => { document.execCommand('fontName', false, e.target.value) }} style={{ fontSize: 11, background: 'rgba(0,0,0,0.2)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '5px 8px', color: 'rgba(200,194,187,0.7)', outline: 'none' }}>
+                      <option value="Inter, sans-serif">Sans (Inter)</option>
+                      <option value="Georgia, serif">Serif (Georgia)</option>
+                      <option value="'Times New Roman', serif">Serif (Times)</option>
+                      <option value="Verdana, sans-serif">Sans (Verdana)</option>
+                      <option value="ui-monospace, monospace">Mono</option>
+                    </select>
+                    <div style={{ width: 1, height: 20, background: 'rgba(200,194,187,0.12)', margin: '0 4px' }} />
+                    {[
+                      { label: 'B', cmd: 'bold', style: { fontWeight: 700 } },
+                      { label: 'I', cmd: 'italic', style: { fontStyle: 'italic' } },
+                      { label: 'U', cmd: 'underline', style: { textDecoration: 'underline' } },
+                    ].map(({ label, cmd, style }) => (
+                      <button key={cmd} className="brief-tb-btn" onMouseDown={e => { e.preventDefault(); document.execCommand(cmd) }} style={{ fontSize: 12, padding: '4px 10px', borderRadius: 4, border: '0.5px solid rgba(200,194,187,0.15)', color: 'rgba(200,194,187,0.6)', background: 'transparent', ...style }}>{label}</button>
+                    ))}
+                    <div style={{ width: 1, height: 20, background: 'rgba(200,194,187,0.12)', margin: '0 4px' }} />
+                    {[
+                      { color: '#C8C2BB', title: 'Default' },
+                      { color: '#E8A87C', title: 'Amber' },
+                      { color: '#85C1E9', title: 'Blue' },
+                      { color: '#82E0AA', title: 'Green' },
+                      { color: '#F1948A', title: 'Red' },
+                    ].map(({ color, title }) => (
+                      <div key={color} className="brief-tb-swatch" title={title} onMouseDown={e => { e.preventDefault(); document.execCommand('foreColor', false, color) }} style={{ width: 16, height: 16, borderRadius: '50%', background: color, border: '1.5px solid rgba(255,255,255,0.15)' }} />
+                    ))}
+                    <div style={{ width: 1, height: 20, background: 'rgba(200,194,187,0.12)', margin: '0 4px' }} />
+                    {[
+                      { label: '• List', cmd: 'insertUnorderedList' },
+                      { label: '1. List', cmd: 'insertOrderedList' },
+                    ].map(({ label, cmd }) => (
+                      <button key={cmd} className="brief-tb-btn" onMouseDown={e => { e.preventDefault(); document.execCommand(cmd) }} style={{ fontSize: 11, padding: '4px 10px', borderRadius: 4, border: '0.5px solid rgba(200,194,187,0.15)', color: 'rgba(200,194,187,0.6)', background: 'transparent' }}>{label}</button>
+                    ))}
+                    <div style={{ width: 1, height: 20, background: 'rgba(200,194,187,0.12)', margin: '0 4px' }} />
+                    <button className="brief-tb-btn" onMouseDown={e => { e.preventDefault(); document.execCommand('insertHorizontalRule') }} style={{ fontSize: 11, padding: '4px 10px', borderRadius: 4, border: '0.5px solid rgba(200,194,187,0.15)', color: 'rgba(200,194,187,0.6)', background: 'transparent' }}>─ Rule</button>
+                    <button className="brief-tb-btn" onMouseDown={e => { e.preventDefault(); document.execCommand('removeFormat') }} style={{ fontSize: 11, padding: '4px 10px', borderRadius: 4, border: '0.5px solid rgba(200,194,187,0.15)', color: 'rgba(200,194,187,0.6)', background: 'transparent' }}>✕ Clear</button>
+                  </div>
+                  {/* EDITOR */}
+                  <style>{`
+                    .brief-editor h1 { font-size: 26px; font-weight: 800; color: #fff; margin: 24px 0 8px; letter-spacing: -0.02em; text-transform: uppercase; }
+                    .brief-editor h2 { font-size: 18px; font-weight: 700; color: #C8C2BB; margin: 20px 0 6px; letter-spacing: -0.01em; }
+                    .brief-editor h3 { font-size: 14px; font-weight: 600; color: rgba(200,194,187,0.8); margin: 16px 0 4px; }
+                    .brief-editor h4 { font-size: 12px; font-weight: 600; color: rgba(200,194,187,0.6); margin: 12px 0 4px; text-transform: uppercase; letter-spacing: 0.08em; }
+                    .brief-editor p { margin: 4px 0; color: rgba(200,194,187,0.7); line-height: 1.8; font-size: 13px; }
+                    .brief-editor ul { margin: 6px 0 6px 20px; padding: 0; }
+                    .brief-editor ol { margin: 6px 0 6px 20px; padding: 0; }
+                    .brief-editor li { color: rgba(200,194,187,0.7); line-height: 1.8; font-size: 13px; margin: 2px 0; }
+                    .brief-editor hr { border: none; border-top: 0.5px solid rgba(200,194,187,0.12); margin: 20px 0; }
+                    .brief-editor b, .brief-editor strong { color: #C8C2BB; font-weight: 600; }
+                    .brief-editor i, .brief-editor em { color: rgba(200,194,187,0.7); }
+                    .brief-editor u { text-decoration-color: rgba(200,194,187,0.4); }
+                    .brief-editor:focus { outline: none; }
+                    .brief-editor p:empty:before, .brief-editor li:empty:before { content: attr(data-placeholder); color: rgba(200,194,187,0.22); pointer-events: none; }
+                    .brief-editor:empty:before { content: 'Start writing your brief...'; color: rgba(200,194,187,0.2); }
+                  `}</style>
+                  <div
+                    ref={briefEditorRef}
+                    contentEditable
+                    suppressContentEditableWarning
+                    className="brief-editor"
+                    onInput={e => { const html = (e.target as HTMLDivElement).innerHTML; setBriefDocContent(html); briefContentRef.current = html; if (modalProject) autoSaveBrief(html, modalProject.id) }}
+                    style={{ background: 'rgba(200,194,187,0.02)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 6, padding: '24px 32px', fontSize: 13, color: '#C8C2BB', fontFamily: 'Inter, sans-serif', lineHeight: 1.8, outline: 'none', minHeight: 420 }}
+                  />
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
+                    <button onClick={() => navigator.clipboard.writeText(briefEditorRef.current?.innerText || '')} style={{ fontSize: 10, color: 'rgba(200,194,187,0.35)', background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>Copy plain text</button>
+                  </div>
+                </div>
+              )}
               <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 16, borderTop: '0.5px solid rgba(200,194,187,0.09)' }}>
                 <div style={{ display: 'flex', gap: 8 }}>
                 {modalProject.drive_url && (
@@ -1182,110 +1276,6 @@ function ProjectsPageInner() {
         </div>
       )}
 
-
-      {/* BRIEF DOCUMENT OVERLAY */}
-      {showBriefDoc && modalProject && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-          <div style={{ background: '#14181F', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 10, width: '100%', maxWidth: 860, height: '90vh', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 24px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', flexShrink: 0 }}>
-              <div>
-                <div style={{ fontSize: 14, fontWeight: 500, color: '#fff' }}>{modalProject.title} — Brief</div>
-                <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', marginTop: 2 }}>Internal document · visible to studio only</div>
-              </div>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                {(briefSaving || briefSaved) && <span style={{ fontSize: 11, color: briefSaving ? 'rgba(210,175,80,0.8)' : 'rgba(100,200,130,0.8)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>{briefSaving ? 'Saving...' : '✓ Saved'}</span>}
-                <button onClick={closeBriefDoc} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '6px 14px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>Save & close</button>
-                <button onClick={closeBriefDoc} style={{ fontSize: 18, color: 'rgba(200,194,187,0.4)', background: 'transparent', border: 'none', cursor: 'pointer', lineHeight: 1 }}>×</button>
-              </div>
-            </div>
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '16px 24px', overflow: 'hidden' }}>
-              {/* TOOLBAR */}
-              <style>{`
-                .brief-tb-btn { font-family: inherit; cursor: pointer; transition: background 0.12s, color 0.12s, border-color 0.12s; }
-                .brief-tb-btn:hover { background: rgba(200,194,187,0.1) !important; color: #C8C2BB !important; border-color: rgba(200,194,187,0.25) !important; }
-                .brief-tb-select { font-family: inherit; cursor: pointer; transition: border-color 0.12s; }
-                .brief-tb-select:hover, .brief-tb-select:focus { border-color: rgba(200,194,187,0.3) !important; }
-                .brief-tb-swatch { cursor: pointer; transition: transform 0.12s, border-color 0.12s; }
-                .brief-tb-swatch:hover { transform: scale(1.15); border-color: rgba(255,255,255,0.5) !important; }
-              `}</style>
-              <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' as const, alignItems: 'center', padding: '10px 14px', background: 'rgba(200,194,187,0.035)', borderRadius: 8, border: '0.5px solid rgba(200,194,187,0.09)' }}>
-                <select className="brief-tb-select" onChange={e => { document.execCommand('formatBlock', false, e.target.value); e.target.value = 'p' }} style={{ fontSize: 11, background: 'rgba(0,0,0,0.2)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '5px 8px', color: 'rgba(200,194,187,0.7)', outline: 'none' }}>
-                  <option value="p">Paragraph</option>
-                  <option value="h1">Heading 1</option>
-                  <option value="h2">Heading 2</option>
-                  <option value="h3">Heading 3</option>
-                  <option value="h4">Heading 4</option>
-                </select>
-                <select className="brief-tb-select" onChange={e => { document.execCommand('fontName', false, e.target.value) }} style={{ fontSize: 11, background: 'rgba(0,0,0,0.2)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '5px 8px', color: 'rgba(200,194,187,0.7)', outline: 'none' }}>
-                  <option value="Inter, sans-serif">Sans (Inter)</option>
-                  <option value="Georgia, serif">Serif (Georgia)</option>
-                  <option value="'Times New Roman', serif">Serif (Times)</option>
-                  <option value="Verdana, sans-serif">Sans (Verdana)</option>
-                  <option value="ui-monospace, monospace">Mono</option>
-                </select>
-                <div style={{ width: 1, height: 20, background: 'rgba(200,194,187,0.12)', margin: '0 4px' }} />
-                {[
-                  { label: 'B', cmd: 'bold', style: { fontWeight: 700 } },
-                  { label: 'I', cmd: 'italic', style: { fontStyle: 'italic' } },
-                  { label: 'U', cmd: 'underline', style: { textDecoration: 'underline' } },
-                ].map(({ label, cmd, style }) => (
-                  <button key={cmd} className="brief-tb-btn" onMouseDown={e => { e.preventDefault(); document.execCommand(cmd) }} style={{ fontSize: 12, padding: '4px 10px', borderRadius: 4, border: '0.5px solid rgba(200,194,187,0.15)', color: 'rgba(200,194,187,0.6)', background: 'transparent', ...style }}>{label}</button>
-                ))}
-                <div style={{ width: 1, height: 20, background: 'rgba(200,194,187,0.12)', margin: '0 4px' }} />
-                {[
-                  { color: '#C8C2BB', title: 'Default' },
-                  { color: '#E8A87C', title: 'Amber' },
-                  { color: '#85C1E9', title: 'Blue' },
-                  { color: '#82E0AA', title: 'Green' },
-                  { color: '#F1948A', title: 'Red' },
-                ].map(({ color, title }) => (
-                  <div key={color} className="brief-tb-swatch" title={title} onMouseDown={e => { e.preventDefault(); document.execCommand('foreColor', false, color) }} style={{ width: 16, height: 16, borderRadius: '50%', background: color, border: '1.5px solid rgba(255,255,255,0.15)' }} />
-                ))}
-                <div style={{ width: 1, height: 20, background: 'rgba(200,194,187,0.12)', margin: '0 4px' }} />
-                {[
-                  { label: '• List', cmd: 'insertUnorderedList' },
-                  { label: '1. List', cmd: 'insertOrderedList' },
-                ].map(({ label, cmd }) => (
-                  <button key={cmd} className="brief-tb-btn" onMouseDown={e => { e.preventDefault(); document.execCommand(cmd) }} style={{ fontSize: 11, padding: '4px 10px', borderRadius: 4, border: '0.5px solid rgba(200,194,187,0.15)', color: 'rgba(200,194,187,0.6)', background: 'transparent' }}>{label}</button>
-                ))}
-                <div style={{ width: 1, height: 20, background: 'rgba(200,194,187,0.12)', margin: '0 4px' }} />
-                <button className="brief-tb-btn" onMouseDown={e => { e.preventDefault(); document.execCommand('insertHorizontalRule') }} style={{ fontSize: 11, padding: '4px 10px', borderRadius: 4, border: '0.5px solid rgba(200,194,187,0.15)', color: 'rgba(200,194,187,0.6)', background: 'transparent' }}>─ Rule</button>
-                <button className="brief-tb-btn" onMouseDown={e => { e.preventDefault(); document.execCommand('removeFormat') }} style={{ fontSize: 11, padding: '4px 10px', borderRadius: 4, border: '0.5px solid rgba(200,194,187,0.15)', color: 'rgba(200,194,187,0.6)', background: 'transparent' }}>✕ Clear</button>
-              </div>
-              {/* EDITOR */}
-              <style>{`
-                .brief-editor h1 { font-size: 26px; font-weight: 800; color: #fff; margin: 24px 0 8px; letter-spacing: -0.02em; text-transform: uppercase; }
-                .brief-editor h2 { font-size: 18px; font-weight: 700; color: #C8C2BB; margin: 20px 0 6px; letter-spacing: -0.01em; }
-                .brief-editor h3 { font-size: 14px; font-weight: 600; color: rgba(200,194,187,0.8); margin: 16px 0 4px; }
-                .brief-editor h4 { font-size: 12px; font-weight: 600; color: rgba(200,194,187,0.6); margin: 12px 0 4px; text-transform: uppercase; letter-spacing: 0.08em; }
-                .brief-editor p { margin: 4px 0; color: rgba(200,194,187,0.7); line-height: 1.8; font-size: 13px; }
-                .brief-editor ul { margin: 6px 0 6px 20px; padding: 0; }
-                .brief-editor ol { margin: 6px 0 6px 20px; padding: 0; }
-                .brief-editor li { color: rgba(200,194,187,0.7); line-height: 1.8; font-size: 13px; margin: 2px 0; }
-                .brief-editor hr { border: none; border-top: 0.5px solid rgba(200,194,187,0.12); margin: 20px 0; }
-                .brief-editor b, .brief-editor strong { color: #C8C2BB; font-weight: 600; }
-                .brief-editor i, .brief-editor em { color: rgba(200,194,187,0.7); }
-                .brief-editor u { text-decoration-color: rgba(200,194,187,0.4); }
-                .brief-editor:focus { outline: none; }
-                .brief-editor p:empty:before, .brief-editor li:empty:before { content: attr(data-placeholder); color: rgba(200,194,187,0.22); pointer-events: none; }
-                .brief-editor:empty:before { content: 'Start writing your brief...'; color: rgba(200,194,187,0.2); }
-              `}</style>
-              <div
-                ref={briefEditorRef}
-                contentEditable
-                suppressContentEditableWarning
-                className="brief-editor"
-                onInput={e => { const html = (e.target as HTMLDivElement).innerHTML; setBriefDocContent(html); if (modalProject) autoSaveBrief(html, modalProject.id) }}
-                style={{ flex: 1, background: 'rgba(200,194,187,0.02)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 6, padding: '24px 32px', fontSize: 13, color: '#C8C2BB', fontFamily: 'Inter, sans-serif', lineHeight: 1.8, outline: 'none', overflowY: 'auto' as const, minHeight: 200 }}
-              />
-            </div>
-            <div style={{ padding: '12px 24px', borderTop: '0.5px solid rgba(200,194,187,0.09)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
-              <span style={{ fontSize: 11, color: 'rgba(200,194,187,0.25)' }}>Rich text editor</span>
-              <button onClick={() => navigator.clipboard.writeText((document.querySelector('[contenteditable]') as HTMLElement)?.innerText || '')} style={{ fontSize: 10, color: 'rgba(200,194,187,0.35)', background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>Copy plain text</button>
-            </div>
-          </div>
-        </div>
-      )}
       </div>
     </main>
   )
