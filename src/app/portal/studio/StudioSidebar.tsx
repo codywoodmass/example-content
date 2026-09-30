@@ -42,11 +42,12 @@ export default function StudioSidebar({ active, onViewChange }: { active?: strin
     })
   }, [])
 
-  // Editors get everything except the Finance group and booking requests. Fail closed
-  // while role is still loading (null) so Finance never flashes for an editor account —
-  // it only appears once the role is confirmed as exactly 'studio'.
+  // Editors get everything except Finance, Team & Time / Equipment, and booking
+  // requests. Fail closed while role is still loading (null) so none of this
+  // flashes for an editor account — it only appears once the role is confirmed
+  // as exactly 'studio'.
   const nav = NAV
-    .filter(group => role === 'studio' || group.label !== 'Finance')
+    .filter(group => role === 'studio' || (group.label !== 'Finance' && group.label !== 'Team'))
     .map(group => group.label === 'Work' && role !== 'studio'
       ? { ...group, items: group.items.filter(item => item.id !== 'bookings') }
       : group)

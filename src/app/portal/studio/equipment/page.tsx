@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import StudioSidebar from '../StudioSidebar'
 import { confirmDialog, ConfirmHost } from '@/lib/notify'
@@ -16,6 +17,18 @@ type Equipment = {
 }
 
 export default function EquipmentPage() {
+  const router = useRouter()
+  const [authorized, setAuthorized] = useState(false)
+  useEffect(() => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!session) { router.push('/login'); return }
+      const { data: profile } = await supabase.from('profiles').select('role').eq('id', session.user.id).maybeSingle()
+      // Equipment is studio-only — an editor (e.g. Fin) navigating here directly
+      // gets bounced back to the dashboard rather than just having the nav link hidden.
+      if (profile?.role !== 'studio') { router.push('/portal/studio'); return }
+      setAuthorized(true)
+    })
+  }, [])
   const [equipment, setEquipment] = useState<Equipment[]>([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<Equipment | null>(null)
@@ -31,7 +44,7 @@ export default function EquipmentPage() {
   const CATEGORIES = ['Camera', 'Drone', 'Lens', 'Audio', 'Lighting', 'Stabiliser', 'Accessory', 'Other']
   const STATUSES = ['Operational', 'Service due', 'In repair', 'Retired']
 
-  useEffect(() => { loadEquipment() }, [])
+  useEffect(() => { if (authorized) loadEquipment() }, [authorized])
 
   async function loadEquipment() {
     setLoading(true)
@@ -84,6 +97,8 @@ export default function EquipmentPage() {
     'In repair': { color: 'rgba(220,120,60,0.9)', bg: 'rgba(80,35,15,0.4)' },
     'Retired': { color: 'rgba(200,194,187,0.4)', bg: 'rgba(200,194,187,0.08)' },
   }
+
+  if (!authorized) return <main style={{ background: '#0E1014', minHeight: '100vh' }} />
 
   return (
     <main style={{ background: '#0E1014', minHeight: '100vh', fontFamily: 'Inter, sans-serif', color: '#C8C2BB', fontSize: 13, display: 'flex' }}>

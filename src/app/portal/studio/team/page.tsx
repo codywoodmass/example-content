@@ -17,6 +17,17 @@ type TeamMember = {
 
 export default function TeamPage() {
   const router = useRouter()
+  const [authorized, setAuthorized] = useState(false)
+  useEffect(() => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!session) { router.push('/login'); return }
+      const { data: profile } = await supabase.from('profiles').select('role').eq('id', session.user.id).maybeSingle()
+      // Team & Time is studio-only — an editor (e.g. Fin) navigating here directly
+      // gets bounced back to the dashboard rather than just having the nav link hidden.
+      if (profile?.role !== 'studio') { router.push('/portal/studio'); return }
+      setAuthorized(true)
+    })
+  }, [])
   const [team, setTeam] = useState<TeamMember[]>([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<TeamMember | null>(null)
@@ -30,7 +41,7 @@ export default function TeamPage() {
   const inp: React.CSSProperties = { background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }
   const lbl: React.CSSProperties = { fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)', marginBottom: 6, display: 'block' }
 
-  useEffect(() => { loadTeam() }, [])
+  useEffect(() => { if (authorized) loadTeam() }, [authorized])
 
   const [previewBroken, setPreviewBroken] = useState(false)
   useEffect(() => { setPreviewBroken(false) }, [selected?.id])
@@ -88,6 +99,8 @@ export default function TeamPage() {
     setTeam(p => p.map(m => m.id === id ? { ...m, active } : m))
     if (selected?.id === id) setSelected(s => s ? { ...s, active } : s)
   }
+
+  if (!authorized) return <main style={{ background: '#0E1014', minHeight: '100vh' }} />
 
   return (
     <main style={{ background: '#0E1014', minHeight: '100vh', fontFamily: 'Inter, sans-serif', color: '#C8C2BB', fontSize: 13, display: 'flex' }}>
