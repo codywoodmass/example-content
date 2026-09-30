@@ -944,13 +944,6 @@ function ProjectsPageInner() {
               </div>
             </div>
             <div style={{ padding: 24 }}>
-              <div style={{ display: 'flex', gap: 4, marginBottom: 20, borderBottom: '0.5px solid rgba(200,194,187,0.09)' }}>
-                {[{ id: 'overview', label: 'Overview' }, { id: 'notes', label: 'Notes & Files' }].map(tab => (
-                  <button key={tab.id} onClick={() => setModalTab(tab.id as any)} style={{ fontSize: 12, padding: '10px 14px', background: 'transparent', border: 'none', borderBottom: `2px solid ${modalTab === tab.id ? '#C8C2BB' : 'transparent'}`, color: modalTab === tab.id ? '#C8C2BB' : 'rgba(200,194,187,0.35)', cursor: 'pointer', fontFamily: 'inherit', marginBottom: -1 }}>{tab.label}</button>
-                ))}
-              </div>
-              {modalTab === 'overview' && (
-              <>
               <div style={{ marginBottom: 24 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
                   {STAGES.map((stage, idx) => {
@@ -991,6 +984,13 @@ function ProjectsPageInner() {
                   </div>
                 </div>
               )}
+              <div style={{ display: 'flex', gap: 4, marginBottom: 20, borderBottom: '0.5px solid rgba(200,194,187,0.09)' }}>
+                {[{ id: 'overview', label: 'Overview' }, { id: 'notes', label: 'Notes & Files' }].map(tab => (
+                  <button key={tab.id} onClick={() => setModalTab(tab.id as any)} style={{ fontSize: 12, padding: '10px 14px', background: 'transparent', border: 'none', borderBottom: `2px solid ${modalTab === tab.id ? '#C8C2BB' : 'transparent'}`, color: modalTab === tab.id ? '#C8C2BB' : 'rgba(200,194,187,0.35)', cursor: 'pointer', fontFamily: 'inherit', marginBottom: -1 }}>{tab.label}</button>
+                ))}
+              </div>
+              {modalTab === 'overview' && (
+              <>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
                 {[
                   { label: 'Client', key: 'client' as const },
