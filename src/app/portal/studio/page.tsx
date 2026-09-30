@@ -3,7 +3,7 @@ import React from 'react'
 import StudioSidebar from './StudioSidebar'
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { formatTime12 } from '@/lib/time'
+import { formatTime12, localDateKey } from '@/lib/time'
 import { xeroAuthedFetch } from '@/lib/xeroClient'
 import { notify, confirmDialog, ToastHost, ConfirmHost } from '@/lib/notify'
 import { useRouter } from 'next/navigation'
@@ -671,8 +671,8 @@ export default function StudioPortal() {
     const monday = mondayOf(new Date())
     monday.setDate(monday.getDate() + weekOffset * 7)
     const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6)
-    const from = monday.toISOString().split('T')[0]
-    const to = sunday.toISOString().split('T')[0]
+    const from = localDateKey(monday)
+    const to = localDateKey(sunday)
     try {
       const res = await fetch(`/api/calendar?action=availability&from=${from}&to=${to}`)
       const data = await res.json()
@@ -1007,7 +1007,7 @@ export default function StudioPortal() {
                             {weeks.map((week: any, wi: number) => (
                               <div key={wi} style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2, marginBottom: 2 }}>
                                 {week.map((day: any, di: number) => {
-                                  const key = day.toISOString().split('T')[0]
+                                  const key = localDateKey(day)
                                   const events = eventsByDate[key] || []
                                   const isToday = day.toDateString() === new Date().toDateString()
                                   const isPast = day < today
@@ -1065,47 +1065,49 @@ export default function StudioPortal() {
                       })()}
                     </div>
                   </div>
-                </div>
-              </div>
-              <div style={{ marginTop: 28 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-                  <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)' }}>To do</div>
-                  <button onClick={() => router.push('/portal/studio/todos')} style={{ fontSize: 11, color: 'rgba(200,194,187,0.35)', background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>View all →</button>
-                </div>
-                <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, padding: '14px 18px' }}>
-                  <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' as const }}>
-                    <input value={newTodoText} onChange={e => setNewTodoText(e.target.value)} onKeyDown={e => e.key === 'Enter' && addTodo()} placeholder="Add a task..." style={{ flex: 1, minWidth: 180, background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '8px 10px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }} />
-                    {(() => {
-                      const todayStr = new Date().toISOString().split('T')[0]
-                      const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1)
-                      const tomorrowStr = tomorrow.toISOString().split('T')[0]
-                      return (
-                        <>
-                          <button onClick={() => setNewTodoDate(d => d === todayStr ? '' : todayStr)} style={{ fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '8px 12px', borderRadius: 4, border: `0.5px solid ${newTodoDate === todayStr ? '#C8C2BB' : 'rgba(200,194,187,0.15)'}`, background: newTodoDate === todayStr ? 'rgba(200,194,187,0.08)' : 'transparent', color: newTodoDate === todayStr ? '#C8C2BB' : 'rgba(200,194,187,0.4)', cursor: 'pointer', fontFamily: 'inherit' }}>Today</button>
-                          <button onClick={() => setNewTodoDate(d => d === tomorrowStr ? '' : tomorrowStr)} style={{ fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '8px 12px', borderRadius: 4, border: `0.5px solid ${newTodoDate === tomorrowStr ? '#C8C2BB' : 'rgba(200,194,187,0.15)'}`, background: newTodoDate === tomorrowStr ? 'rgba(200,194,187,0.08)' : 'transparent', color: newTodoDate === tomorrowStr ? '#C8C2BB' : 'rgba(200,194,187,0.4)', cursor: 'pointer', fontFamily: 'inherit' }}>Tomorrow</button>
-                        </>
-                      )
-                    })()}
-                    <input type="date" value={newTodoDate} onChange={e => setNewTodoDate(e.target.value)} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '8px 10px', fontSize: 11, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }} />
-                    <button onClick={addTodo} disabled={!newTodoText.trim()} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 4, background: newTodoText.trim() ? '#C8C2BB' : 'rgba(200,194,187,0.1)', color: newTodoText.trim() ? '#111' : 'rgba(200,194,187,0.3)', border: 'none', cursor: newTodoText.trim() ? 'pointer' : 'not-allowed', fontWeight: 500, fontFamily: 'inherit' }}>+ Add</button>
-                  </div>
-                  {todos.length === 0 ? (
-                    <div style={{ padding: '10px 4px', fontSize: 12, color: 'rgba(200,194,187,0.25)' }}>Nothing on the list — add a task above</div>
-                  ) : todos.slice(0, 8).map((t: any) => {
-                    const todayStr = new Date().toISOString().split('T')[0]
-                    const overdue = t.due_date && !t.done && t.due_date < todayStr
-                    const dateLabel = t.due_date ? (t.due_date === todayStr ? 'Today' : (() => { const tmw = new Date(); tmw.setDate(tmw.getDate() + 1); return t.due_date === tmw.toISOString().split('T')[0] ? 'Tomorrow' : new Date(t.due_date + 'T12:00:00').toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' }) })()) : null
-                    return (
-                      <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 4px', borderBottom: '0.5px solid rgba(200,194,187,0.06)' }}>
-                        <div onClick={() => toggleTodo(t.id, t.done)} style={{ width: 16, height: 16, borderRadius: 4, border: `1.5px solid ${t.done ? 'rgba(100,200,130,0.6)' : 'rgba(200,194,187,0.25)'}`, background: t.done ? 'rgba(100,200,130,0.15)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
-                          {t.done && <span style={{ fontSize: 10, color: 'rgba(100,200,130,0.9)' }}>✓</span>}
+                  <div style={{ marginTop: 28 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                      <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)' }}>To do</div>
+                      <button onClick={() => router.push('/portal/studio/todos')} style={{ fontSize: 11, color: 'rgba(200,194,187,0.35)', background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>View all →</button>
+                    </div>
+                    <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, padding: '14px 18px' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
+                        <input value={newTodoText} onChange={e => setNewTodoText(e.target.value)} onKeyDown={e => e.key === 'Enter' && addTodo()} placeholder="Add a task..." style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '8px 10px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }} />
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const }}>
+                          {(() => {
+                            const todayStr = localDateKey(new Date())
+                            const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1)
+                            const tomorrowStr = localDateKey(tomorrow)
+                            return (
+                              <>
+                                <button onClick={() => setNewTodoDate(d => d === todayStr ? '' : todayStr)} style={{ fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '8px 12px', borderRadius: 4, border: `0.5px solid ${newTodoDate === todayStr ? '#C8C2BB' : 'rgba(200,194,187,0.15)'}`, background: newTodoDate === todayStr ? 'rgba(200,194,187,0.08)' : 'transparent', color: newTodoDate === todayStr ? '#C8C2BB' : 'rgba(200,194,187,0.4)', cursor: 'pointer', fontFamily: 'inherit' }}>Today</button>
+                                <button onClick={() => setNewTodoDate(d => d === tomorrowStr ? '' : tomorrowStr)} style={{ fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '8px 12px', borderRadius: 4, border: `0.5px solid ${newTodoDate === tomorrowStr ? '#C8C2BB' : 'rgba(200,194,187,0.15)'}`, background: newTodoDate === tomorrowStr ? 'rgba(200,194,187,0.08)' : 'transparent', color: newTodoDate === tomorrowStr ? '#C8C2BB' : 'rgba(200,194,187,0.4)', cursor: 'pointer', fontFamily: 'inherit' }}>Tomorrow</button>
+                              </>
+                            )
+                          })()}
+                          <input type="date" value={newTodoDate} onChange={e => setNewTodoDate(e.target.value)} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '8px 10px', fontSize: 11, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', flex: 1, minWidth: 0 }} />
+                          <button onClick={addTodo} disabled={!newTodoText.trim()} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 4, background: newTodoText.trim() ? '#C8C2BB' : 'rgba(200,194,187,0.1)', color: newTodoText.trim() ? '#111' : 'rgba(200,194,187,0.3)', border: 'none', cursor: newTodoText.trim() ? 'pointer' : 'not-allowed', fontWeight: 500, fontFamily: 'inherit' }}>+ Add</button>
                         </div>
-                        <div style={{ flex: 1, fontSize: 12, color: t.done ? 'rgba(200,194,187,0.3)' : '#C8C2BB', textDecoration: t.done ? 'line-through' : 'none' }}>{t.text}</div>
-                        {dateLabel && <span style={{ fontSize: 10, letterSpacing: '0.05em', textTransform: 'uppercase' as const, color: overdue ? 'rgba(210,90,90,0.8)' : 'rgba(200,194,187,0.35)' }}>{overdue ? '⚠ ' : ''}{dateLabel}</span>}
-                        <button onClick={() => deleteTodo(t.id)} style={{ fontSize: 14, color: 'rgba(200,194,187,0.25)', background: 'transparent', border: 'none', cursor: 'pointer', lineHeight: 1, padding: '0 2px' }}>×</button>
                       </div>
-                    )
-                  })}
+                      {todos.length === 0 ? (
+                        <div style={{ padding: '10px 4px', fontSize: 12, color: 'rgba(200,194,187,0.25)' }}>Nothing on the list — add a task above</div>
+                      ) : todos.slice(0, 8).map((t: any) => {
+                        const todayStr = localDateKey(new Date())
+                        const overdue = t.due_date && !t.done && t.due_date < todayStr
+                        const dateLabel = t.due_date ? (t.due_date === todayStr ? 'Today' : (() => { const tmw = new Date(); tmw.setDate(tmw.getDate() + 1); return t.due_date === localDateKey(tmw) ? 'Tomorrow' : new Date(t.due_date + 'T12:00:00').toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' }) })()) : null
+                        return (
+                          <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 4px', borderBottom: '0.5px solid rgba(200,194,187,0.06)' }}>
+                            <div onClick={() => toggleTodo(t.id, t.done)} style={{ width: 16, height: 16, borderRadius: 4, border: `1.5px solid ${t.done ? 'rgba(100,200,130,0.6)' : 'rgba(200,194,187,0.25)'}`, background: t.done ? 'rgba(100,200,130,0.15)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
+                              {t.done && <span style={{ fontSize: 10, color: 'rgba(100,200,130,0.9)' }}>✓</span>}
+                            </div>
+                            <div style={{ flex: 1, fontSize: 12, color: t.done ? 'rgba(200,194,187,0.3)' : '#C8C2BB', textDecoration: t.done ? 'line-through' : 'none' }}>{t.text}</div>
+                            {dateLabel && <span style={{ fontSize: 10, letterSpacing: '0.05em', textTransform: 'uppercase' as const, color: overdue ? 'rgba(210,90,90,0.8)' : 'rgba(200,194,187,0.35)' }}>{overdue ? '⚠ ' : ''}{dateLabel}</span>}
+                            <button onClick={() => deleteTodo(t.id)} style={{ fontSize: 14, color: 'rgba(200,194,187,0.25)', background: 'transparent', border: 'none', cursor: 'pointer', lineHeight: 1, padding: '0 2px' }}>×</button>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
