@@ -91,6 +91,17 @@ type Project = {
   confirmed_at: string | null
   amount: number | null
   invoice_id: string | null
+  attachment_urls: { name: string; url: string; size: number }[]
+  archived_at: string | null
+}
+
+function attachmentIcon(name: string): string {
+  const ext = name.split('.').pop()?.toLowerCase() || ''
+  if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic'].includes(ext)) return '🖼️'
+  if (['mp4', 'mov', 'avi', 'webm', 'mkv'].includes(ext)) return '🎬'
+  if (ext === 'pdf') return '📄'
+  if (['doc', 'docx'].includes(ext)) return '📝'
+  return '📎'
 }
 
 function ProjectsPageInner() {
@@ -104,6 +115,8 @@ function ProjectsPageInner() {
   const searchParams = useSearchParams()
   const [modalProject, setModalProject] = useState<Project | null>(null)
   const [modalEditing, setModalEditing] = useState(true)
+  const [modalTab, setModalTab] = useState<'overview' | 'dates' | 'notes'>('overview')
+  useEffect(() => { setModalTab('overview') }, [modalProject?.id])
   const [modalSaving, setModalSaving] = useState(false)
   const [modalSaved, setModalSaved] = useState(false)
   const [autoSaveTimer, setAutoSaveTimer] = useState<any>(null)
@@ -446,8 +459,11 @@ function ProjectsPageInner() {
   }
 
   async function archiveProject(id: string, archived: boolean) {
-    await supabase.from('projects1').update({ archived }).eq('id', id)
-    setProjects(p => p.map(proj => proj.id === id ? { ...proj, archived } : proj))
+    // archived_at drives the 30-day attachment cleanup — cleared on unarchive
+    // so a project pulled back out of the archive isn't still on that clock.
+    const archived_at = archived ? new Date().toISOString() : null
+    await supabase.from('projects1').update({ archived, archived_at }).eq('id', id)
+    setProjects(p => p.map(proj => proj.id === id ? { ...proj, archived, archived_at } : proj))
     setModalProject(null)
   }
 
@@ -927,6 +943,26 @@ function ProjectsPageInner() {
               </div>
             </div>
             <div style={{ padding: 24 }}>
+              {modalProject.attachment_urls && modalProject.attachment_urls.length > 0 && (
+                <div style={{ marginBottom: 20, background: 'rgba(100,150,220,0.06)', border: '0.5px solid rgba(100,150,220,0.2)', borderRadius: 6, padding: '14px 16px' }}>
+                  <div style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(100,150,220,0.85)', marginBottom: 10 }}>Client attachments ({modalProject.attachment_urls.length})</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                    {modalProject.attachment_urls.map((a, ai) => (
+                      <a key={ai} href={a.url} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#C8C2BB', textDecoration: 'none', background: 'rgba(200,194,187,0.06)', border: '0.5px solid rgba(200,194,187,0.12)', borderRadius: 4, padding: '6px 10px', maxWidth: 240 }}>
+                        <span>{attachmentIcon(a.name)}</span>
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.name}</span>
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: 4, marginBottom: 20, borderBottom: '0.5px solid rgba(200,194,187,0.09)' }}>
+                {[{ id: 'overview', label: 'Overview' }, { id: 'dates', label: 'Dates & Deliverables' }, { id: 'notes', label: 'Notes & Files' }].map(tab => (
+                  <button key={tab.id} onClick={() => setModalTab(tab.id as any)} style={{ fontSize: 12, padding: '10px 14px', background: 'transparent', border: 'none', borderBottom: `2px solid ${modalTab === tab.id ? '#C8C2BB' : 'transparent'}`, color: modalTab === tab.id ? '#C8C2BB' : 'rgba(200,194,187,0.35)', cursor: 'pointer', fontFamily: 'inherit', marginBottom: -1 }}>{tab.label}</button>
+                ))}
+              </div>
+              {modalTab === 'overview' && (
+              <>
               <div style={{ marginBottom: 24 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
                   {STAGES.map((stage, idx) => {
@@ -985,6 +1021,10 @@ function ProjectsPageInner() {
                   ) : null}
                 </div>
               </div>
+              </>
+              )}
+              {modalTab === 'dates' && (
+              <>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, marginBottom: 20 }}>
                 {[{ label: 'Shoot date', key: 'shoot_date' as const }, { label: 'Draft due', key: 'draft_due' as const }, { label: 'Delivery date', key: 'delivery_due' as const }].map(({ label, key }) => (
                   <div key={key}>
@@ -1076,6 +1116,10 @@ function ProjectsPageInner() {
                   </div>
                 </div>
               )}
+              </>
+              )}
+              {modalTab === 'notes' && (
+              <>
               <div style={{ marginBottom: 20 }}>
                 <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>Google Drive</div>
                 {modalEditing ? (
@@ -1122,6 +1166,8 @@ function ProjectsPageInner() {
                   <textarea value={modalProject.editor_notes || ''} onChange={e => setModalProject(p => { const u = p ? { ...p, editor_notes: e.target.value } : p; if (u) triggerAutoSave(u); return u })} style={{ width: '100%', background: 'rgba(100,150,220,0.03)', border: '0.5px solid rgba(100,150,220,0.12)', borderRadius: 4, padding: '10px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', lineHeight: 1.7, resize: 'vertical' as const, minHeight: 80 }} placeholder="Editor notes..." />
                 </div>
               </div>
+              </>
+              )}
               <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 16, borderTop: '0.5px solid rgba(200,194,187,0.09)' }}>
                 <div style={{ display: 'flex', gap: 8 }}>
                 {modalProject.drive_url && (
