@@ -77,6 +77,9 @@ function DriveFolder({ project, clientEmail, clientName }: { project: any; clien
   const [feedbackTimestamp, setFeedbackTimestamp] = React.useState('')
   const [feedbackMessage, setFeedbackMessage] = React.useState('')
   const [submittingFeedback, setSubmittingFeedback] = React.useState(false)
+  const [generalFeedbackMessage, setGeneralFeedbackMessage] = React.useState('')
+  const [submittingGeneralFeedback, setSubmittingGeneralFeedback] = React.useState(false)
+  const [generalFeedbackSent, setGeneralFeedbackSent] = React.useState(false)
   const [feedbackSent, setFeedbackSent] = React.useState(false)
 
   React.useEffect(() => {
@@ -135,6 +138,44 @@ function DriveFolder({ project, clientEmail, clientName }: { project: any; clien
       setTimeout(() => setFeedbackSent(false), 2500)
     }
     setSubmittingFeedback(false)
+  }
+
+  // Feedback on the project as a whole, not tied to any one clip — same table
+  // as per-video feedback (file_id null marks it as general), so it shows up
+  // in the studio's existing revision-request pipeline without new plumbing.
+  async function submitGeneralFeedback() {
+    if (!generalFeedbackMessage.trim() || !clientEmail) return
+    setSubmittingGeneralFeedback(true)
+    const { data, error } = await supabase.from('video_feedback').insert([{
+      project_id: project.id,
+      file_id: null,
+      file_name: null,
+      client_email: clientEmail,
+      client_name: clientName || clientEmail,
+      timestamp_seconds: null,
+      message: generalFeedbackMessage.trim(),
+    }]).select().single()
+    if (!error && data) {
+      try {
+        await fetch('/api/video-feedback', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            projectId: project.id,
+            projectTitle: project.title,
+            fileName: null,
+            clientName: clientName || clientEmail,
+            clientEmail,
+            timestampSeconds: null,
+            message: generalFeedbackMessage.trim(),
+          }),
+        })
+      } catch (e) { console.error('Feedback notify error:', e) }
+      setGeneralFeedbackMessage('')
+      setGeneralFeedbackSent(true)
+      setTimeout(() => setGeneralFeedbackSent(false), 2500)
+    }
+    setSubmittingGeneralFeedback(false)
   }
 
   function loadRoot() {
@@ -208,6 +249,15 @@ function DriveFolder({ project, clientEmail, clientName }: { project: any; clien
           {project.shoot_date && <div style={{ fontSize:11, color:'rgba(200,194,187,0.4)' }}>Shoot: {new Date(project.shoot_date+'T12:00:00').toLocaleDateString('en-NZ',{day:'numeric',month:'short',year:'numeric'})}</div>}
           {project.address && <div style={{ fontSize:11, color:'rgba(200,194,187,0.4)' }}>{project.address.split(',')[0]}</div>}
           <div style={{ fontSize:11, color:'rgba(100,200,130,0.7)' }}>{files.length} item{files.length!==1?'s':''}</div>
+        </div>
+      </div>
+      <div style={{ background:'#1A1F28', border:'0.5px solid rgba(200,194,187,0.09)', borderRadius:7, overflow:'hidden', marginBottom:14, padding:'14px 18px' }}>
+        <div style={{ fontSize:11, fontWeight:500, color:'#C8C2BB', marginBottom:8 }}>Have feedback on this project overall?</div>
+        <div style={{ display:'flex', gap:8 }}>
+          <textarea value={generalFeedbackMessage} onChange={e => setGeneralFeedbackMessage(e.target.value)} placeholder="e.g. Can we get a warmer grade across the whole set, and swap the intro clip?" rows={2} style={{ flex:1, background:'rgba(200,194,187,0.04)', border:'0.5px solid rgba(200,194,187,0.12)', borderRadius:4, padding:'8px 10px', fontSize:12, color:'#C8C2BB', fontFamily:'inherit', outline:'none', resize:'vertical' as const }} />
+          <button onClick={submitGeneralFeedback} disabled={submittingGeneralFeedback || !generalFeedbackMessage.trim()} style={{ fontSize:11, letterSpacing:'0.08em', textTransform:'uppercase', padding:'9px 14px', borderRadius:3, background: generalFeedbackSent ? 'rgba(100,200,130,0.15)' : '#C8C2BB', color: generalFeedbackSent ? 'rgba(100,200,130,0.9)' : '#111', border: generalFeedbackSent ? '0.5px solid rgba(100,200,130,0.3)' : 'none', cursor: submittingGeneralFeedback || !generalFeedbackMessage.trim() ? 'not-allowed' : 'pointer', fontWeight:500, fontFamily:'inherit', flexShrink:0, opacity: !generalFeedbackMessage.trim() && !submittingGeneralFeedback ? 0.5 : 1 }}>
+            {submittingGeneralFeedback ? 'Sending...' : generalFeedbackSent ? '✓ Sent' : 'Send'}
+          </button>
         </div>
       </div>
       {stack.length > 0 && (

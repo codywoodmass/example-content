@@ -435,6 +435,12 @@ function ProjectsPageInner() {
       read: false,
     }])
 
+    // A redelivery is the studio's own signal that requested changes have been
+    // made — close out any pending revision requests for this project rather
+    // than requiring a separate manual "mark resolved" per item first.
+    await supabase.from('video_feedback').update({ status: 'resolved' }).eq('project_id', project.id).eq('status', 'pending')
+    setProjectFeedback(p => p.map(f => f.status === 'pending' ? { ...f, status: 'resolved' } : f))
+
     // Update local state
     setModalProject(p => p ? { ...p, stage: 'Awaiting Confirmation', progress: 100 } : p)
     setProjects(p => p.map(proj => proj.id === project.id ? { ...proj, stage: 'Awaiting Confirmation', progress: 100 } : proj))

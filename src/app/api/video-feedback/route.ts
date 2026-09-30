@@ -18,8 +18,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Missing clientEmail or message' }, { status: 400 })
   }
 
-  const timeLabel = formatTimestamp(timestampSeconds || 0)
-  const notifMessage = `${clientName || clientEmail} left feedback at ${timeLabel} on "${fileName || 'a file'}" (${projectTitle || 'project'}): ${message}`
+  const timeLabel = fileName ? formatTimestamp(timestampSeconds || 0) : null
+  const notifMessage = fileName
+    ? `${clientName || clientEmail} left feedback at ${timeLabel} on "${fileName}" (${projectTitle || 'project'}): ${message}`
+    : `${clientName || clientEmail} left feedback on ${projectTitle || 'the project'}: ${message}`
 
   try {
     await supabase.from('notifications').insert([{
@@ -46,9 +48,12 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify({
         from: process.env.RESEND_FROM_EMAIL || 'Example Content <onboarding@resend.dev>',
         to: STUDIO_EMAIL,
-        subject: `Video feedback — ${projectTitle || 'Project'} @ ${timeLabel}`,
-        html: `
-          <p><strong>${clientName || clientEmail}</strong> left feedback on <strong>${fileName || 'a file'}</strong> (${projectTitle || 'project'}) at <strong>${timeLabel}</strong>:</p>
+        subject: fileName ? `Video feedback — ${projectTitle || 'Project'} @ ${timeLabel}` : `Project feedback — ${projectTitle || 'Project'}`,
+        html: fileName ? `
+          <p><strong>${clientName || clientEmail}</strong> left feedback on <strong>${fileName}</strong> (${projectTitle || 'project'}) at <strong>${timeLabel}</strong>:</p>
+          <p>${message}</p>
+        ` : `
+          <p><strong>${clientName || clientEmail}</strong> left feedback on <strong>${projectTitle || 'the project'}</strong>:</p>
           <p>${message}</p>
         `,
       }),

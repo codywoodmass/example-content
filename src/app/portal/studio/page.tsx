@@ -213,6 +213,7 @@ export default function StudioPortal() {
   const [changeRequests, setChangeRequests] = useState<any[]>([])
   const [changeRequestCount, setChangeRequestCount] = useState(0)
   const [videoFeedbackCount, setVideoFeedbackCount] = useState(0)
+  const [videoFeedbackList, setVideoFeedbackList] = useState<any[]>([])
   const [respondingToCR, setRespondingToCR] = useState<any>(null)
   const [dashProjects, setDashProjects] = useState<any[]>([])
   const [modalProject, setModalProject] = useState<any>(null)
@@ -270,6 +271,9 @@ export default function StudioPortal() {
   const [confirmingBooking, setConfirmingBooking] = useState(false)
   const [eventLink, setEventLink] = useState("")
   const [showConnectPrompt, setShowConnectPrompt] = useState(false)
+  const [showDailyDigest, setShowDailyDigest] = useState(false)
+  const [digestShoots, setDigestShoots] = useState<any[]>([])
+  const [digestDeliveries, setDigestDeliveries] = useState<any[]>([])
 
   // Date/time negotiation — propose a slot to the client against a real
   // Google Calendar week view, rather than confirming directly.
@@ -365,7 +369,7 @@ export default function StudioPortal() {
       setUserRole(profile.role)
       setUser(session.user)
       setLoading(false)
-      loadBookings()
+      loadBookings(session.user.email)
       checkGoogleStatus()
     })
 
@@ -426,7 +430,7 @@ export default function StudioPortal() {
     setModalSaving(false)
   }
 
-  async function loadBookings() {
+  async function loadBookings(digestUserEmail?: string) {
     const [{ data, error }, { data: projects }, { data: crs }, { data: vf }] = await Promise.all([
       supabase.from('bookings1').select('*').in('status', ['pending', 'date_proposed', 'alt_requested', 'confirmed']).order('created_at', { ascending: false }),
       supabase.from('projects1').select('*').order('created_at', { ascending: false }),
@@ -441,7 +445,7 @@ export default function StudioPortal() {
       setBookingCount(actionable.length)
     }
     if (crs) { setChangeRequests(crs); setChangeRequestCount(crs.length) }
-    if (vf) setVideoFeedbackCount(vf.length)
+    if (vf) { setVideoFeedbackCount(vf.length); setVideoFeedbackList(vf) }
     if (projects) {
       const now = new Date()
       const in14 = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000)
@@ -453,7 +457,33 @@ export default function StudioPortal() {
       }).sort((a: any, b: any) => new Date(a.shoot_date).getTime() - new Date(b.shoot_date).getTime()))
       setRecentDeliveries(projects.filter((p: any) => p.drive_url && !p.archived && p.stage === 'Awaiting Confirmation').slice(0, 10))
       setScheduleProjects(projects.filter((p: any) => !p.archived))
+
+      // Once-a-day "what's coming up" popup, gated per signed-in user so Fin
+      // and Cody each get their own prompt rather than one dismissing it for both.
+      if (digestUserEmail) {
+        const today = localDateKey(new Date())
+        const seenKey = `daily_digest_seen_${digestUserEmail}_${today}`
+        if (!localStorage.getItem(seenKey)) {
+          const in7 = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
+          const shoots = projects.filter((p: any) => !p.archived && p.shoot_date && new Date(p.shoot_date) >= now && new Date(p.shoot_date) <= in7)
+            .sort((a: any, b: any) => new Date(a.shoot_date).getTime() - new Date(b.shoot_date).getTime())
+          const deliveries = projects.filter((p: any) => !p.archived && p.delivery_due && p.stage !== 'Awaiting Confirmation' && new Date(p.delivery_due) >= now && new Date(p.delivery_due) <= in7)
+            .sort((a: any, b: any) => new Date(a.delivery_due).getTime() - new Date(b.delivery_due).getTime())
+          if (shoots.length > 0 || deliveries.length > 0 || (vf && vf.length > 0)) {
+            setDigestShoots(shoots)
+            setDigestDeliveries(deliveries)
+            setShowDailyDigest(true)
+          }
+          localStorage.setItem(seenKey, '1')
+        }
+      }
     }
+  }
+
+  async function resolveDashboardFeedback(id: string) {
+    await supabase.from('video_feedback').update({ status: 'resolved' }).eq('id', id)
+    setVideoFeedbackList(p => p.filter(f => f.id !== id))
+    setVideoFeedbackCount(c => Math.max(0, c - 1))
   }
 
   async function connectGoogleCalendar() {
@@ -860,11 +890,11 @@ export default function StudioPortal() {
                     }).length
                     return count + ' shooting this week'
                   })() },
-                  { label: 'Revision requests', value: videoFeedbackCount, sub: videoFeedbackCount > 0 ? 'Client feedback awaiting a response' : 'All clear', alert: videoFeedbackCount > 0 },
+                  { label: 'Revision requests', value: videoFeedbackCount, sub: videoFeedbackCount > 0 ? 'Client feedback awaiting a response' : 'All clear', alert: videoFeedbackCount > 0, onClick: () => setActiveView('revisions') },
                   { label: 'In post-production', value: dashProjects.filter((p: any) => p.stage === 'Post-Production' || p.stage === 'Revisions').length, sub: 'Editing & revisions' },
                   { label: 'Ready to invoice', value: dashProjects.filter((p: any) => p.stage === 'Awaiting Confirmation' && !p.invoice_id).length, sub: (() => { const now = new Date(); const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0); const days = Math.ceil((lastDay.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)); return days === 0 ? 'Last day of month!' : `${days} day${days !== 1 ? 's' : ''} until end of month` })(), alert: dashProjects.filter((p: any) => p.stage === 'Awaiting Confirmation' && !p.invoice_id).length > 0 },
-                ].map(({ label, value, sub, alert }: any) => (
-                  <div key={label} style={{ background: 'linear-gradient(135deg, rgba(30,36,48,0.9) 0%, rgba(20,24,32,0.95) 100%)', border: '0.5px solid ' + (alert ? 'rgba(210,90,90,0.4)' : 'rgba(200,194,187,0.08)'), borderRadius: 12, padding: '20px 22px', position: 'relative', overflow: 'hidden', boxShadow: alert ? '0 0 20px rgba(210,90,90,0.08) inset' : '0 0 0 0 transparent' }}>
+                ].map(({ label, value, sub, alert, onClick }: any) => (
+                  <div key={label} onClick={onClick} style={{ background: 'linear-gradient(135deg, rgba(30,36,48,0.9) 0%, rgba(20,24,32,0.95) 100%)', border: '0.5px solid ' + (alert ? 'rgba(210,90,90,0.4)' : 'rgba(200,194,187,0.08)'), borderRadius: 12, padding: '20px 22px', position: 'relative', overflow: 'hidden', boxShadow: alert ? '0 0 20px rgba(210,90,90,0.08) inset' : '0 0 0 0 transparent', cursor: onClick ? 'pointer' : 'default' }}>
                     <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '1px', background: alert ? 'linear-gradient(90deg, transparent, rgba(210,90,90,0.5), transparent)' : 'linear-gradient(90deg, transparent, rgba(200,194,187,0.12), transparent)' }} />
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
                       <div style={{ fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', fontWeight: 500 }}>{label}</div>
@@ -1449,6 +1479,66 @@ export default function StudioPortal() {
             </div>
           </div>
         )}
+
+        {/* ===== REVISION REQUESTS ===== */}
+        {activeView === 'revisions' && (() => {
+          const grouped: Record<string, any[]> = {}
+          videoFeedbackList.forEach((f: any) => {
+            const key = f.project_id || 'unknown'
+            if (!grouped[key]) grouped[key] = []
+            grouped[key].push(f)
+          })
+          const groups = Object.entries(grouped).map(([projectId, items]) => ({
+            project: dashProjects.find((p: any) => p.id === projectId),
+            projectId,
+            items: items.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()),
+          }))
+          return (
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 28px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', background: '#14181F' }}>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 500, color: '#fff' }}>Revision Requests</div>
+                  <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>{videoFeedbackList.length} awaiting a response</div>
+                </div>
+                <button onClick={() => setActiveView('dashboard')} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>← Dashboard</button>
+              </div>
+              <div style={{ padding: 28 }}>
+                {groups.length === 0 ? (
+                  <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, padding: '40px 28px', textAlign: 'center', color: 'rgba(200,194,187,0.3)', fontSize: 13 }}>No revision requests — all clear</div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                    {groups.map(({ project, projectId, items }) => (
+                      <div key={projectId} style={{ background: '#1A1F28', border: '0.5px solid rgba(210,175,80,0.2)', borderRadius: 7, overflow: 'hidden' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)' }}>
+                          <div>
+                            <div style={{ fontSize: 13, fontWeight: 500, color: '#C8C2BB' }}>{project?.title || 'Unknown project'}</div>
+                            <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>{project?.client}</div>
+                          </div>
+                          {project && <button onClick={() => router.push('/portal/studio/projects?open=' + project.id)} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>View project →</button>}
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                          {items.map((fb: any, i: number) => (
+                            <div key={fb.id} style={{ padding: '12px 18px', borderBottom: i < items.length - 1 ? '0.5px solid rgba(200,194,187,0.06)' : 'none' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
+                                <div style={{ fontSize: 11, fontWeight: 500, color: '#C8C2BB' }}>
+                                  {fb.client_name || fb.client_email}
+                                  <span style={{ color: 'rgba(200,194,187,0.4)', fontWeight: 400 }}> · {fb.file_name ? `${fb.file_name}${fb.timestamp_seconds != null ? ' @ ' + Math.floor(fb.timestamp_seconds / 60) + ':' + String(Math.floor(fb.timestamp_seconds % 60)).padStart(2, '0') : ''}` : 'General project feedback'}</span>
+                                </div>
+                                <button onClick={() => resolveDashboardFeedback(fb.id)} style={{ fontSize: 9, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '3px 8px', borderRadius: 3, border: '0.5px solid rgba(210,175,80,0.3)', color: 'rgba(210,175,80,0.9)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Mark resolved</button>
+                              </div>
+                              <div style={{ fontSize: 12, color: 'rgba(200,194,187,0.7)', lineHeight: 1.5 }}>{fb.message}</div>
+                              <div style={{ fontSize: 10, color: 'rgba(200,194,187,0.25)', marginTop: 4 }}>{new Date(fb.created_at).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )
+        })()}
 
         {/* ===== EQUIPMENT ===== */}
         {activeView === 'equipment' && (
@@ -2336,6 +2426,65 @@ export default function StudioPortal() {
               <button onClick={() => setShowConnectPrompt(false)} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '9px 16px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Not now</button>
               <button onClick={connectGoogleCalendar} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '9px 16px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>Connect Google →</button>
             </div>
+          </div>
+        </div>
+      )}
+      {/* DAILY DIGEST — upcoming shoots/deliveries + revision requests, once per day per user */}
+      {showDailyDigest && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }} onClick={() => setShowDailyDigest(false)}>
+          <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 10, width: '100%', maxWidth: 480, maxHeight: '85vh', overflowY: 'auto', padding: 28 }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: 15, fontWeight: 500, color: '#fff', marginBottom: 4 }}>What's coming up</div>
+            <div style={{ fontSize: 12, color: 'rgba(200,194,187,0.4)', marginBottom: 20 }}>{new Date().toLocaleDateString('en-NZ', { weekday: 'long', day: 'numeric', month: 'long' })} · next 7 days</div>
+
+            {videoFeedbackCount > 0 && (
+              <div onClick={() => { setShowDailyDigest(false); setActiveView('revisions') }} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(210,90,90,0.08)', border: '0.5px solid rgba(210,90,90,0.25)', borderRadius: 6, padding: '12px 14px', marginBottom: 18, cursor: 'pointer' }}>
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 500, color: 'rgba(210,90,90,0.9)' }}>{videoFeedbackCount} revision request{videoFeedbackCount !== 1 ? 's' : ''} awaiting a response</div>
+                  <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', marginTop: 2 }}>Client feedback on delivered content</div>
+                </div>
+                <span style={{ fontSize: 11, color: 'rgba(210,90,90,0.8)' }}>Review →</span>
+              </div>
+            )}
+
+            <div style={{ marginBottom: 18 }}>
+              <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 8 }}>Upcoming shoots ({digestShoots.length})</div>
+              {digestShoots.length === 0 ? (
+                <div style={{ fontSize: 12, color: 'rgba(200,194,187,0.25)' }}>Nothing shooting in the next 7 days</div>
+              ) : (
+                <div style={{ background: '#14181F', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 6, overflow: 'hidden' }}>
+                  {digestShoots.map((p: any, i: number) => (
+                    <div key={p.id} onClick={() => { setShowDailyDigest(false); router.push('/portal/studio/projects?open=' + p.id) }} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', borderBottom: i < digestShoots.length - 1 ? '0.5px solid rgba(200,194,187,0.06)' : 'none', cursor: 'pointer' }}>
+                      <div>
+                        <div style={{ fontSize: 12, color: '#C8C2BB' }}>{p.title}</div>
+                        <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>{p.client}</div>
+                      </div>
+                      <div style={{ fontSize: 11, color: 'rgba(210,175,80,0.8)' }}>{new Date(p.shoot_date + 'T12:00:00').toLocaleDateString('en-NZ', { weekday: 'short', day: 'numeric', month: 'short' })}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div style={{ marginBottom: 24 }}>
+              <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 8 }}>Upcoming deliveries ({digestDeliveries.length})</div>
+              {digestDeliveries.length === 0 ? (
+                <div style={{ fontSize: 12, color: 'rgba(200,194,187,0.25)' }}>Nothing due in the next 7 days</div>
+              ) : (
+                <div style={{ background: '#14181F', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 6, overflow: 'hidden' }}>
+                  {digestDeliveries.map((p: any, i: number) => (
+                    <div key={p.id} onClick={() => { setShowDailyDigest(false); router.push('/portal/studio/projects?open=' + p.id) }} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', borderBottom: i < digestDeliveries.length - 1 ? '0.5px solid rgba(200,194,187,0.06)' : 'none', cursor: 'pointer' }}>
+                      <div>
+                        <div style={{ fontSize: 12, color: '#C8C2BB' }}>{p.title}</div>
+                        <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>{p.client}</div>
+                      </div>
+                      <div style={{ fontSize: 11, color: 'rgba(100,200,130,0.8)' }}>{new Date(p.delivery_due + 'T12:00:00').toLocaleDateString('en-NZ', { weekday: 'short', day: 'numeric', month: 'short' })}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <button onClick={() => setShowDailyDigest(false)} style={{ width: '100%', fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '10px 16px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>Got it</button>
           </div>
         </div>
       )}
