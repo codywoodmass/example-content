@@ -222,13 +222,14 @@ export default function StudioPortal() {
   const [newTodoDate, setNewTodoDate] = useState<string>('')
 
   async function loadTodos() {
-    const { data } = await supabase.from('todos').select('*').order('done', { ascending: true }).order('due_date', { ascending: true, nullsFirst: false }).order('created_at', { ascending: true })
+    if (!user?.email) return
+    const { data } = await supabase.from('todos').select('*').eq('user_email', user.email).order('done', { ascending: true }).order('due_date', { ascending: true, nullsFirst: false }).order('created_at', { ascending: true })
     setTodos(data || [])
   }
 
   async function addTodo() {
-    if (!newTodoText.trim()) return
-    const { data, error } = await supabase.from('todos').insert([{ text: newTodoText.trim(), due_date: newTodoDate || null }]).select().single()
+    if (!newTodoText.trim() || !user?.email) return
+    const { data, error } = await supabase.from('todos').insert([{ text: newTodoText.trim(), due_date: newTodoDate || null, user_email: user.email }]).select().single()
     if (error) { notify('Error adding task: ' + error.message, 'error'); return }
     setTodos(p => [...p, data])
     setNewTodoText('')
@@ -245,7 +246,7 @@ export default function StudioPortal() {
     setTodos(p => p.filter(t => t.id !== id))
   }
 
-  useEffect(() => { loadTodos() }, [])
+  useEffect(() => { if (user?.email) loadTodos() }, [user?.email])
   const [deliveryModal, setDeliveryModal] = useState<any>(null)
   const [modalEditing, setModalEditing] = useState(false)
   const [modalSaving, setModalSaving] = useState(false)

@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import StudioSidebar from '../StudioSidebar'
 import { notify, confirmDialog, ToastHost, ConfirmHost } from '@/lib/notify'
+import { localDateKey } from '@/lib/time'
 
 type Todo = { id: string; text: string; due_date: string | null; done: boolean; created_at: string }
 
@@ -17,22 +18,30 @@ const BUCKET_COLOR: Record<string, string> = {
 }
 
 export default function TodosPage() {
+  const [userEmail, setUserEmail] = useState<string | null>(null)
   const [todos, setTodos] = useState<Todo[]>([])
   const [loading, setLoading] = useState(true)
   const [newText, setNewText] = useState('')
   const [newDate, setNewDate] = useState('')
   const [showDone, setShowDone] = useState(false)
 
-  const todayStr = new Date().toISOString().split('T')[0]
+  const todayStr = localDateKey(new Date())
   const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1)
-  const tomorrowStr = tomorrow.toISOString().split('T')[0]
+  const tomorrowStr = localDateKey(tomorrow)
   const weekAhead = new Date(); weekAhead.setDate(weekAhead.getDate() + 7)
 
-  useEffect(() => { loadTodos() }, [])
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user?.email) setUserEmail(session.user.email)
+    })
+  }, [])
+  useEffect(() => { if (userEmail) loadTodos() }, [userEmail])
 
   async function loadTodos() {
+    if (!userEmail) return
     setLoading(true)
     const { data } = await supabase.from('todos').select('*')
+      .eq('user_email', userEmail)
       .order('done', { ascending: true })
       .order('due_date', { ascending: true, nullsFirst: false })
       .order('created_at', { ascending: true })
@@ -41,8 +50,8 @@ export default function TodosPage() {
   }
 
   async function addTodo() {
-    if (!newText.trim()) return
-    const { data, error } = await supabase.from('todos').insert([{ text: newText.trim(), due_date: newDate || null }]).select().single()
+    if (!newText.trim() || !userEmail) return
+    const { data, error } = await supabase.from('todos').insert([{ text: newText.trim(), due_date: newDate || null, user_email: userEmail }]).select().single()
     if (error) { notify('Error adding task: ' + error.message, 'error'); return }
     setTodos(p => [...p, data])
     setNewText('')
