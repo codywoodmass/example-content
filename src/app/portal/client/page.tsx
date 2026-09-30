@@ -2,7 +2,7 @@
 import React from 'react'
 import { useEffect, useState } from 'react'
 import { supabase, ensureClientProfile } from '@/lib/supabase'
-import { formatTime12 } from '@/lib/time'
+import { formatTime12, localDateKey, addBusinessDays } from '@/lib/time'
 import { useRouter } from 'next/navigation'
 
 const VIDEO_FORMATS = ['1920×1080', '1080×1080', '9×16 Vertical', '4×5', '4K 3840×2160']
@@ -411,6 +411,8 @@ export default function ClientPortal() {
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [activeView, setActiveView] = useState('dashboard')
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [selectedCalDay, setSelectedCalDay] = useState<string | null>(null)
   const handleViewChange = (view: string) => {
     setActiveView(view)
     if (notifications.length > 0) setShowNotifications(true)
@@ -739,11 +741,44 @@ export default function ClientPortal() {
 
   return (
     <main style={{ background: '#0E1014', minHeight: '100vh', fontFamily: 'Inter, sans-serif', color: '#C8C2BB', display: 'flex' }}>
+      <style>{`
+        .ec-client-topbar { display: none; }
+        .ec-client-backdrop { display: none; }
+        @media (max-width: 860px) {
+          .ec-client-sidebar { position: fixed !important; top: 0; left: 0; z-index: 200; transform: translateX(-100%); transition: transform 0.2s ease; }
+          .ec-client-sidebar.open { transform: translateX(0); }
+          .ec-client-topbar { display: flex !important; }
+          .ec-client-backdrop.open { display: block !important; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 199; }
+          .ec-client-main { padding-top: 56px; }
+        }
+        .ec-grid-4-resp { display: grid; grid-template-columns: repeat(4,1fr); }
+        .ec-grid-sidebar-resp { display: grid; grid-template-columns: 1fr 300px; }
+        @media (max-width: 900px) {
+          .ec-grid-4-resp { grid-template-columns: repeat(2,1fr) !important; }
+          .ec-grid-sidebar-resp { grid-template-columns: 1fr !important; }
+        }
+        @media (max-width: 640px) {
+          .ec-grid-resp { grid-template-columns: 1fr !important; }
+          .ec-grid-4-resp { grid-template-columns: repeat(2,1fr) !important; }
+        }
+      `}</style>
+
+      {/* MOBILE TOP BAR */}
+      <div className="ec-client-topbar" style={{ position: 'fixed', top: 0, left: 0, right: 0, height: 56, zIndex: 150, background: '#14181F', borderBottom: '0.5px solid rgba(200,194,187,0.09)', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px' }}>
+        <img src="/images/Pale_logo_EX.png" alt="Example Content" style={{ height: 28, objectFit: 'contain', display: 'block' }} />
+        <button onClick={() => setMobileMenuOpen(true)} aria-label="Menu" style={{ background: 'transparent', border: 'none', width: 28, height: 20, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', cursor: 'pointer', padding: 0 }}>
+          <span style={{ height: 1.5, background: '#C8C2BB', width: '100%' }} />
+          <span style={{ height: 1.5, background: '#C8C2BB', width: '100%' }} />
+          <span style={{ height: 1.5, background: '#C8C2BB', width: '100%' }} />
+        </button>
+      </div>
+      <div className={`ec-client-backdrop ${mobileMenuOpen ? 'open' : ''}`} onClick={() => setMobileMenuOpen(false)} />
 
       {/* SIDEBAR */}
-      <aside style={{ width: 220, flexShrink: 0, background: '#14181F', borderRight: '0.5px solid rgba(200,194,187,0.09)', display: 'flex', flexDirection: 'column', position: 'sticky', top: 0, height: '100vh' }}>
-        <div style={{ padding: '14px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', display: 'flex', alignItems: 'center' }}>
+      <aside className={`ec-client-sidebar ${mobileMenuOpen ? 'open' : ''}`} style={{ width: 220, flexShrink: 0, background: '#14181F', borderRight: '0.5px solid rgba(200,194,187,0.09)', display: 'flex', flexDirection: 'column', position: 'sticky', top: 0, height: '100vh' }}>
+        <div style={{ padding: '14px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <img src="/images/Pale_logo_EX.png" alt="Example Content" style={{ height: 40, objectFit: 'contain', maxWidth: 184 }} />
+          <button onClick={() => setMobileMenuOpen(false)} className="ec-client-topbar" style={{ display: 'none', background: 'transparent', border: 'none', color: 'rgba(200,194,187,0.5)', fontSize: 20, cursor: 'pointer', lineHeight: 1 }}>×</button>
         </div>
         <div style={{ margin: '14px 14px 8px', background: 'rgba(61,71,86,0.3)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 6, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{ width: 30, height: 30, borderRadius: '50%', background: '#3D4756', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 500, color: '#C8C2BB', flexShrink: 0 }}>{clientProfile?.name ? clientProfile.name.split(' ').map((n: string) => n[0]).join('').slice(0,2).toUpperCase() : user?.email?.[0]?.toUpperCase() || '?'}</div>
@@ -762,7 +797,7 @@ export default function ClientPortal() {
             { id: 'pitches', label: 'Our Briefs' },
             { id: 'invoices', label: 'Invoices' },
           ].map(item => (
-            <button key={item.id} onClick={() => { setActiveView(item.id); setBookingStep(1); setSelectedCat(''); setSelectedShoot(null); setSelectedDel(null); setSelectedAddons([]); setTcAccepted(false); setPreferredDate(''); setDraftDue(''); setDeliveryDue(''); setBookingNotes(''); setAccessNotes(''); setPropertyAddress(''); setProjectType(''); setProjectTitle(''); setProjectDescription(''); setTargetAudience(''); setKeyMessage(''); setTalentDetails(''); setBriefDeliverables([{ id: '1', name: '', quantity: 1, duration: '', formats: [], notes: '' }]); setDateFlexible(false); setShootDuration(''); setReferenceLinks(''); setBudgetRange(''); setBookingAttachments([]) }} style={{ display: 'flex', alignItems: 'center', width: '100%', padding: '13px 14px', borderRadius: 6, fontSize: 13, letterSpacing: '0.01em', fontWeight: activeView === item.id ? 600 : 500, color: activeView === item.id ? '#fff' : 'rgba(200,194,187,0.5)', background: activeView === item.id ? 'rgba(61,71,86,0.4)' : 'transparent', border: activeView === item.id ? '0.5px solid rgba(200,194,187,0.15)' : '0.5px solid transparent', cursor: 'pointer', marginBottom: 8, textAlign: 'left', fontFamily: 'var(--font-space-grotesk), Inter, sans-serif' }}>
+            <button key={item.id} onClick={() => { setMobileMenuOpen(false); setActiveView(item.id); setBookingStep(1); setSelectedCat(''); setSelectedShoot(null); setSelectedDel(null); setSelectedAddons([]); setTcAccepted(false); setPreferredDate(''); setDraftDue(''); setDeliveryDue(''); setBookingNotes(''); setAccessNotes(''); setPropertyAddress(''); setProjectType(''); setProjectTitle(''); setProjectDescription(''); setTargetAudience(''); setKeyMessage(''); setTalentDetails(''); setBriefDeliverables([{ id: '1', name: '', quantity: 1, duration: '', formats: [], notes: '' }]); setDateFlexible(false); setShootDuration(''); setReferenceLinks(''); setBudgetRange(''); setBookingAttachments([]) }} style={{ display: 'flex', alignItems: 'center', width: '100%', padding: '13px 14px', borderRadius: 6, fontSize: 13, letterSpacing: '0.01em', fontWeight: activeView === item.id ? 600 : 500, color: activeView === item.id ? '#fff' : 'rgba(200,194,187,0.5)', background: activeView === item.id ? 'rgba(61,71,86,0.4)' : 'transparent', border: activeView === item.id ? '0.5px solid rgba(200,194,187,0.15)' : '0.5px solid transparent', cursor: 'pointer', marginBottom: 8, textAlign: 'left', fontFamily: 'var(--font-space-grotesk), Inter, sans-serif' }}>
               {item.label}
             </button>
           ))}
@@ -774,7 +809,7 @@ export default function ClientPortal() {
       </aside>
 
       {/* MAIN */}
-      <div style={{ flex: 1, overflowY: 'auto' }}>
+      <div className="ec-client-main" style={{ flex: 1, overflowY: 'auto', minWidth: 0 }}>
 
         {/* ===== DASHBOARD ===== */}
         {activeView === 'dashboard' && (() => {
@@ -798,25 +833,34 @@ export default function ClientPortal() {
           const awaitingSchedule = clientBookings.filter((b: any) => !b.preferred_date && !b.proposed_date && isUnresolved(b.status))
           const completedProjects = clientProjects.filter((p: any) => p.stage === 'Awaiting Confirmation' || p.drive_url)
           const pendingBookings = clientBookings.filter((b: any) => isUnresolved(b.status))
+          // Same scoping as the studio dashboard's "Recent deliveries" slider.
+          const recentDeliveries = clientProjects.filter((p: any) => p.drive_url && !p.archived && p.stage === 'Awaiting Confirmation').slice(0, 10)
 
           // Calendar
           const startOfWeek = new Date(now)
           const dow = now.getDay() === 0 ? 6 : now.getDay() - 1
           startOfWeek.setDate(now.getDate() - dow)
           const weeks = Array.from({length: 5}, (_: any, wi: number) => Array.from({length: 7}, (_: any, di: number) => { const d = new Date(startOfWeek); d.setDate(startOfWeek.getDate() + wi * 7 + di); return d }))
-          const eventsByDate: Record<string, string[]> = {}
-          const addCalEvent = (date: string | null, type: string) => {
+          const eventsByDate: Record<string, { type: string; label: string; ref: any }[]> = {}
+          const addCalEvent = (date: string | null, type: string, label: string, ref: any) => {
             if (!date) return
             if (!eventsByDate[date]) eventsByDate[date] = []
-            eventsByDate[date].push(type)
+            eventsByDate[date].push({ type, label, ref })
           }
+          // Property shoots get an estimated delivery date — 3 business days after
+          // the shoot — shown on the calendar until the studio sets a real delivery_due.
           clientProjects.forEach((p: any) => {
-            addCalEvent(p.shoot_date, 'shoot')
-            addCalEvent(p.delivery_due, 'delivery')
+            if (p.shoot_date) addCalEvent(p.shoot_date, 'shoot', 'Shoot', p)
+            if (p.delivery_due) addCalEvent(p.delivery_due, 'delivery', 'Delivery due', p)
+            else if (p.category === 'Property' && p.shoot_date) addCalEvent(addBusinessDays(p.shoot_date, 3), 'delivery-estimate', 'Estimated delivery', p)
           })
-          clientBookings.filter((b: any) => b.preferred_date).forEach((b: any) => {
-            addCalEvent(b.preferred_date, b.status === 'confirmed' ? 'shoot' : 'pending')
+          clientBookings.filter((b: any) => isAwaitingProject(b)).forEach((b: any) => {
+            const bDate = b.proposed_date || b.preferred_date
+            if (!bDate) return
+            addCalEvent(bDate, b.status === 'confirmed' ? 'shoot' : 'pending', b.status === 'confirmed' ? 'Shoot (confirmed)' : 'Shoot (pending confirmation)', b)
+            if (b.category === 'property') addCalEvent(addBusinessDays(bDate, 3), 'delivery-estimate', 'Estimated delivery', b)
           })
+          const calTypeColors: Record<string,string> = { shoot: 'rgba(210,175,80,0.9)', pending: 'rgba(160,100,220,0.9)', delivery: 'rgba(100,200,130,0.9)', 'delivery-estimate': 'rgba(100,200,130,0.5)' }
 
           return (
             <div>
@@ -835,7 +879,7 @@ export default function ClientPortal() {
               <div style={{ padding: 28 }}>
                 {/* STAT CARDS */}
                 <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 12 }}>Your account</div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10, marginBottom: 24 }}>
+                <div className="ec-grid-4-resp" style={{ gap: 10, marginBottom: 24 }}>
                   {[
                     { label: 'Upcoming shoots', value: upcomingShoots.length, sub: upcomingShoots.length > 0 ? 'Next: ' + new Date(upcomingShoots[0].shoot_date + 'T12:00:00').toLocaleDateString('en-NZ',{day:'numeric',month:'short'}) : 'None scheduled' },
                     { label: 'Active projects', value: activeProjects.length, sub: activeProjects.length > 0 ? activeProjects[0].stage : 'All clear' },
@@ -850,7 +894,7 @@ export default function ClientPortal() {
                   ))}
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 20 }}>
+                <div className="ec-grid-sidebar-resp" style={{ gap: 20 }}>
                   {/* LEFT: UPCOMING SHOOTS + ACTIVE PROJECTS */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
                     {/* UPCOMING SHOOTS */}
@@ -860,7 +904,7 @@ export default function ClientPortal() {
                         <button onClick={() => setActiveView('book')} style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>+ Book new</button>
                       </div>
                       {awaitingSchedule.length > 0 && awaitingSchedule.map((b: any) => (
-                        <div key={b.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.06)' }}>
+                        <div key={b.id} onClick={() => setActiveView('upcoming')} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.06)', cursor: 'pointer' }}>
                           <div style={{ width: 42, flexShrink: 0, textAlign: 'center', background: 'rgba(210,175,80,0.08)', border: '0.5px solid rgba(210,175,80,0.2)', borderRadius: 5, padding: '5px 3px' }}>
                             <div style={{ fontSize: 16, opacity: 0.5 }}>⏳</div>
                           </div>
@@ -878,7 +922,7 @@ export default function ClientPortal() {
                         const STAGE_C: Record<string,any> = { 'Pre-Production': {color:'rgba(100,150,220,0.9)',bg:'rgba(25,45,80,0.4)'}, 'Shooting': {color:'rgba(210,175,80,0.9)',bg:'rgba(65,52,18,0.4)'}, 'Post-Production': {color:'rgba(160,100,220,0.9)',bg:'rgba(50,25,80,0.4)'}, 'Revisions': {color:'rgba(220,120,60,0.9)',bg:'rgba(80,35,15,0.4)'}, 'Awaiting Confirmation': {color:'rgba(100,200,130,0.9)',bg:'rgba(30,70,45,0.4)'}, 'Pending': {color:'rgba(210,175,80,0.9)',bg:'rgba(65,52,18,0.4)'}, 'Time proposed': {color:'rgba(100,150,220,0.9)',bg:'rgba(25,45,80,0.4)'}, 'Awaiting new time': {color:'rgba(160,100,220,0.9)',bg:'rgba(50,25,80,0.4)'}, 'Confirmed': {color:'rgba(100,200,130,0.9)',bg:'rgba(30,70,45,0.4)'} }
                         const sc = STAGE_C[p.stage] || {color:'#C8C2BB',bg:'rgba(200,194,187,0.1)'}
                         return (
-                          <div key={p.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '13px 18px', borderBottom: i < upcomingShoots.length - 1 ? '0.5px solid rgba(200,194,187,0.06)' : 'none' }}>
+                          <div key={p.id} onClick={() => p.isPending ? setActiveView('upcoming') : setSelectedProject(p)} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '13px 18px', borderBottom: i < upcomingShoots.length - 1 ? '0.5px solid rgba(200,194,187,0.06)' : 'none', cursor: 'pointer' }}>
                             <div style={{ width: 42, flexShrink: 0, textAlign: 'center', background: 'rgba(61,71,86,0.3)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 5, padding: '5px 3px' }}>
                               <div style={{ fontSize: 16, fontWeight: 600, color: '#fff', lineHeight: 1 }}>{d.getDate()}</div>
                               <div style={{ fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)', marginTop: 2 }}>{d.toLocaleDateString('en-NZ',{month:'short'})}</div>
@@ -903,7 +947,7 @@ export default function ClientPortal() {
                           const STAGE_C: Record<string,any> = { 'Pre-Production': {color:'rgba(100,150,220,0.9)',bg:'rgba(25,45,80,0.4)'}, 'Shooting': {color:'rgba(210,175,80,0.9)',bg:'rgba(65,52,18,0.4)'}, 'Post-Production': {color:'rgba(160,100,220,0.9)',bg:'rgba(50,25,80,0.4)'}, 'Revisions': {color:'rgba(220,120,60,0.9)',bg:'rgba(80,35,15,0.4)'} }
                           const sc = STAGE_C[p.stage] || {color:'#C8C2BB',bg:'rgba(200,194,187,0.1)'}
                           return (
-                            <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 18px', borderBottom: i < activeProjects.length - 1 ? '0.5px solid rgba(200,194,187,0.06)' : 'none' }}>
+                            <div key={p.id} onClick={() => setSelectedProject(p)} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 18px', borderBottom: i < activeProjects.length - 1 ? '0.5px solid rgba(200,194,187,0.06)' : 'none', cursor: 'pointer' }}>
                               <div style={{ flex: 1 }}>
                                 <div style={{ fontSize: 13, fontWeight: 500, color: '#C8C2BB', marginBottom: 3 }}>{p.title}</div>
                                 <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>{p.delivery_due ? 'Due: ' + new Date(p.delivery_due + 'T12:00:00').toLocaleDateString('en-NZ',{day:'numeric',month:'short'}) : p.stage}</div>
@@ -929,22 +973,22 @@ export default function ClientPortal() {
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 2, marginBottom: 4 }}>
                           {['Mo','Tu','We','Th','Fr','Sa','Su'].map(d => <div key={d} style={{ fontSize: 9, textAlign: 'center', color: 'rgba(200,194,187,0.3)' }}>{d}</div>)}
                         </div>
-                        {weeks.map((week: any, wi: number) => (
+                        {(() => {
+                          return weeks.map((week: any, wi: number) => (
                           <div key={wi} style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 2, marginBottom: 2 }}>
                             {week.map((day: any, di: number) => {
-                              const key = day.toISOString().split('T')[0]
+                              const key = localDateKey(day)
                               const events = eventsByDate[key] || []
                               const hasEvents = events.length > 0
                               const isToday = day.toDateString() === now.toDateString()
                               const isCurrentMonth = day.getMonth() === now.getMonth()
-                              const typeColors: Record<string,string> = { shoot: 'rgba(210,175,80,0.9)', delivery: 'rgba(100,200,130,0.9)', pending: 'rgba(160,100,220,0.9)' }
                               return (
-                                <div key={di} style={{ height: 36, borderRadius: 3, background: hasEvents ? 'rgba(200,194,187,0.04)' : 'transparent', border: '0.5px solid ' + (isToday ? 'rgba(200,194,187,0.5)' : hasEvents ? 'rgba(200,194,187,0.12)' : 'rgba(200,194,187,0.05)'), display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '2px 0' }}>
+                                <div key={di} onClick={() => hasEvents && setSelectedCalDay(key)} style={{ height: 36, borderRadius: 3, background: hasEvents ? 'rgba(200,194,187,0.04)' : 'transparent', border: '0.5px solid ' + (isToday ? 'rgba(200,194,187,0.5)' : hasEvents ? 'rgba(200,194,187,0.12)' : 'rgba(200,194,187,0.05)'), display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '2px 0', cursor: hasEvents ? 'pointer' : 'default' }}>
                                   <div style={{ fontSize: 10, fontWeight: isToday ? 700 : 400, color: isToday ? '#fff' : isCurrentMonth ? 'rgba(200,194,187,0.5)' : 'rgba(200,194,187,0.2)' }}>{day.getDate()}</div>
                                   {hasEvents && (
                                     <div style={{ display: 'flex', gap: 2, marginTop: 2 }}>
-                                      {events.slice(0,3).map((type: string, ei: number) => (
-                                        <div key={ei} style={{ width: 4, height: 4, borderRadius: '50%', background: typeColors[type] || '#C8C2BB' }} />
+                                      {events.slice(0,3).map((ev: any, ei: number) => (
+                                        <div key={ei} style={{ width: 4, height: 4, borderRadius: '50%', background: calTypeColors[ev.type] || '#C8C2BB' }} />
                                       ))}
                                     </div>
                                   )}
@@ -952,7 +996,41 @@ export default function ClientPortal() {
                               )
                             })}
                           </div>
-                        ))}
+                          ))
+                        })()}
+                        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' as const, marginTop: 10, paddingTop: 10, borderTop: '0.5px solid rgba(200,194,187,0.07)' }}>
+                          {[['rgba(210,175,80,0.9)', 'Shoot'], ['rgba(100,200,130,0.9)', 'Delivery'], ['rgba(100,200,130,0.5)', 'Est. delivery']].map(([color, label]) => (
+                            <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                              <div style={{ width: 6, height: 6, borderRadius: '50%', background: color }} />
+                              <span style={{ fontSize: 9, color: 'rgba(200,194,187,0.4)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</span>
+                            </div>
+                          ))}
+                        </div>
+                        {selectedCalDay && (() => {
+                          const dayEvents = eventsByDate[selectedCalDay] || []
+                          const dayLabel = new Date(selectedCalDay + 'T12:00:00').toLocaleDateString('en-NZ', { weekday: 'long', day: 'numeric', month: 'long' })
+                          return (
+                            <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }} onClick={() => setSelectedCalDay(null)}>
+                              <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 10, width: '100%', maxWidth: 380, maxHeight: '80vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderBottom: '0.5px solid rgba(200,194,187,0.09)' }}>
+                                  <div style={{ fontSize: 13, fontWeight: 500, color: '#fff' }}>{dayLabel}</div>
+                                  <button onClick={() => setSelectedCalDay(null)} style={{ fontSize: 18, color: 'rgba(200,194,187,0.4)', background: 'transparent', border: 'none', cursor: 'pointer', lineHeight: 1 }}>×</button>
+                                </div>
+                                <div style={{ padding: '10px 14px' }}>
+                                  {dayEvents.map((ev: any, i: number) => (
+                                    <div key={i} onClick={() => { setSelectedCalDay(null); if (ev.ref.stage) { setSelectedProject(ev.ref) } else { setActiveView('upcoming') } }} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 8px', borderRadius: 5, cursor: 'pointer', borderBottom: i < dayEvents.length - 1 ? '0.5px solid rgba(200,194,187,0.06)' : 'none' }}>
+                                      <div style={{ width: 7, height: 7, borderRadius: '50%', background: calTypeColors[ev.type] || '#C8C2BB', flexShrink: 0 }} />
+                                      <div style={{ flex: 1, minWidth: 0 }}>
+                                        <div style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.ref.title || ev.ref.address || ev.ref.shoot_package || 'Booking'}</div>
+                                        <div style={{ fontSize: 10, color: 'rgba(200,194,187,0.4)' }}>{ev.label}</div>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          )
+                        })()}
                       </div>
                     </div>
 
@@ -966,12 +1044,15 @@ export default function ClientPortal() {
                   </div>
                 </div>
 
-                {/* RECENT DELIVERABLES */}
-                {completedProjects.length > 0 && (
+                {/* RECENT DELIVERIES */}
+                {recentDeliveries.length > 0 && (
                   <div style={{ marginTop: 24 }}>
-                    <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 14 }}>Recent deliverables</div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                      <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)' }}>Recent deliveries</div>
+                      <span style={{ fontSize: 11, color: 'rgba(200,194,187,0.3)' }}>scroll →</span>
+                    </div>
                     <div style={{ display: 'flex', gap: 14, overflowX: 'auto', paddingBottom: 8 }}>
-                      {completedProjects.map((p: any) => (
+                      {recentDeliveries.map((p: any) => (
                         <DriveThumb key={p.id} project={p} onClick={() => { setLibraryProject(p); setActiveView('library') }} />
                       ))}
                     </div>
@@ -1076,7 +1157,7 @@ export default function ClientPortal() {
               {bookingStep === 2 && selectedCat === 'property' && (
                 <div>
                   <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 12 }}>Select package</div>
-                  <div style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:14, marginBottom:22 }}>
+                  <div className="ec-grid-resp" style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:14, marginBottom:22 }}>
                     {shootPackages.map((pkg: any) => (
                       <div key={pkg.name} onClick={() => {
                         setSelectedShoot(pkg)
@@ -1132,7 +1213,7 @@ export default function ClientPortal() {
 
                   {/* About you */}
                   <div style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.3)', marginBottom: 10, marginTop: 4 }}>About you</div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 20 }}>
+                  <div className="ec-grid-resp" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 20 }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                       <label style={cLbl}>Business / brand name</label>
                       <input value={clientContactName} onChange={e => setClientContactName(e.target.value)} placeholder="e.g. Black Barn Retreats" style={cInp} />
@@ -1145,7 +1226,7 @@ export default function ClientPortal() {
 
                   {/* The project */}
                   <div style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.3)', marginBottom: 10 }}>The project</div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 20 }}>
+                  <div className="ec-grid-resp" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 20 }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                       <label style={cLbl}>Project title</label>
                       <input value={projectTitle} onChange={e => setProjectTitle(e.target.value)} placeholder="e.g. 2026 Brand Campaign" style={cInp} />
@@ -1188,7 +1269,7 @@ export default function ClientPortal() {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 20 }}>
                     {briefDeliverables.map(d => (
                       <div key={d.id} style={{ background: 'rgba(0,0,0,0.2)', border: '0.5px solid rgba(200,194,187,0.07)', borderRadius: 6, padding: 14 }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px 110px', gap: 10, marginBottom: 10 }}>
+                        <div className="ec-grid-resp" style={{ display: 'grid', gridTemplateColumns: '1fr 60px 110px', gap: 10, marginBottom: 10 }}>
                           <input style={cInp} value={d.name} onChange={e => updateBriefDel(d.id, 'name', e.target.value)} placeholder="e.g. Hero brand film..." />
                           <div><label style={{ ...cLbl, marginBottom: 4, display: 'block' }}>Qty</label><input style={{ ...cInp, textAlign: 'center' as const }} type="number" min="1" value={d.quantity} onChange={e => updateBriefDel(d.id, 'quantity', parseInt(e.target.value) || 1)} /></div>
                           <div><label style={{ ...cLbl, marginBottom: 4, display: 'block' }}>Length</label><input style={cInp} value={d.duration} onChange={e => updateBriefDel(d.id, 'duration', e.target.value)} placeholder="2-3 min" /></div>
@@ -1211,7 +1292,7 @@ export default function ClientPortal() {
 
                   {/* Logistics */}
                   <div style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.3)', marginBottom: 10 }}>Logistics</div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 20 }}>
+                  <div className="ec-grid-resp" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 20 }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, gridColumn: 'span 2' }}>
                       <label style={cLbl}>Shoot location(s)</label>
                       <div style={{ position: 'relative' }}>
@@ -1256,7 +1337,7 @@ export default function ClientPortal() {
 
                   {/* Extras */}
                   <div style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.3)', marginBottom: 10 }}>Extras</div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 20 }}>
+                  <div className="ec-grid-resp" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 20 }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                       <label style={cLbl}>Reference links / mood board / brand guidelines</label>
                       <input value={referenceLinks} onChange={e => setReferenceLinks(e.target.value)} placeholder="Paste any links here" style={cInp} />
@@ -1319,7 +1400,7 @@ export default function ClientPortal() {
     {bookingStep === 4 && (
                 <div>
                   <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 6 }}>Add-ons <span style={{ color: 'rgba(200,194,187,0.2)', fontSize: 10, textTransform: 'none', letterSpacing: 0, marginLeft: 8 }}>Optional — select any that apply</span></div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 20 }}>
+                  <div className="ec-grid-resp" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 20 }}>
                     {addons.map(addon => {
                       const selected = selectedAddons.find(a => a.name === addon.name)
                       return (
@@ -1351,7 +1432,7 @@ export default function ClientPortal() {
                   <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 16 }}>Your details</div>
 
                   {/* Contact info — always shown first */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+                  <div className="ec-grid-resp" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                       <label style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)' }}>Listing agent name</label>
                       <input value={clientContactName} onChange={e => setClientContactName(e.target.value)} placeholder="e.g. Jessica Moore" style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }} />
@@ -1364,7 +1445,7 @@ export default function ClientPortal() {
 
                   {/* Property specific */}
                   {selectedCat === 'property' && (
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+                    <div className="ec-grid-resp" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6, gridColumn: 'span 2' }}>
                         <label style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)' }}>Property address</label>
                         <div style={{ position: 'relative' }}>
@@ -1394,7 +1475,7 @@ export default function ClientPortal() {
                   )}
 
                   {/* Dates — always shown */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, marginBottom: 14 }}>
+                  <div className="ec-grid-resp" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, marginBottom: 14 }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                       <label style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)' }}>Preferred shoot date</label>
                       <div style={{ display:'flex', gap:10 }}>
@@ -1800,7 +1881,7 @@ export default function ClientPortal() {
                   projectsWithDrive.length === 0 ? (
                     <div style={{ background:'#1A1F28', border:'0.5px solid rgba(200,194,187,0.09)', borderRadius:7, padding:'40px 20px', textAlign:'center', color:'rgba(200,194,187,0.25)', fontSize:13 }}>No delivered content yet</div>
                   ) : (
-                    <div style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:16 }}>
+                    <div className="ec-grid-resp" style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:16 }}>
                       {projectsWithDrive.map((p: any) => (
                         <div key={p.id} onClick={() => setLibraryProject(p)} style={{ background:'#1A1F28', border:'0.5px solid rgba(200,194,187,0.09)', borderRadius:7, padding:'20px 22px', cursor:'pointer', display:'flex', alignItems:'center', gap:16 }} onMouseEnter={e=>(e.currentTarget.style.borderColor='rgba(200,194,187,0.2)')} onMouseLeave={e=>(e.currentTarget.style.borderColor='rgba(200,194,187,0.09)')}>
                           <div style={{ width:48, height:48, borderRadius:8, background:'rgba(200,194,187,0.06)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:22, flexShrink:0 }}>📁</div>
@@ -1897,7 +1978,7 @@ export default function ClientPortal() {
                         <div style={{ padding:'32px 40px', borderBottom:'0.5px solid rgba(200,194,187,0.09)' }}>
                           <div style={{ fontSize:9, letterSpacing:'0.2em', textTransform:'uppercase', color:'rgba(200,194,187,0.35)', marginBottom:6 }}>The Scope</div>
                           <div style={{ fontSize:22, fontWeight:700, color:'#fff', marginBottom:20 }}>{(d.jobType||'').toUpperCase()}</div>
-                          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:32, marginBottom:24 }}>
+                          <div className="ec-grid-resp" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:32, marginBottom:24 }}>
                             <div>
                               <div style={{ fontSize:10, letterSpacing:'0.16em', textTransform:'uppercase', color:'rgba(200,194,187,0.4)', marginBottom:10, fontWeight:700 }}>Overview</div>
                               <div style={{ fontSize:14, color:'rgba(200,194,187,0.7)', lineHeight:1.75 }}>{d.jobDescription}</div>
@@ -2082,7 +2163,7 @@ export default function ClientPortal() {
               </div>
 
               {/* DETAILS */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
+              <div className="ec-grid-resp" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
                 {[
                   { label: 'Shoot date', value: selectedProject.shoot_date ? new Date(selectedProject.shoot_date + 'T12:00:00').toLocaleDateString('en-NZ',{weekday:'long',day:'numeric',month:'long',year:'numeric'}) : '—' },
                   { label: 'Delivery date', value: selectedProject.delivery_due ? new Date(selectedProject.delivery_due + 'T12:00:00').toLocaleDateString('en-NZ',{day:'numeric',month:'long',year:'numeric'}) : '—' },

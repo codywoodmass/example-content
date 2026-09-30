@@ -18,3 +18,16 @@ export function formatTime12(time: string | null | undefined): string {
 export function localDateKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
+
+// Adds `days` business days (skipping Sat/Sun) to a 'YYYY-MM-DD' date string,
+// returning a 'YYYY-MM-DD' string. Used to estimate delivery dates before a
+// studio-set delivery_due exists.
+export function addBusinessDays(dateStr: string, days: number): string {
+  const d = new Date(dateStr + 'T12:00:00')
+  let added = 0
+  while (added < days) {
+    d.setDate(d.getDate() + 1)
+    if (d.getDay() !== 0 && d.getDay() !== 6) added++
+  }
+  return localDateKey(d)
+}
