@@ -66,7 +66,7 @@ export default function SignupPage() {
       <div style={{ width: '100%', maxWidth: 420, padding: '0 24px' }}>
 
         <div style={{ textAlign: 'center', marginBottom: 40 }}>
-          <img src='/images/Pale_logo_EX.png' alt='Example Content' style={{ height: 48, objectFit: 'contain' }} />
+          <img src='/images/Pale_logo_EX.png' alt='Example Content' style={{ height: 48, objectFit: 'contain', display: 'block', margin: '0 auto' }} />
         </div>
 
         <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 20, textAlign: 'center' }}>Create your client account</div>

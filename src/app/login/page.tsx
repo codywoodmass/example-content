@@ -49,7 +49,7 @@ export default function LoginPage() {
 
         {/* LOGO */}
         <div style={{ textAlign: 'center', marginBottom: 40 }}>
-          <img src='/images/Pale_logo_EX.png' alt='Example Content' style={{ height: 48, objectFit: 'contain' }} />
+          <img src='/images/Pale_logo_EX.png' alt='Example Content' style={{ height: 48, objectFit: 'contain', display: 'block', margin: '0 auto' }} />
         </div>
 
         {/* MODE TOGGLE */}
