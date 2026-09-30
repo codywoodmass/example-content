@@ -24,11 +24,30 @@ export default function TeamPage() {
   const [saved, setSaved] = useState(false)
   const [showNewModal, setShowNewModal] = useState(false)
   const [newForm, setNewForm] = useState({ name: '', role: '', email: '', phone: '', photo_url: '', bio: '', active: true })
+  const [uploadingPhoto, setUploadingPhoto] = useState(false)
+  const [photoBroken, setPhotoBroken] = useState<Record<string, boolean>>({})
 
   const inp: React.CSSProperties = { background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }
   const lbl: React.CSSProperties = { fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)', marginBottom: 6, display: 'block' }
 
   useEffect(() => { loadTeam() }, [])
+
+  const [previewBroken, setPreviewBroken] = useState(false)
+  useEffect(() => { setPreviewBroken(false) }, [selected?.id])
+
+  async function uploadTeamPhoto(file: File, apply: (url: string) => void) {
+    setUploadingPhoto(true)
+    try {
+      const safeName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_')
+      const path = `${Date.now()}-${safeName}`
+      const { error } = await supabase.storage.from('team-photos').upload(path, file, { upsert: true })
+      if (error) { console.error('Photo upload error:', error); return }
+      const { data: { publicUrl } } = supabase.storage.from('team-photos').getPublicUrl(path)
+      apply(publicUrl)
+    } finally {
+      setUploadingPhoto(false)
+    }
+  }
 
   async function loadTeam() {
     setLoading(true)
@@ -88,8 +107,8 @@ export default function TeamPage() {
             {!loading && team.length === 0 && <div style={{ padding: 20, color: 'rgba(200,194,187,0.25)', fontSize: 12 }}>No team members yet</div>}
             {team.map(member => (
               <div key={member.id} onClick={() => setSelected(member)} style={{ padding: '12px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.06)', cursor: 'pointer', background: selected?.id === member.id ? 'rgba(200,194,187,0.05)' : 'transparent', borderLeft: `2px solid ${selected?.id === member.id ? '#C8C2BB' : 'transparent'}`, display: 'flex', alignItems: 'center', gap: 12 }}>
-                {member.photo_url ? (
-                  <img src={member.photo_url} alt={member.name} style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+                {member.photo_url && !photoBroken[member.id] ? (
+                  <img src={member.photo_url} alt={member.name} onError={() => setPhotoBroken(p => ({ ...p, [member.id]: true }))} style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
                 ) : (
                   <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#3D4756', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 500, flexShrink: 0, color: '#C8C2BB' }}>{member.name.split(' ').map(n => n[0]).join('')}</div>
                 )}
@@ -119,7 +138,7 @@ export default function TeamPage() {
                 <button onClick={() => toggleActive(selected.id, !selected.active)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, border: `0.5px solid ${selected.active ? 'rgba(210,90,90,0.3)' : 'rgba(100,200,130,0.3)'}`, color: selected.active ? 'rgba(210,90,90,0.8)' : 'rgba(100,200,130,0.8)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>
                   {selected.active ? 'Deactivate' : 'Activate'}
                 </button>
-                <button onClick={saveMember} disabled={saving} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 16px', borderRadius: 3, background: saved ? 'rgba(100,200,130,0.2)' : '#C8C2BB', color: saved ? 'rgba(100,200,130,0.9)' : '#111', border: saved ? '0.5px solid rgba(100,200,130,0.4)' : 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>
+                <button onClick={saveMember} disabled={saving || uploadingPhoto} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 16px', borderRadius: 3, background: saved ? 'rgba(100,200,130,0.2)' : '#C8C2BB', color: saved ? 'rgba(100,200,130,0.9)' : '#111', border: saved ? '0.5px solid rgba(100,200,130,0.4)' : 'none', cursor: saving || uploadingPhoto ? 'not-allowed' : 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>
                   {saving ? 'Saving...' : saved ? '✓ Saved' : 'Save changes'}
                 </button>
               </div>
@@ -132,7 +151,16 @@ export default function TeamPage() {
                   <div><label style={lbl}>Role / title</label><input style={inp} value={selected.role} onChange={e => setSelected(s => s ? { ...s, role: e.target.value } : s)} placeholder="e.g. Director / Shooter" /></div>
                   <div><label style={lbl}>Email</label><input style={inp} type="email" value={selected.email || ''} onChange={e => setSelected(s => s ? { ...s, email: e.target.value } : s)} /></div>
                   <div><label style={lbl}>Phone</label><input style={inp} value={selected.phone || ''} onChange={e => setSelected(s => s ? { ...s, phone: e.target.value } : s)} /></div>
-                  <div style={{ gridColumn: 'span 2' }}><label style={lbl}>Photo URL</label><input style={inp} value={selected.photo_url || ''} onChange={e => setSelected(s => s ? { ...s, photo_url: e.target.value } : s)} placeholder="https://... or /images/name.jpg" /></div>
+                  <div style={{ gridColumn: 'span 2' }}>
+                    <label style={lbl}>Photo</label>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <input style={{ ...inp, flex: 1 }} value={selected.photo_url || ''} onChange={e => { setSelected(s => s ? { ...s, photo_url: e.target.value } : s); setPreviewBroken(false) }} placeholder="Upload a photo, or paste a URL" />
+                      <label style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '9px 16px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: uploadingPhoto ? 'rgba(200,194,187,0.25)' : 'rgba(200,194,187,0.5)', cursor: uploadingPhoto ? 'default' : 'pointer', fontFamily: 'inherit', flexShrink: 0, whiteSpace: 'nowrap' }}>
+                        {uploadingPhoto ? 'Uploading...' : 'Upload'}
+                        <input type="file" accept="image/*" disabled={uploadingPhoto} style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) uploadTeamPhoto(f, url => { setSelected(s => s ? { ...s, photo_url: url } : s); setPreviewBroken(false) }); e.target.value = '' }} />
+                      </label>
+                    </div>
+                  </div>
                   <div style={{ gridColumn: 'span 2' }}><label style={lbl}>Bio (shown in pitch decks)</label><textarea style={{ ...inp, resize: 'vertical' as const, lineHeight: 1.65, minHeight: 80 }} value={selected.bio || ''} onChange={e => setSelected(s => s ? { ...s, bio: e.target.value } : s)} placeholder="Short bio for pitch decks and client-facing materials..." /></div>
                 </div>
               </div>
@@ -140,7 +168,13 @@ export default function TeamPage() {
                 <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, overflow: 'hidden', marginBottom: 20 }}>
                   <div style={{ padding: '13px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>Photo preview</div>
                   <div style={{ padding: 18 }}>
-                    <img src={selected.photo_url} alt={selected.name} style={{ width: 120, height: 120, borderRadius: 8, objectFit: 'cover', objectPosition: 'top' }} />
+                    {previewBroken ? (
+                      <div style={{ background: 'rgba(210,90,90,0.08)', border: '0.5px solid rgba(210,90,90,0.25)', borderRadius: 6, padding: '12px 14px', fontSize: 12, color: 'rgba(210,90,90,0.85)', maxWidth: 320, lineHeight: 1.6 }}>
+                        This image failed to load — the URL may be broken or expired (a Google Drive "share" link won't work here). Upload a file instead, or paste a direct image URL.
+                      </div>
+                    ) : (
+                      <img src={selected.photo_url} alt={selected.name} onError={() => setPreviewBroken(true)} style={{ width: 120, height: 120, borderRadius: 8, objectFit: 'cover', objectPosition: 'top' }} />
+                    )}
                   </div>
                 </div>
               )}
@@ -159,7 +193,16 @@ export default function TeamPage() {
               <div><label style={lbl}>Role</label><input style={inp} value={newForm.role} onChange={e => setNewForm(f => ({ ...f, role: e.target.value }))} placeholder="e.g. Director" /></div>
               <div><label style={lbl}>Email</label><input style={inp} type="email" value={newForm.email} onChange={e => setNewForm(f => ({ ...f, email: e.target.value }))} /></div>
               <div><label style={lbl}>Phone</label><input style={inp} value={newForm.phone} onChange={e => setNewForm(f => ({ ...f, phone: e.target.value }))} /></div>
-              <div style={{ gridColumn: 'span 2' }}><label style={lbl}>Photo URL</label><input style={inp} value={newForm.photo_url} onChange={e => setNewForm(f => ({ ...f, photo_url: e.target.value }))} placeholder="/images/name.jpg or https://..." /></div>
+              <div style={{ gridColumn: 'span 2' }}>
+                <label style={lbl}>Photo</label>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input style={{ ...inp, flex: 1 }} value={newForm.photo_url} onChange={e => setNewForm(f => ({ ...f, photo_url: e.target.value }))} placeholder="Upload a photo, or paste a URL" />
+                  <label style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '9px 16px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: uploadingPhoto ? 'rgba(200,194,187,0.25)' : 'rgba(200,194,187,0.5)', cursor: uploadingPhoto ? 'default' : 'pointer', fontFamily: 'inherit', flexShrink: 0, whiteSpace: 'nowrap' }}>
+                    {uploadingPhoto ? 'Uploading...' : 'Upload'}
+                    <input type="file" accept="image/*" disabled={uploadingPhoto} style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) uploadTeamPhoto(f, url => setNewForm(form => ({ ...form, photo_url: url }))); e.target.value = '' }} />
+                  </label>
+                </div>
+              </div>
               <div style={{ gridColumn: 'span 2' }}><label style={lbl}>Bio</label><textarea style={{ ...inp, resize: 'vertical' as const, lineHeight: 1.65, minHeight: 60 }} value={newForm.bio} onChange={e => setNewForm(f => ({ ...f, bio: e.target.value }))} placeholder="Short bio for pitch decks..." /></div>
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
