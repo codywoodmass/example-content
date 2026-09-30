@@ -1256,8 +1256,14 @@ function ProjectsPageInner() {
                   </button>
                 )}
                 {modalProject.category === 'Property' && modalProject.address && (
-                  <button onClick={() => generateProjectBrief(modalProject)} disabled={briefLoading} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: `0.5px solid ${briefGenerated ? 'rgba(100,200,130,0.3)' : 'rgba(200,194,187,0.2)'}`, color: briefGenerated ? 'rgba(100,200,130,0.8)' : 'rgba(200,194,187,0.5)', background: briefGenerated ? 'rgba(100,200,130,0.06)' : 'transparent', cursor: briefLoading ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>
-                    {briefLoading ? 'Researching...' : briefGenerated ? 'Brief saved' : 'Generate brief'}
+                  <button onClick={() => generateProjectBrief(modalProject)} disabled={briefLoading} style={{ position: 'relative', overflow: 'hidden', fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: `0.5px solid ${briefGenerated ? 'rgba(100,200,130,0.3)' : 'rgba(200,194,187,0.2)'}`, color: briefGenerated ? 'rgba(100,200,130,0.8)' : 'rgba(200,194,187,0.5)', background: briefGenerated ? 'rgba(100,200,130,0.06)' : 'transparent', cursor: briefLoading ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>
+                    {briefLoading && (
+                      <>
+                        <style>{`@keyframes fakeBriefProgress { 0% { width: 0%; } 100% { width: 92%; } }`}</style>
+                        <div style={{ position: 'absolute', inset: 0, background: 'rgba(200,194,187,0.14)', animation: 'fakeBriefProgress 55s cubic-bezier(0.15,0.65,0.3,1) forwards' }} />
+                      </>
+                    )}
+                    <span style={{ position: 'relative' }}>{briefLoading ? 'Researching...' : briefGenerated ? 'Brief saved' : 'Generate brief'}</span>
                   </button>
                 )}
                 {modalProject.stage === 'Awaiting Confirmation' && !modalProject.archived && !modalProject.invoice_id && (

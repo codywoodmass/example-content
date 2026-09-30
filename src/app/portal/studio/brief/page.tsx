@@ -152,8 +152,14 @@ export default function BriefPage() {
                 <textarea style={{ ...inp, resize: 'vertical' as const, lineHeight: 1.65, minHeight: 60 }} value={briefNotes} onChange={e => setBriefNotes(e.target.value)} placeholder="Access notes, specific features to highlight, client preferences..." />
               </div>
               {error && <div style={{ fontSize: 12, color: 'rgba(210,90,90,0.8)', padding: '10px 14px', background: 'rgba(210,90,90,0.08)', borderRadius: 4, border: '0.5px solid rgba(210,90,90,0.2)' }}>{error}</div>}
-              <button onClick={generateBrief} disabled={loading} style={{ background: loading ? 'rgba(200,194,187,0.1)' : '#C8C2BB', color: loading ? 'rgba(200,194,187,0.3)' : '#111', border: 'none', borderRadius: 3, padding: '12px', fontSize: 12, letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 500, cursor: loading ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>
-                {loading ? '✦ Researching property — this may take up to 60 seconds...' : '✦ Generate property brief'}
+              <button onClick={generateBrief} disabled={loading} style={{ position: 'relative', overflow: 'hidden', background: loading ? 'rgba(200,194,187,0.1)' : '#C8C2BB', color: loading ? 'rgba(200,194,187,0.5)' : '#111', border: 'none', borderRadius: 3, padding: '12px', fontSize: 12, letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 500, cursor: loading ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>
+                {loading && (
+                  <>
+                    <style>{`@keyframes fakeBriefProgress { 0% { width: 0%; } 100% { width: 92%; } }`}</style>
+                    <div style={{ position: 'absolute', inset: 0, background: 'rgba(200,194,187,0.16)', animation: 'fakeBriefProgress 55s cubic-bezier(0.15,0.65,0.3,1) forwards' }} />
+                  </>
+                )}
+                <span style={{ position: 'relative' }}>{loading ? '✦ Researching property — this may take up to 60 seconds...' : '✦ Generate property brief'}</span>
               </button>
             </div>
           </div>
