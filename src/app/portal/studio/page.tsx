@@ -80,7 +80,7 @@ function StudioDriveFolder({ driveUrl }: { driveUrl: string }) {
       {files.length === 0 ? (
         <div style={{ textAlign:'center', color:'rgba(200,194,187,0.25)', padding:'40px 0' }}>No files found</div>
       ) : (
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:14 }}>
+        <div className="ec-form-grid-3" style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:14 }}>
           {files.map((file: any) => {
             const isFolder = file.mimeType === 'application/vnd.google-apps.folder'
             const isVideo = file.mimeType?.includes('video')
@@ -120,11 +120,11 @@ function StudioDriveFolder({ driveUrl }: { driveUrl: string }) {
       {previewFile && (
         <div onClick={() => setPreviewFile(null)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.9)', zIndex:500, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:20, gap:14 }}>
           {previewFile.mimeType?.includes('video') ? (
-            <div style={{ display:'flex', gap:16, width:'96vw', height:'88vh' }} onClick={e => e.stopPropagation()}>
+            <div className="ec-video-row" style={{ display:'flex', gap:16, width:'96vw', height:'88vh' }} onClick={e => e.stopPropagation()}>
               <div style={{ flex:'1 1 auto', display:'flex', alignItems:'center', justifyContent:'center', minWidth:0 }}>
                 <iframe src={`https://drive.google.com/file/d/${previewFile.id}/preview`} style={{ width:'100%', maxWidth:'68vw', height:'86vh', border:'none', borderRadius:6 }} allow="autoplay" allowFullScreen />
               </div>
-              <div style={{ width:320, flexShrink:0, height:'86vh', background:'#14181F', border:'0.5px solid rgba(200,194,187,0.12)', borderRadius:8, display:'flex', flexDirection:'column', overflow:'hidden' }}>
+              <div className="ec-feedback-panel" style={{ width:320, flexShrink:0, height:'86vh', background:'#14181F', border:'0.5px solid rgba(200,194,187,0.12)', borderRadius:8, display:'flex', flexDirection:'column', overflow:'hidden' }}>
                 <div style={{ padding:'16px 18px', borderBottom:'0.5px solid rgba(200,194,187,0.1)' }}>
                   <div style={{ fontSize:13, fontWeight:500, color:'#fff' }}>Client feedback</div>
                 </div>
@@ -855,7 +855,7 @@ export default function StudioPortal() {
       <StudioSidebar active={activeView} onViewChange={setActiveView} />
 
       {/* MAIN */}
-      <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
+      <div className="ec-studio-main" style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', minWidth: 0 }}>
 
         {/* ===== DASHBOARD ===== */}
         {activeView === 'dashboard' && (
@@ -879,7 +879,7 @@ export default function StudioPortal() {
             </div>
             <div style={{ padding: 28 }}>
               <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 14 }}>Overview</div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 28 }}>
+              <div className="ec-form-grid-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 28 }}>
                 {[
                   { label: 'Active projects', value: dashProjects.length, sub: (() => {
                     const start = new Date(); start.setHours(0, 0, 0, 0)
@@ -905,7 +905,7 @@ export default function StudioPortal() {
                   </div>
                 ))}
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 20, minWidth: 0 }}>
+              <div className="ec-dash-split" style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 20, minWidth: 0 }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 20, minWidth: 0 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: -6 }}>
                     <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)' }}>Active projects</div>
@@ -1260,7 +1260,7 @@ export default function StudioPortal() {
                 </div>
                 <button onClick={() => setActiveView('dashboard')} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>← Dashboard</button>
               </div>
-              <div style={{ padding: 28, display: 'grid', gridTemplateColumns: userRole === 'studio' ? '1fr 1fr' : '1fr', gap: 20 }}>
+              <div className="ec-form-grid-2" style={{ padding: 28, display: 'grid', gridTemplateColumns: userRole === 'studio' ? '1fr 1fr' : '1fr', gap: 20 }}>
                 {userRole === 'studio' && (
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
@@ -1350,7 +1350,7 @@ export default function StudioPortal() {
                           {booking.client_response_message && <div style={{ marginTop: 6, color: 'rgba(200,194,187,0.7)', fontStyle: 'italic' }}>"{booking.client_response_message}"</div>}
                         </div>
                       )}
-                       <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:16, marginTop:12 }}>
+                       <div className="ec-form-grid-3" style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:16, marginTop:12 }}>
                          <div><div style={{ fontSize:9, letterSpacing:'0.14em', textTransform:'uppercase', color:'rgba(200,194,187,0.35)', marginBottom:4 }}>Client</div><div style={{ fontSize:12, color:'#C8C2BB' }}>{booking.client_name || booking.client_email}</div></div>
                          <div><div style={{ fontSize:9, letterSpacing:'0.14em', textTransform:'uppercase', color:'rgba(200,194,187,0.35)', marginBottom:4 }}>Package</div><div style={{ fontSize:12, color:'#C8C2BB' }}>{booking.shoot_package || '-'}</div></div>
                          <div><div style={{ fontSize:9, letterSpacing:'0.14em', textTransform:'uppercase', color:'rgba(200,194,187,0.35)', marginBottom:4 }}>Deliverables</div><div style={{ fontSize:12, color:'#C8C2BB' }}>{booking.deliverables || '-'}</div></div>
@@ -1419,7 +1419,7 @@ export default function StudioPortal() {
               <button onClick={() => setActiveView('dashboard')} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>← Dashboard</button>
             </div>
             <div style={{ padding: 28 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10, marginBottom: 20 }}>
+              <div className="ec-form-grid-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10, marginBottom: 20 }}>
                 {[['Total hours — Jun','94h'],['Shoot hours','52h'],['Edit hours','38h'],['Labour cost est.','$4,700']].map(([label, value]) => (
                   <div key={label} style={{ ...s.panel, padding: '14px 16px' }}><div style={{ fontSize: 10, color: 'rgba(200,194,187,0.4)', marginBottom: 6 }}>{label}</div><div style={{ fontSize: 22, fontWeight: 500, color: '#fff' }}>{value}</div></div>
                 ))}
@@ -1548,7 +1548,7 @@ export default function StudioPortal() {
               <button onClick={() => setActiveView('dashboard')} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>← Dashboard</button>
             </div>
             <div style={{ padding: 28 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10, marginBottom: 20 }}>
+              <div className="ec-form-grid-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10, marginBottom: 20 }}>
                 {[['Total asset value','$68,400'],['Drones','2'],['Cameras','3'],['Lenses & accessories','9']].map(([label, value]) => (
                   <div key={label} style={{ ...s.panel, padding: '14px 16px' }}><div style={{ fontSize: 10, color: 'rgba(200,194,187,0.4)', marginBottom: 6 }}>{label}</div><div style={{ fontSize: 22, fontWeight: 500, color: '#fff' }}>{value}</div></div>
                 ))}
@@ -1634,7 +1634,7 @@ export default function StudioPortal() {
               return (
                 <div style={{ padding: 28 }}>
                   {sectionLabel('📌', 'Overview')}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 28 }}>
+                  <div className="ec-form-grid-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 28 }}>
                     <div style={kpiCard('rgba(30,50,38,0.6)', 'rgba(100,200,130,0.2)')}>
                       {glow('rgba(100,200,130,0.5)')}
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
@@ -1682,7 +1682,7 @@ export default function StudioPortal() {
                       ))}
                     </div>
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 28 }}>
+                  <div className="ec-form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 28 }}>
                     {pnl.monthly && pnl.monthly.length > 0 && (
                       <div style={s.panel}>
                         <div style={{ padding: '14px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)' }}><span style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>Monthly income</span></div>
@@ -1736,7 +1736,7 @@ export default function StudioPortal() {
                   </div>
 
                   {sectionLabel('🧾', 'Xero P&L breakdown')}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+                  <div className="ec-form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
                     <div style={s.panel}>
                       <div style={{ padding: '14px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)' }}><span style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>Revenue</span></div>
                       {(pnl.revenueBreakdown || []).map((row: any) => (
@@ -1770,7 +1770,7 @@ export default function StudioPortal() {
                   </div>
 
                   {sectionLabel('💳', 'Invoicing')}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                  <div className="ec-form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                     <div style={s.panel}>
                       <div style={{ padding: '14px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1864,7 +1864,7 @@ export default function StudioPortal() {
               </div>
             ) : (
               <>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, marginBottom: 16 }}>
+                <div className="ec-form-grid-3" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, marginBottom: 16 }}>
                   <div style={{ gridColumn: 'span 3' }}>
                     <label style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)', marginBottom: 6, display: 'block' }}>{meetingMode ? 'Meeting date' : 'Shoot date'} {shootDate && '— ' + new Date(shootDate + 'T12:00:00').toLocaleDateString('en-NZ',{weekday:'long',day:'numeric',month:'long'})}</label>
                     {(() => {
@@ -2084,7 +2084,7 @@ export default function StudioPortal() {
               )
             })()}
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, marginBottom: 20 }}>
+            <div className="ec-form-grid-3" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, marginBottom: 20 }}>
               <div>
                 <label style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)', marginBottom: 6, display: 'block' }}>Start time</label>
                 <select value={proposeStart} onChange={e => setProposeStart(e.target.value)} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }}>
@@ -2165,7 +2165,7 @@ export default function StudioPortal() {
                   setModalProject((p: any) => p ? { ...p, progress: val, stage } : p)
                 }} style={{ width: '100%', accentColor: '#C8C2BB', cursor: 'pointer' }} />
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
+              <div className="ec-form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
                 {[{ label: 'Client', key: 'client' }, { label: 'Email', key: 'email' }].map(({ label, key }) => (
                   <div key={key}>
                     <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>{label}</div>
@@ -2185,7 +2185,7 @@ export default function StudioPortal() {
                   ) : <div style={{ fontSize: 13, color: '#C8C2BB' }}>{modalProject.stage}</div>}
                 </div>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, marginBottom: 20 }}>
+              <div className="ec-form-grid-3" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, marginBottom: 20 }}>
                 {[{ label: 'Shoot date', key: 'shoot_date' }, { label: 'Draft due', key: 'draft_due' }, { label: 'Delivery date', key: 'delivery_due' }].map(({ label, key }) => (
                   <div key={key}>
                     <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>{label}</div>
@@ -2302,7 +2302,7 @@ export default function StudioPortal() {
                   setModalProject((p: any) => p ? { ...p, progress: val, stage } : p)
                 }} style={{ width: '100%', accentColor: '#C8C2BB', cursor: 'pointer' }} />
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
+              <div className="ec-form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
                 {[{ label: 'Client', key: 'client' }, { label: 'Email', key: 'email' }].map(({ label, key }) => (
                   <div key={key}>
                     <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>{label}</div>
@@ -2322,7 +2322,7 @@ export default function StudioPortal() {
                   ) : <div style={{ fontSize: 13, color: '#C8C2BB' }}>{modalProject.stage}</div>}
                 </div>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, marginBottom: 20 }}>
+              <div className="ec-form-grid-3" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, marginBottom: 20 }}>
                 {[{ label: 'Shoot date', key: 'shoot_date' }, { label: 'Draft due', key: 'draft_due' }, { label: 'Delivery date', key: 'delivery_due' }].map(({ label, key }) => (
                   <div key={key}>
                     <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>{label}</div>

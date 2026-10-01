@@ -606,7 +606,7 @@ export default function PitchDeckPage() {
       <ToastHost />
       <ConfirmHost />
       <StudioSidebar active="pitches" />
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div className="ec-studio-main" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
 
       {/* TOPBAR */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 20px', height: 48, borderBottom: '0.5px solid rgba(200,194,187,0.09)', background: '#14181F', position: 'sticky', top: 0, zIndex: 20 }}>
@@ -719,7 +719,7 @@ export default function PitchDeckPage() {
       {/* TEMPLATE PICKER */}
       {view === 'template' && (
         <div style={{ padding: 28, maxWidth: 680 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 24 }}>
+          <div className="ec-form-grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 24 }}>
             {Object.values(TEMPLATES).map(tmpl => (
               <div key={tmpl.id} onClick={() => setTemplate(tmpl.id as Template)} style={{ border: `0.5px solid ${template === tmpl.id ? '#C8C2BB' : 'rgba(200,194,187,0.09)'}`, borderRadius: 8, overflow: 'hidden', cursor: 'pointer', background: '#1A1F28', position: 'relative' }}>
                 {template === tmpl.id && <span style={{ position: 'absolute', top: 10, right: 12, fontSize: 11, color: '#C8C2BB', zIndex: 1 }}>✓</span>}
@@ -743,7 +743,7 @@ export default function PitchDeckPage() {
           <div style={panelS}>
             <div style={{ padding: '13px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>Client & project</div>
             <div style={{ padding: 18 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+              <div className="ec-form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
                 <div>
                   <label style={lbl}>Client / brand</label>
                   <select style={inp} value={clientEmail} onChange={e => { const c = clients.find((cl:any) => cl.email === e.target.value); if (c) { setClientName(c.name); setClientEmail(c.email); setContactName(c.name) } }}>
@@ -787,7 +787,7 @@ export default function PitchDeckPage() {
                   ))}
                 </div>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, overflow: 'visible' }}>
+              <div className="ec-form-grid-3" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, overflow: 'visible' }}>
                 {shootDuration === 'multiday' && <div><label style={lbl}>Days</label><input style={inp} type="number" min="2" value={shootDays} onChange={e => setShootDays(parseInt(e.target.value)||2)} /></div>}
                 <div><label style={lbl}>Additional hours</label><input style={inp} type="number" min="0" value={extraHours} onChange={e => setExtraHours(parseInt(e.target.value)||0)} /></div>
                 <div><label style={lbl}>Shoot date</label><input style={inp} type="date" value={shootDates} onChange={e => setShootDates(e.target.value)} /></div>
@@ -840,7 +840,7 @@ export default function PitchDeckPage() {
             <div style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 12 }}>
               {deliverables.map(d => (
                 <div key={d.id} style={{ background: 'rgba(0,0,0,0.2)', border: '0.5px solid rgba(200,194,187,0.07)', borderRadius: 6, padding: 14 }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px 110px', gap: 10, marginBottom: 10 }}>
+                  <div className="ec-shoot-date-row" style={{ display: 'grid', gridTemplateColumns: '1fr 60px 110px', gap: 10, marginBottom: 10 }}>
                     <input style={inp} value={d.name} onChange={e => updateDel(d.id,'name',e.target.value)} placeholder="e.g. Hero brand film..." />
                     <div><label style={{ ...lbl, marginBottom: 4 }}>Qty</label><input style={{ ...inp, textAlign: 'center' as const }} type="number" min="1" value={d.quantity} onChange={e => updateDel(d.id,'quantity',parseInt(e.target.value)||1)} /></div>
                     <div><label style={{ ...lbl, marginBottom: 4 }}>Length</label><input style={inp} value={d.duration} onChange={e => updateDel(d.id,'duration',e.target.value)} placeholder="2-3 min" /></div>
@@ -894,7 +894,7 @@ export default function PitchDeckPage() {
             </div>
             <div style={{ padding: 18 }}>
               <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.3)', marginBottom: 12 }}>Equipment costs are included in your rate. Tick "hire" only if renting externally.</div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              <div className="ec-form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                 {equipment.map(e => (
                   <div key={e.id} style={{ padding: '9px 13px', borderRadius: 5, border: `0.5px solid ${e.selected ? '#C8C2BB' : 'rgba(200,194,187,0.09)'}`, background: e.selected ? 'rgba(200,194,187,0.04)' : 'transparent' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }} onClick={() => toggleEq(e.id)}>
@@ -941,7 +941,7 @@ export default function PitchDeckPage() {
 
       {/* DECK VIEWER */}
       {view === 'deck' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '210px 1fr 280px', height: 'calc(100vh - 48px)' }}>
+        <div className="ec-deck-editor" style={{ display: 'grid', gridTemplateColumns: '210px 1fr 280px', height: 'calc(100vh - 48px)' }}>
 
           {/* LEFT PANEL */}
           <div style={{ background: '#0A0C10', borderRight: '0.5px solid rgba(200,194,187,0.09)', overflowY: 'auto', padding: '14px 10px' }}>
@@ -1074,7 +1074,7 @@ export default function PitchDeckPage() {
                   {/* RATES EDITOR */}
                   <div style={{ background: 'rgba(200,194,187,0.03)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 5, padding: '10px 12px', marginBottom: 8 }}>
                     <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 8 }}>Editable rates</div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                    <div className="ec-form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                       {[
                         { label: 'Filming ($/hr)', val: rateFilming, set: setRateFilming },
                         { label: 'Editing ($/hr)', val: rateEditing, set: setRateEditing },

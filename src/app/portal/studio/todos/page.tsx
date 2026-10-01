@@ -117,7 +117,7 @@ export default function TodosPage() {
       <ToastHost />
       <ConfirmHost />
       <StudioSidebar active="todos" />
-      <div style={{ flex: 1, overflowX: 'hidden', overflowY: 'auto' }}>
+      <div className="ec-studio-main" style={{ flex: 1, overflowX: 'hidden', overflowY: 'auto', minWidth: 0 }}>
         <div style={{ padding: '16px 28px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', background: '#14181F', position: 'sticky', top: 0, zIndex: 10, display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{ width: 34, height: 34, borderRadius: 8, background: 'rgba(210,175,80,0.1)', border: '0.5px solid rgba(210,175,80,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15 }}>✅</div>
           <div>
@@ -126,7 +126,7 @@ export default function TodosPage() {
           </div>
         </div>
         <div style={{ padding: 28 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 24 }}>
+          <div className="ec-form-grid-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 24 }}>
             <div style={kpiCard('rgba(25,45,80,0.6)', 'rgba(100,150,220,0.2)')}>
               {glow('rgba(100,150,220,0.5)')}
               <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)', marginBottom: 8 }}>Open</div>

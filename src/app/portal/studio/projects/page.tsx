@@ -748,10 +748,10 @@ function ProjectsPageInner() {
       <ToastHost />
       <ConfirmHost />
       <StudioSidebar active="projects" />
-      <div style={{ flex: 1, overflowX: 'hidden' }}>
+      <div className="ec-studio-main" style={{ flex: 1, overflowX: 'hidden', minWidth: 0 }}>
 
       {/* TOPBAR */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 28px', height: 57, borderBottom: '0.5px solid rgba(200,194,187,0.09)', background: '#14181F', position: 'sticky', top: 0, zIndex: 20 }}>
+      <div className="ec-toolbar-wrap" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 28px', height: 57, borderBottom: '0.5px solid rgba(200,194,187,0.09)', background: '#14181F', position: 'sticky', top: 0, zIndex: 20 }}>
         <div>
           <div style={{ fontSize: 14, fontWeight: 500, color: '#fff' }}>Projects</div>
           <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', marginTop: 1 }}>{projects.length} projects · {projects.filter(p => p.stage === 'Awaiting Confirmation').length} invoicing</div>
@@ -798,7 +798,7 @@ function ProjectsPageInner() {
 
       {/* KANBAN */}
       {!showArchived && viewMode === 'kanban' && (
-        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${STAGES.length}, 1fr)`, height: 'calc(100vh - 57px)', overflow: 'auto' }}>
+        <div className="ec-kanban" style={{ display: 'grid', gridTemplateColumns: `repeat(${STAGES.length}, 1fr)`, height: 'calc(100vh - 57px)', overflow: 'auto' }}>
           {STAGES.map(stage => {
             const stageProjects = filtered.filter(p => p.stage === stage)
             const c = STAGE_COLORS[stage]
@@ -885,7 +885,7 @@ function ProjectsPageInner() {
                 <button key={cat} onClick={() => setNewForm(f => ({ ...f, category: cat, title: cat === 'Property' ? f.address || '' : f.title }))} style={{ fontSize: 11, padding: '7px 14px', borderRadius: 3, border: `0.5px solid ${newForm.category === cat ? '#C8C2BB' : 'rgba(200,194,187,0.15)'}`, background: newForm.category === cat ? 'rgba(200,194,187,0.08)' : 'transparent', color: newForm.category === cat ? '#C8C2BB' : 'rgba(200,194,187,0.35)', cursor: 'pointer', fontFamily: 'inherit' }}>{cat}</button>
               ))}
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 20 }}>
+            <div className="ec-form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 20 }}>
               {newForm.category === 'Property' ? (
                 <>
                   <div style={{ gridColumn: 'span 2' }}>
@@ -1005,7 +1005,7 @@ function ProjectsPageInner() {
               </div>
               {modalTab === 'overview' && (
               <>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
+              <div className="ec-form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
                 {[
                   { label: 'Client', key: 'client' as const },
                   { label: 'Email', key: 'email' as const },
@@ -1049,7 +1049,7 @@ function ProjectsPageInner() {
                   )}
                 </div>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, marginBottom: 20 }}>
+              <div className="ec-form-grid-3" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, marginBottom: 20 }}>
                 {[{ label: 'Shoot date', key: 'shoot_date' as const }, { label: 'Draft due', key: 'draft_due' as const }, { label: 'Delivery date', key: 'delivery_due' as const }].map(({ label, key }) => (
                   <div key={key}>
                     <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>{label}</div>
@@ -1073,7 +1073,7 @@ function ProjectsPageInner() {
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {(modalProject.shoot_dates || []).map(d => (
-                      <div key={d.id} style={{ display: 'grid', gridTemplateColumns: '1fr 100px 100px 1fr 24px', gap: 8, alignItems: 'center', background: 'rgba(200,194,187,0.03)', border: '0.5px solid rgba(200,194,187,0.07)', borderRadius: 5, padding: '8px 10px' }}>
+                      <div key={d.id} className="ec-shoot-date-row" style={{ display: 'grid', gridTemplateColumns: '1fr 100px 100px 1fr 24px', gap: 8, alignItems: 'center', background: 'rgba(200,194,187,0.03)', border: '0.5px solid rgba(200,194,187,0.07)', borderRadius: 5, padding: '8px 10px' }}>
                         <input type="date" value={d.date} onChange={e => updateShootDate(d.id, 'date', e.target.value)} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '6px 8px', fontSize: 11, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }} />
                         <select value={d.start_time} onChange={e => updateShootDate(d.id, 'start_time', e.target.value)} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '6px 8px', fontSize: 11, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }}>
                           <option value=''>Start</option>

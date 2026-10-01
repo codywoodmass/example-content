@@ -761,6 +761,11 @@ export default function ClientPortal() {
           .ec-grid-resp { grid-template-columns: 1fr !important; }
           .ec-grid-4-resp { grid-template-columns: repeat(2,1fr) !important; }
         }
+        @media (max-width: 760px) {
+          .ec-category-split { flex-direction: column !important; }
+          .ec-category-card { border-right: none !important; border-bottom: 0.5px solid rgba(200,194,187,0.12); }
+          .ec-category-card .ec-category-content { padding: 24px !important; }
+        }
       `}</style>
 
       {/* MOBILE TOP BAR */}
@@ -1095,7 +1100,7 @@ export default function ClientPortal() {
               {bookingStep === 1 && (
                 <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 115px)' }}>
                   {/* SPLIT PANELS */}
-                  <div style={{ display: 'flex', flex: 1, height: 'calc(100vh - 115px)' }}>
+                  <div className="ec-category-split" style={{ display: 'flex', flex: 1, height: 'calc(100vh - 115px)' }}>
                     {[
                       {
                         id: 'property',
@@ -1114,6 +1119,7 @@ export default function ClientPortal() {
                     ].map((cat, i) => (
                       <div
                         key={cat.id}
+                        className="ec-category-card"
                         onClick={() => { setSelectedCat(cat.id); setBookingStep(2) }}
                         style={{ flex: 1, position: 'relative', overflow: 'hidden', cursor: 'pointer', borderRight: i === 0 ? '0.5px solid rgba(200,194,187,0.12)' : 'none', background: cat.gradient }}
                         onMouseEnter={e => { const ov = e.currentTarget.querySelector('.overlay') as HTMLElement; if(ov) ov.style.background = 'rgba(0,0,0,0.2)' }}
@@ -1134,7 +1140,7 @@ export default function ClientPortal() {
                         <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '70%', background: 'linear-gradient(to top, rgba(0,0,0,0.92) 0%, transparent 100%)' }} />
 
                         {/* CONTENT */}
-                        <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', padding: '48px' }}>
+                        <div className="ec-category-content" style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', padding: '48px' }}>
                           <div style={{ fontSize: 10, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.5)', marginBottom: 16 }}>0{i + 1}</div>
                           <h2 style={{ fontSize: 'clamp(28px, 4vw, 52px)', fontWeight: 700, color: '#fff', lineHeight: 1.05, letterSpacing: '-0.02em', whiteSpace: 'pre-line', margin: '0 0 20px 0' }}>{cat.title}</h2>
                           <p style={{ fontSize: 13, color: 'rgba(200,194,187,0.65)', lineHeight: 1.7, maxWidth: 340, marginBottom: 36 }}>{cat.desc}</p>

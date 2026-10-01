@@ -105,10 +105,10 @@ export default function TeamPage() {
   return (
     <main style={{ background: '#0E1014', minHeight: '100vh', fontFamily: 'Inter, sans-serif', color: '#C8C2BB', fontSize: 13, display: 'flex' }}>
       <StudioSidebar active="team" />
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden', height: '100vh' }}>
+      <div className="ec-studio-main ec-split-pane" style={{ flex: 1, display: 'flex', overflow: 'hidden', height: '100vh', minWidth: 0 }}>
 
         {/* TEAM LIST */}
-        <div style={{ width: 280, borderRight: '0.5px solid rgba(200,194,187,0.09)', display: 'flex', flexDirection: 'column', height: '100vh', flexShrink: 0 }}>
+        <div className="ec-split-list" style={{ width: 280, borderRight: '0.5px solid rgba(200,194,187,0.09)', display: 'flex', flexDirection: 'column', height: '100vh', flexShrink: 0 }}>
           <div style={{ padding: '16px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', background: '#14181F', flexShrink: 0 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ fontSize: 14, fontWeight: 500, color: '#fff' }}>Team</div>
@@ -159,7 +159,7 @@ export default function TeamPage() {
             <div style={{ padding: 28 }}>
               <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, overflow: 'hidden', marginBottom: 20 }}>
                 <div style={{ padding: '13px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>Profile</div>
-                <div style={{ padding: 18, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                <div className="ec-form-grid-2" style={{ padding: 18, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                   <div><label style={lbl}>Full name</label><input style={inp} value={selected.name} onChange={e => setSelected(s => s ? { ...s, name: e.target.value } : s)} /></div>
                   <div><label style={lbl}>Role / title</label><input style={inp} value={selected.role} onChange={e => setSelected(s => s ? { ...s, role: e.target.value } : s)} placeholder="e.g. Director / Shooter" /></div>
                   <div><label style={lbl}>Email</label><input style={inp} type="email" value={selected.email || ''} onChange={e => setSelected(s => s ? { ...s, email: e.target.value } : s)} /></div>
@@ -201,7 +201,7 @@ export default function TeamPage() {
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 10, padding: 28, width: 480, maxWidth: '95vw' }}>
             <div style={{ fontSize: 14, fontWeight: 500, color: '#fff', marginBottom: 20 }}>Add team member</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 20 }}>
+            <div className="ec-form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 20 }}>
               <div><label style={lbl}>Full name</label><input style={inp} value={newForm.name} onChange={e => setNewForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Cody Woodmass" /></div>
               <div><label style={lbl}>Role</label><input style={inp} value={newForm.role} onChange={e => setNewForm(f => ({ ...f, role: e.target.value }))} placeholder="e.g. Director" /></div>
               <div><label style={lbl}>Email</label><input style={inp} type="email" value={newForm.email} onChange={e => setNewForm(f => ({ ...f, email: e.target.value }))} /></div>

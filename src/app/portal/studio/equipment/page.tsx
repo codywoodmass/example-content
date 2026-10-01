@@ -104,10 +104,10 @@ export default function EquipmentPage() {
     <main style={{ background: '#0E1014', minHeight: '100vh', fontFamily: 'Inter, sans-serif', color: '#C8C2BB', fontSize: 13, display: 'flex' }}>
       <ConfirmHost />
       <StudioSidebar active="equipment" />
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden', height: '100vh' }}>
+      <div className="ec-studio-main ec-split-pane" style={{ flex: 1, display: 'flex', overflow: 'hidden', height: '100vh', minWidth: 0 }}>
 
         {/* EQUIPMENT LIST */}
-        <div style={{ width: 300, borderRight: '0.5px solid rgba(200,194,187,0.09)', display: 'flex', flexDirection: 'column', height: '100vh', flexShrink: 0 }}>
+        <div className="ec-split-list" style={{ width: 300, borderRight: '0.5px solid rgba(200,194,187,0.09)', display: 'flex', flexDirection: 'column', height: '100vh', flexShrink: 0 }}>
           <div style={{ padding: '16px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', background: '#14181F', flexShrink: 0 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <div style={{ fontSize: 14, fontWeight: 500, color: '#fff' }}>Equipment</div>
@@ -168,7 +168,7 @@ export default function EquipmentPage() {
             <div style={{ padding: 28 }}>
               <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, overflow: 'hidden', marginBottom: 20 }}>
                 <div style={{ padding: '13px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>Equipment details</div>
-                <div style={{ padding: 18, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                <div className="ec-form-grid-2" style={{ padding: 18, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                   <div style={{ gridColumn: 'span 2' }}><label style={lbl}>Name</label><input style={inp} value={selected.name} onChange={e => setSelected(s => s ? { ...s, name: e.target.value } : s)} /></div>
                   <div><label style={lbl}>Category</label>
                     <select style={inp} value={selected.category} onChange={e => setSelected(s => s ? { ...s, category: e.target.value } : s)}>
@@ -199,7 +199,7 @@ export default function EquipmentPage() {
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 10, padding: 28, width: 500, maxWidth: '95vw' }}>
             <div style={{ fontSize: 14, fontWeight: 500, color: '#fff', marginBottom: 20 }}>Add equipment</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 20 }}>
+            <div className="ec-form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 20 }}>
               <div style={{ gridColumn: 'span 2' }}><label style={lbl}>Name</label><input style={inp} value={newForm.name} onChange={e => setNewForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Sony FX3 Body #1" /></div>
               <div><label style={lbl}>Category</label>
                 <select style={inp} value={newForm.category} onChange={e => setNewForm(f => ({ ...f, category: e.target.value }))}>

@@ -105,10 +105,10 @@ export default function ClientsPage() {
     <main style={{ background: '#0E1014', minHeight: '100vh', fontFamily: 'Inter, sans-serif', color: '#C8C2BB', fontSize: 13, display: 'flex' }}>
       <ToastHost />
       <StudioSidebar active="clients" />
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden', height: '100vh' }}>
+      <div className="ec-studio-main ec-split-pane" style={{ flex: 1, display: 'flex', overflow: 'hidden', height: '100vh', minWidth: 0 }}>
 
         {/* CLIENT LIST */}
-        <div style={{ width: 300, borderRight: '0.5px solid rgba(200,194,187,0.09)', display: 'flex', flexDirection: 'column', height: '100vh', flexShrink: 0 }}>
+        <div className="ec-split-list" style={{ width: 300, borderRight: '0.5px solid rgba(200,194,187,0.09)', display: 'flex', flexDirection: 'column', height: '100vh', flexShrink: 0 }}>
           <div style={{ padding: '16px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', background: '#14181F', flexShrink: 0 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <div style={{ fontSize: 14, fontWeight: 500, color: '#fff' }}>Clients</div>
@@ -170,7 +170,7 @@ export default function ClientsPage() {
                 const topDeliverable = deliverablesList.length > 0 ? deliverablesList[0] : null
                 if (!totalSpend && !topPackage) return null
                 return (
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, marginBottom: 20 }}>
+                  <div className="ec-form-grid-3" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, marginBottom: 20 }}>
                     <div style={{ background: '#1A1F28', border: '0.5px solid rgba(100,200,130,0.2)', borderRadius: 7, padding: '16px 18px' }}>
                       <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 8 }}>Total spend</div>
                       <div style={{ fontSize: 22, fontWeight: 600, color: 'rgba(100,200,130,0.9)', marginBottom: 4 }}>${totalSpend.toLocaleString()}</div>
@@ -191,7 +191,7 @@ export default function ClientsPage() {
               })()}
               <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, overflow: 'hidden', marginBottom: 20 }}>
                 <div style={{ padding: '13px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>Client details</div>
-                <div style={{ padding: 18, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                <div className="ec-form-grid-2" style={{ padding: 18, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                   <div><label style={lbl}>Full name</label><input style={inp} value={selectedClient.name || ''} onChange={e => setSelectedClient(p => p ? { ...p, name: e.target.value } : p)} /></div>
                   <div><label style={lbl}>Email</label><input style={inp} value={selectedClient.email || ''} onChange={e => setSelectedClient(p => p ? { ...p, email: e.target.value } : p)} /></div>
                   <div><label style={lbl}>Phone</label><input style={inp} value={selectedClient.phone || ''} onChange={e => setSelectedClient(p => p ? { ...p, phone: e.target.value } : p)} placeholder="e.g. 021 123 4567" /></div>
@@ -310,7 +310,7 @@ export default function ClientsPage() {
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 10, padding: 28, width: 480, maxWidth: '95vw' }}>
             <div style={{ fontSize: 14, fontWeight: 500, color: '#fff', marginBottom: 20 }}>New client</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 20 }}>
+            <div className="ec-form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 20 }}>
               <div><label style={lbl}>Full name</label><input style={inp} value={newForm.name} onChange={e => setNewForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. James Blackwell" /></div>
               <div><label style={lbl}>Email</label><input style={inp} type="email" value={newForm.email} onChange={e => setNewForm(f => ({ ...f, email: e.target.value }))} placeholder="james@example.co.nz" /></div>
               <div><label style={lbl}>Phone</label><input style={inp} value={newForm.phone} onChange={e => setNewForm(f => ({ ...f, phone: e.target.value }))} placeholder="021 123 4567" /></div>

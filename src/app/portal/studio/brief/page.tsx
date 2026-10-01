@@ -99,7 +99,7 @@ export default function BriefPage() {
   return (
     <main style={{ background: '#0E1014', minHeight: '100vh', fontFamily: 'Inter, sans-serif', color: '#C8C2BB', fontSize: 13, display: 'flex' }}>
       <StudioSidebar active="brief" />
-      <div style={{ flex: 1, overflowY: 'auto' }}>
+      <div className="ec-studio-main" style={{ flex: 1, overflowY: 'auto', minWidth: 0 }}>
         <div style={{ padding: '16px 28px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', background: '#14181F', position: 'sticky', top: 0, zIndex: 10 }}>
           <div style={{ fontSize: 22, fontWeight: 800, color: '#fff', letterSpacing: '-0.02em', textTransform: 'uppercase', fontStyle: 'italic' }}>Property Brief</div>
           <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', marginTop: 2 }}>AI-powered property research for shoot preparation</div>
@@ -130,7 +130,7 @@ export default function BriefPage() {
                   </div>
                 )}
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+              <div className="ec-form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                 <div>
                   <label style={lbl}>Property type</label>
                   <select style={inp} value={propertyType} onChange={e => setPropertyType(e.target.value)}>
@@ -167,7 +167,7 @@ export default function BriefPage() {
           {brief && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               {/* Property stats */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12 }}>
+              <div className="ec-form-grid-5" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12 }}>
                 {[
                   ['Bedrooms', brief.property?.bedrooms],
                   ['Bathrooms', brief.property?.bathrooms],
@@ -183,7 +183,7 @@ export default function BriefPage() {
               </div>
 
               {/* Valuation */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+              <div className="ec-form-grid-3" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
                 {[
                   ['Rateable value', brief.property?.rateableValue],
                   ['Last sale price', brief.property?.lastSalePrice],
@@ -198,7 +198,7 @@ export default function BriefPage() {
 
               {/* Built year & style */}
               {(brief.property?.yearBuilt || brief.property?.architecturalStyle) && (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div className="ec-form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                   <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, padding: '14px 16px' }}>
                     <div style={{ fontSize: 9, color: 'rgba(200,194,187,0.35)', marginBottom: 6, letterSpacing: '0.12em', textTransform: 'uppercase' }}>Year built</div>
                     <div style={{ fontSize: 14, fontWeight: 500, color: '#C8C2BB' }}>{brief.property?.yearBuilt || '—'}</div>
@@ -212,7 +212,7 @@ export default function BriefPage() {
 
               {/* Photos */}
               {brief.property?.photoUrls && brief.property.photoUrls.length > 0 && (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+                <div className="ec-form-grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
                   {brief.property.photoUrls.map((url: string, i: number) => (
                     <div key={i} style={{ borderRadius: 7, overflow: 'hidden', border: '0.5px solid rgba(200,194,187,0.09)', aspectRatio: '4/3', background: '#0E1014' }}>
                       <img src={url} alt="Property photo" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} onError={e => { (e.target as HTMLImageElement).closest('div')!.style.display = 'none' }} />
@@ -295,7 +295,7 @@ export default function BriefPage() {
                     </div>
                     {isExpanded && (
                       <div style={{ padding: '0 18px 18px', borderTop: '0.5px solid rgba(200,194,187,0.06)' }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10, marginTop: 14, marginBottom: 14 }}>
+                        <div className="ec-form-grid-5" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10, marginTop: 14, marginBottom: 14 }}>
                           {[['Bedrooms', p.bedrooms], ['Bathrooms', p.bathrooms], ['Garage', p.garageSpaces], ['Floor', p.floorSize], ['Land', p.landSize]].map(([label, value]) => (
                             <div key={label as string} style={{ background: 'rgba(61,71,86,0.3)', borderRadius: 5, padding: '10px 12px' }}>
                               <div style={{ fontSize: 9, color: 'rgba(200,194,187,0.35)', marginBottom: 4 }}>{label}</div>
@@ -303,7 +303,7 @@ export default function BriefPage() {
                             </div>
                           ))}
                         </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 14 }}>
+                        <div className="ec-form-grid-3" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 14 }}>
                           {[['RV', p.rateableValue], ['Last sale', p.lastSalePrice], ['Sale year', p.lastSaleDate]].map(([label, value]) => (
                             <div key={label as string} style={{ background: 'rgba(61,71,86,0.2)', borderRadius: 5, padding: '10px 12px' }}>
                               <div style={{ fontSize: 9, color: 'rgba(200,194,187,0.35)', marginBottom: 4 }}>{label}</div>
@@ -312,7 +312,7 @@ export default function BriefPage() {
                           ))}
                         </div>
                         {(p.yearBuilt || p.architecturalStyle) && (
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
+                          <div className="ec-form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
                             <div style={{ background: 'rgba(61,71,86,0.2)', borderRadius: 5, padding: '10px 12px' }}>
                               <div style={{ fontSize: 9, color: 'rgba(200,194,187,0.35)', marginBottom: 4 }}>Year built</div>
                               <div style={{ fontSize: 12, color: '#C8C2BB' }}>{p.yearBuilt || '—'}</div>
@@ -325,7 +325,7 @@ export default function BriefPage() {
                         )}
                         {p.description && <div style={{ fontSize: 12, color: 'rgba(200,194,187,0.5)', lineHeight: 1.7, marginBottom: 14 }}>{p.description}</div>}
                         {p.photoUrls && p.photoUrls.length > 0 && (
-                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 14 }}>
+                          <div className="ec-form-grid-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 14 }}>
                             {p.photoUrls.map((url: string, i: number) => (
                               <div key={i} style={{ borderRadius: 5, overflow: 'hidden', aspectRatio: '4/3', background: 'rgba(61,71,86,0.2)' }}>
                                 <img src={url} alt="Property photo" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} onError={e => { (e.target as HTMLImageElement).closest('div')!.style.display = 'none' }} />

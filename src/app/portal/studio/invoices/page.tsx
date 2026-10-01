@@ -151,7 +151,7 @@ export default function InvoicesPage() {
       <ToastHost />
       <ConfirmHost />
       <StudioSidebar active="invoices" />
-      <div style={{ flex: 1, overflowX: 'hidden' }}>
+      <div className="ec-studio-main" style={{ flex: 1, overflowX: 'hidden', minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 28px', height: 57, borderBottom: '0.5px solid rgba(200,194,187,0.09)', background: '#14181F', position: 'sticky', top: 0, zIndex: 20 }}>
           <div>
             <div style={{ fontSize: 14, fontWeight: 500, color: '#fff' }}>Invoices</div>
