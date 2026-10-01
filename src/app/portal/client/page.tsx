@@ -1027,7 +1027,7 @@ export default function ClientPortal() {
                                       <div style={{ width: 7, height: 7, borderRadius: '50%', background: calTypeColors[ev.type] || '#C8C2BB', flexShrink: 0 }} />
                                       <div style={{ flex: 1, minWidth: 0 }}>
                                         <div style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.ref.title || ev.ref.address || ev.ref.shoot_package || 'Booking'}</div>
-                                        <div style={{ fontSize: 10, color: 'rgba(200,194,187,0.4)' }}>{ev.label}</div>
+                                        <div style={{ fontSize: 10, color: 'rgba(200,194,187,0.4)' }}>{ev.label}{(() => { const st = ev.ref.shoot_window_start || ev.ref.proposed_start_time; const et = ev.ref.shoot_window_end || ev.ref.proposed_end_time; return st ? ' · ' + formatTime12(st) + (et ? '–' + formatTime12(et) : '') : '' })()}</div>
                                       </div>
                                     </div>
                                   ))}

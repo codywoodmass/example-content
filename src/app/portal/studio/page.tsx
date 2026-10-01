@@ -274,6 +274,8 @@ export default function StudioPortal() {
   const [showDailyDigest, setShowDailyDigest] = useState(false)
   const [digestShoots, setDigestShoots] = useState<any[]>([])
   const [digestDeliveries, setDigestDeliveries] = useState<any[]>([])
+  const [digestTodos, setDigestTodos] = useState<any[]>([])
+  const [digestRequestsCount, setDigestRequestsCount] = useState(0)
 
   // Date/time negotiation — propose a slot to the client against a real
   // Google Calendar week view, rather than confirming directly.
@@ -369,7 +371,7 @@ export default function StudioPortal() {
       setUserRole(profile.role)
       setUser(session.user)
       setLoading(false)
-      loadBookings(session.user.email)
+      loadBookings(session.user.email, profile.role)
       checkGoogleStatus()
     })
 
@@ -430,7 +432,7 @@ export default function StudioPortal() {
     setModalSaving(false)
   }
 
-  async function loadBookings(digestUserEmail?: string) {
+  async function loadBookings(digestUserEmail?: string, digestRole?: string) {
     const [{ data, error }, { data: projects }, { data: crs }, { data: vf }] = await Promise.all([
       supabase.from('bookings1').select('*').in('status', ['pending', 'date_proposed', 'alt_requested', 'confirmed']).order('created_at', { ascending: false }),
       supabase.from('projects1').select('*').order('created_at', { ascending: false }),
@@ -469,9 +471,14 @@ export default function StudioPortal() {
             .sort((a: any, b: any) => new Date(a.shoot_date).getTime() - new Date(b.shoot_date).getTime())
           const deliveries = projects.filter((p: any) => !p.archived && p.delivery_due && p.stage !== 'Awaiting Confirmation' && new Date(p.delivery_due) >= now && new Date(p.delivery_due) <= in7)
             .sort((a: any, b: any) => new Date(a.delivery_due).getTime() - new Date(b.delivery_due).getTime())
-          if (shoots.length > 0 || deliveries.length > 0 || (vf && vf.length > 0)) {
+          const { data: todaysTodos } = await supabase.from('todos').select('*').eq('user_email', digestUserEmail).eq('due_date', today).eq('done', false)
+          const actionableCount = (data || []).filter((b: any) => b.status !== 'confirmed' || !b.project_id).length
+          const requestsCount = digestRole === 'studio' ? actionableCount + (crs?.length || 0) : 0
+          if (shoots.length > 0 || deliveries.length > 0 || (vf && vf.length > 0) || (todaysTodos && todaysTodos.length > 0) || requestsCount > 0) {
             setDigestShoots(shoots)
             setDigestDeliveries(deliveries)
+            setDigestTodos(todaysTodos || [])
+            setDigestRequestsCount(requestsCount)
             setShowDailyDigest(true)
           }
           localStorage.setItem(seenKey, '1')
@@ -576,7 +583,7 @@ export default function StudioPortal() {
   // Shared by confirmBooking and bookMeeting — creates the project, Drive folder and
   // deliverables checklist from a pending booking. shootDateForProject is only set when
   // an actual shoot date is being locked in (not for a discovery/scoping meeting).
-  async function createProjectFromBooking(booking: any, shootDateForProject: string | null, extraNotes: string) {
+  async function createProjectFromBooking(booking: any, shootDateForProject: string | null, extraNotes: string, shootStartTime?: string | null, shootEndTime?: string | null) {
     const { data, error: projectError } = await supabase.from('projects1').insert([{
       title: booking.address || booking.shoot_package || 'New project',
       client: booking.client_name || booking.client_email || '',
@@ -586,6 +593,8 @@ export default function StudioPortal() {
       address: booking.address || '',
       stage: 'Enquiry',
       shoot_date: shootDateForProject,
+      shoot_window_start: shootDateForProject ? (shootStartTime || null) : null,
+      shoot_window_end: shootDateForProject ? (shootEndTime || null) : null,
       draft_due: booking.draft_due || null,
       delivery_due: booking.delivery_due || null,
       progress: 0,
@@ -631,7 +640,7 @@ export default function StudioPortal() {
   }
 
   async function confirmBooking(booking: any) {
-    const data = await createProjectFromBooking(booking, shootDate || booking.preferred_date || null, '')
+    const data = await createProjectFromBooking(booking, shootDate || booking.preferred_date || null, '', startTime, endTime)
     // Fast path (no negotiation) — set project_id in the same write so this
     // booking never also shows up in the "ready to create project" queue.
     await supabase.from('bookings1').update({ status: 'confirmed', project_id: data?.id || null }).eq('id', booking.id)
@@ -764,7 +773,7 @@ export default function StudioPortal() {
   // event now (only the studio's own browser session has the Google cookies
   // needed for either), then link the booking to the new project.
   async function finalizeBooking(booking: any) {
-    const data = await createProjectFromBooking(booking, booking.proposed_date || booking.preferred_date || null, '')
+    const data = await createProjectFromBooking(booking, booking.proposed_date || booking.preferred_date || null, '', booking.proposed_start_time, booking.proposed_end_time)
     if (!data) return
     if (booking.proposed_date && booking.proposed_start_time && booking.proposed_end_time) {
       try {
@@ -1026,7 +1035,7 @@ export default function StudioPortal() {
                           addEvent(p.shoot_date, 'shoot', p)
                           addEvent(p.draft_due, 'draft', p)
                           addEvent(p.delivery_due, 'delivery', p)
-                          ;(p.shoot_dates || []).forEach((d: any) => addEvent(d.date, 'shoot', p))
+                          ;(p.shoot_dates || []).forEach((d: any) => addEvent(d.date, 'shoot', { ...p, shoot_window_start: d.start_time, shoot_window_end: d.end_time }))
                         })
                         const typeColors: Record<string, string> = { shoot: 'rgba(210,175,80,0.9)', draft: 'rgba(100,150,220,0.9)', delivery: 'rgba(100,200,130,0.9)' }
                         const typeLabels: Record<string, string> = { shoot: 'Shoot', draft: 'Brief/draft due', delivery: 'Delivery due' }
@@ -1082,7 +1091,7 @@ export default function StudioPortal() {
                                           <div style={{ width: 7, height: 7, borderRadius: '50%', background: typeColors[ev.type] || '#C8C2BB', flexShrink: 0 }} />
                                           <div style={{ flex: 1, minWidth: 0 }}>
                                             <div style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.project.title}</div>
-                                            <div style={{ fontSize: 10, color: 'rgba(200,194,187,0.4)' }}>{typeLabels[ev.type] || ev.type} · {ev.project.client}</div>
+                                            <div style={{ fontSize: 10, color: 'rgba(200,194,187,0.4)' }}>{typeLabels[ev.type] || ev.type}{ev.type === 'shoot' && ev.project.shoot_window_start ? ' · ' + formatTime12(ev.project.shoot_window_start) + (ev.project.shoot_window_end ? '–' + formatTime12(ev.project.shoot_window_end) : '') : ''} · {ev.project.client}</div>
                                           </div>
                                         </div>
                                       ))}
@@ -1200,16 +1209,16 @@ export default function StudioPortal() {
           // shoot_date plus any additional shoot_dates entries added for multi-day jobs.
           const upcomingShoots = scheduleProjects
             .flatMap((p: any) => {
-              const occurrences: { key: string; p: any; date: string; note?: string }[] = []
-              if (p.shoot_date && new Date(p.shoot_date) >= now) occurrences.push({ key: p.id, p, date: p.shoot_date })
+              const occurrences: { key: string; p: any; date: string; note?: string; startTime?: string; endTime?: string }[] = []
+              if (p.shoot_date && new Date(p.shoot_date) >= now) occurrences.push({ key: p.id, p, date: p.shoot_date, startTime: p.shoot_window_start, endTime: p.shoot_window_end })
               ;(p.shoot_dates || []).forEach((d: any) => {
-                if (d.date && new Date(d.date) >= now) occurrences.push({ key: p.id + '-' + d.id, p, date: d.date, note: d.notes || 'Additional shoot date' })
+                if (d.date && new Date(d.date) >= now) occurrences.push({ key: p.id + '-' + d.id, p, date: d.date, note: d.notes || 'Additional shoot date', startTime: d.start_time, endTime: d.end_time })
               })
               return occurrences
             })
             .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
 
-          function ProjectRow({ p, i, total, displayDate, note }: { p: any; i: number; total: number; displayDate?: string; note?: string }) {
+          function ProjectRow({ p, i, total, displayDate, note, startTime, endTime }: { p: any; i: number; total: number; displayDate?: string; note?: string; startTime?: string; endTime?: string }) {
             const dateVal = displayDate || p.shoot_date
             const STAGE_C: Record<string,any> = {
               'Enquiry': {color:'rgba(200,194,187,0.55)',bg:'rgba(200,194,187,0.06)'},
@@ -1236,6 +1245,7 @@ export default function StudioPortal() {
                   <div style={{ fontSize: 13, fontWeight: 500, color: '#C8C2BB', marginBottom: 3 }}>{p.title}</div>
                   <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>
                     {p.client}
+                    {startTime ? ' · ' + formatTime12(startTime) + (endTime ? '–' + formatTime12(endTime) : '') : ''}
                     {p.address ? ' · ' + p.address.split(',')[0] : ''}
                     {note ? ' · ' + note : ''}
                     {p.draft_due ? ' · Brief due: ' + new Date(p.draft_due + 'T12:00:00').toLocaleDateString('en-NZ',{day:'numeric',month:'short'}) : ''}
@@ -1284,7 +1294,7 @@ export default function StudioPortal() {
                   <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, overflow: 'hidden' }}>
                     {upcomingShoots.length === 0 ? (
                       <div style={{ padding: '28px 18px', textAlign: 'center', color: 'rgba(200,194,187,0.25)', fontSize: 12 }}>No upcoming shoots scheduled</div>
-                    ) : upcomingShoots.map((occ, i: number) => <ProjectRow key={occ.key} p={occ.p} i={i} total={upcomingShoots.length} displayDate={occ.date} note={occ.note} />)}
+                    ) : upcomingShoots.map((occ, i: number) => <ProjectRow key={occ.key} p={occ.p} i={i} total={upcomingShoots.length} displayDate={occ.date} note={occ.note} startTime={occ.startTime} endTime={occ.endTime} />)}
                   </div>
                 </div>
               </div>
@@ -1976,7 +1986,7 @@ export default function StudioPortal() {
                     try {
                     if (respondingToCR && shootDate) {
                       if (respondingToCR.project_id) {
-                        await supabase.from('projects1').update({ shoot_date: shootDate, general_notes: (respondingToCR.general_notes || '') + '\n\n[RESCHEDULED ' + new Date().toLocaleDateString('en-NZ') + '] New date: ' + new Date(shootDate + 'T12:00:00').toLocaleDateString('en-NZ',{weekday:'long',day:'numeric',month:'long',year:'numeric'}) + ' at ' + formatTime12(startTime) }).eq('id', respondingToCR.project_id)
+                        await supabase.from('projects1').update({ shoot_date: shootDate, shoot_window_start: startTime, shoot_window_end: endTime, general_notes: (respondingToCR.general_notes || '') + '\n\n[RESCHEDULED ' + new Date().toLocaleDateString('en-NZ') + '] New date: ' + new Date(shootDate + 'T12:00:00').toLocaleDateString('en-NZ',{weekday:'long',day:'numeric',month:'long',year:'numeric'}) + ' at ' + formatTime12(startTime) }).eq('id', respondingToCR.project_id)
                       }
                       await supabase.from('change_requests').update({ status: 'resolved' }).eq('id', respondingToCR.id)
                       setChangeRequests((p: any[]) => p.filter((r: any) => r.id !== respondingToCR.id))
@@ -2445,6 +2455,29 @@ export default function StudioPortal() {
                 <span style={{ fontSize: 11, color: 'rgba(210,90,90,0.8)' }}>Review →</span>
               </div>
             )}
+
+            {digestRequestsCount > 0 && (
+              <div onClick={() => { setShowDailyDigest(false); setActiveView('bookings') }} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(100,150,220,0.08)', border: '0.5px solid rgba(100,150,220,0.25)', borderRadius: 6, padding: '12px 14px', marginBottom: 18, cursor: 'pointer' }}>
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 500, color: 'rgba(100,150,220,0.9)' }}>{digestRequestsCount} booking request{digestRequestsCount !== 1 ? 's' : ''} / change{digestRequestsCount !== 1 ? 's' : ''} to review</div>
+                  <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', marginTop: 2 }}>New bookings, reschedules and date responses</div>
+                </div>
+                <span style={{ fontSize: 11, color: 'rgba(100,150,220,0.8)' }}>Review →</span>
+              </div>
+            )}
+
+            <div style={{ marginBottom: 18 }}>
+              <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 8 }}>To do today ({digestTodos.length})</div>
+              {digestTodos.length === 0 ? (
+                <div style={{ fontSize: 12, color: 'rgba(200,194,187,0.25)' }}>Nothing on your to-do list for today</div>
+              ) : (
+                <div style={{ background: '#14181F', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 6, overflow: 'hidden' }}>
+                  {digestTodos.map((t: any, i: number) => (
+                    <div key={t.id} onClick={() => { setShowDailyDigest(false); router.push('/portal/studio/todos') }} style={{ padding: '10px 14px', borderBottom: i < digestTodos.length - 1 ? '0.5px solid rgba(200,194,187,0.06)' : 'none', cursor: 'pointer', fontSize: 12, color: '#C8C2BB' }}>{t.text}</div>
+                  ))}
+                </div>
+              )}
+            </div>
 
             <div style={{ marginBottom: 18 }}>
               <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 8 }}>Upcoming shoots ({digestShoots.length})</div>
