@@ -1090,6 +1090,62 @@ export default function StudioPortal() {
                       })}
                     </div>
                   </div>
+
+                {/* WEATHER — precipitation, wind and temp for the week ahead, Auckland + Waikato */}
+                {(() => {
+                  const WEATHER_ICONS: Record<number, string> = { 0: '☀️', 1: '🌤️', 2: '⛅', 3: '☁️', 45: '🌫️', 48: '🌫️', 51: '🌦️', 53: '🌦️', 55: '🌦️', 61: '🌧️', 63: '🌧️', 65: '🌧️', 71: '🌨️', 73: '🌨️', 75: '🌨️', 80: '🌧️', 81: '🌧️', 82: '🌧️', 95: '⛈️', 96: '⛈️', 99: '⛈️' }
+                  const weatherIcon = (code: number) => WEATHER_ICONS[code] ?? '🌡️'
+                  const today = new Date(); today.setHours(0, 0, 0, 0)
+                  const dow = today.getDay() === 0 ? 6 : today.getDay() - 1
+                  const monday = new Date(today); monday.setDate(today.getDate() - dow + weekOffset * 7)
+                  const days = Array.from({ length: 7 }, (_, i) => { const d = new Date(monday); d.setDate(monday.getDate() + i); return d })
+                  const hasAnyData = days.some(d => weatherByDate[localDateKey(d)])
+                  const COL_W = 64
+
+                  const RegionRow = ({ label, icon, pick }: { label: string; icon: string; pick: (w: any) => any }) => (
+                    <div style={{ display: 'grid', gridTemplateColumns: `56px repeat(7, ${COL_W}px)`, alignItems: 'center' }}>
+                      <div style={{ fontSize: 10, color: 'rgba(200,194,187,0.5)' }}>{icon} {label}</div>
+                      {days.map(d => {
+                        const key = localDateKey(d)
+                        const w = pick(weatherByDate[key])
+                        return (
+                          <div key={key} style={{ textAlign: 'center', padding: '4px 2px', borderLeft: '0.5px solid rgba(200,194,187,0.06)' }}>
+                            {w ? (
+                              <>
+                                <div style={{ fontSize: 10, color: '#C8C2BB' }}>{weatherIcon(w.code)} {Math.round(w.max)}/{Math.round(w.min)}°</div>
+                                <div style={{ fontSize: 9, color: w.rain >= 50 ? 'rgba(100,150,220,0.85)' : 'rgba(200,194,187,0.35)' }}>💧{w.rain}% 💨{Math.round(w.wind)}</div>
+                              </>
+                            ) : (
+                              <div style={{ fontSize: 9, color: 'rgba(200,194,187,0.15)', padding: '6px 0' }}>—</div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )
+
+                  return (
+                    <div style={{ marginBottom: 28 }}>
+                      <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 10 }}>Weather — week ahead</div>
+                      <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, padding: '10px 12px', overflowX: 'auto' }}>
+                        {!hasAnyData ? (
+                          <div style={{ padding: '6px 0', fontSize: 12, color: 'rgba(200,194,187,0.25)', textAlign: 'center' }}>Forecast unavailable for this week</div>
+                        ) : (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 56 + COL_W * 7 }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: `56px repeat(7, ${COL_W}px)` }}>
+                              <div />
+                              {days.map(d => (
+                                <div key={localDateKey(d)} style={{ textAlign: 'center', fontSize: 8.5, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)' }}>{d.toLocaleDateString('en-NZ', { weekday: 'short' })} {d.getDate()}</div>
+                              ))}
+                            </div>
+                            <RegionRow label="AKL" icon="🏙️" pick={(w: any) => w?.akl} />
+                            <RegionRow label="WKO" icon="🚜" pick={(w: any) => w?.wko} />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })()}
                 </div>
               </div>
 
@@ -1201,62 +1257,6 @@ export default function StudioPortal() {
                           )
                         })}
                       </div>
-                    </div>
-                  </div>
-                )
-              })()}
-
-              {/* WEATHER — precipitation, wind and temp for the week ahead, Auckland + Waikato */}
-              {(() => {
-                const WEATHER_ICONS: Record<number, string> = { 0: '☀️', 1: '🌤️', 2: '⛅', 3: '☁️', 45: '🌫️', 48: '🌫️', 51: '🌦️', 53: '🌦️', 55: '🌦️', 61: '🌧️', 63: '🌧️', 65: '🌧️', 71: '🌨️', 73: '🌨️', 75: '🌨️', 80: '🌧️', 81: '🌧️', 82: '🌧️', 95: '⛈️', 96: '⛈️', 99: '⛈️' }
-                const weatherIcon = (code: number) => WEATHER_ICONS[code] ?? '🌡️'
-                const today = new Date(); today.setHours(0, 0, 0, 0)
-                const dow = today.getDay() === 0 ? 6 : today.getDay() - 1
-                const monday = new Date(today); monday.setDate(today.getDate() - dow + weekOffset * 7)
-                const days = Array.from({ length: 7 }, (_, i) => { const d = new Date(monday); d.setDate(monday.getDate() + i); return d })
-                const hasAnyData = days.some(d => weatherByDate[localDateKey(d)])
-                const COL_W = 64
-
-                const RegionRow = ({ label, icon, pick }: { label: string; icon: string; pick: (w: any) => any }) => (
-                  <div style={{ display: 'grid', gridTemplateColumns: `56px repeat(7, ${COL_W}px)`, alignItems: 'center' }}>
-                    <div style={{ fontSize: 10, color: 'rgba(200,194,187,0.5)' }}>{icon} {label}</div>
-                    {days.map(d => {
-                      const key = localDateKey(d)
-                      const w = pick(weatherByDate[key])
-                      return (
-                        <div key={key} style={{ textAlign: 'center', padding: '4px 2px', borderLeft: '0.5px solid rgba(200,194,187,0.06)' }}>
-                          {w ? (
-                            <>
-                              <div style={{ fontSize: 10, color: '#C8C2BB' }}>{weatherIcon(w.code)} {Math.round(w.max)}/{Math.round(w.min)}°</div>
-                              <div style={{ fontSize: 9, color: w.rain >= 50 ? 'rgba(100,150,220,0.85)' : 'rgba(200,194,187,0.35)' }}>💧{w.rain}% 💨{Math.round(w.wind)}</div>
-                            </>
-                          ) : (
-                            <div style={{ fontSize: 9, color: 'rgba(200,194,187,0.15)', padding: '6px 0' }}>—</div>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
-                )
-
-                return (
-                  <div style={{ marginBottom: 28 }}>
-                    <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 10 }}>Weather — week ahead</div>
-                    <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, padding: '10px 12px', overflowX: 'auto' }}>
-                      {!hasAnyData ? (
-                        <div style={{ padding: '6px 0', fontSize: 12, color: 'rgba(200,194,187,0.25)', textAlign: 'center' }}>Forecast unavailable for this week</div>
-                      ) : (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 56 + COL_W * 7 }}>
-                          <div style={{ display: 'grid', gridTemplateColumns: `56px repeat(7, ${COL_W}px)` }}>
-                            <div />
-                            {days.map(d => (
-                              <div key={localDateKey(d)} style={{ textAlign: 'center', fontSize: 8.5, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)' }}>{d.toLocaleDateString('en-NZ', { weekday: 'short' })} {d.getDate()}</div>
-                            ))}
-                          </div>
-                          <RegionRow label="AKL" icon="🏙️" pick={(w: any) => w?.akl} />
-                          <RegionRow label="WKO" icon="🚜" pick={(w: any) => w?.wko} />
-                        </div>
-                      )}
                     </div>
                   </div>
                 )
