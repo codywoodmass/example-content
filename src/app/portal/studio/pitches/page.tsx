@@ -237,14 +237,16 @@ export default function PitchDeckPage() {
     if (!briefId) return
     await supabase.from('briefs').update({ status: 'sent' }).eq('id', briefId)
     setBriefStatus('sent')
-    // Add notification for client
-    await supabase.from('notifications').insert([{
-      user_email: clientEmail,
-      type: 'brief_ready',
-      title: 'Your production brief is ready',
-      message: 'Your brief for ' + projectName + ' is ready to review and approve.',
-      read: false,
-    }])
+    // Known clients get an in-app notification; clients with no portal
+    // account get an actual email with a public, no-login link instead —
+    // an in-app notification would never reach them.
+    try {
+      await fetch('/api/notify-brief-ready', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ briefId, projectName, clientName, clientEmail }),
+      })
+    } catch (e) { console.error('Brief notify error:', e) }
     notify('Brief sent to ' + clientEmail, 'success')
   }
 
