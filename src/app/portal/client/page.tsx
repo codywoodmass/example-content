@@ -660,6 +660,7 @@ export default function ClientPortal() {
   // lifetime stats don't go blank the moment an invoice is actually sent.
   const [allClientProjects, setAllClientProjects] = useState<any[]>([])
   const [openInvoiceId, setOpenInvoiceId] = useState<string | null>(null)
+  const [previousShootsPage, setPreviousShootsPage] = useState(1)
   const [selectedBrief, setSelectedBrief] = useState<any>(null)
   const [libraryProject, setLibraryProject] = useState<any>(null)
   const [briefFeedback, setBriefFeedback] = useState('')
@@ -1053,10 +1054,14 @@ export default function ClientPortal() {
           const upcomingShoots = [...confirmedShoots, ...pendingShootBookings].sort((a: any, b: any) => new Date(a.shoot_date).getTime() - new Date(b.shoot_date).getTime())
           const activeProjects = clientProjects.filter((p: any) => p.stage !== 'Awaiting Confirmation' && p.stage !== 'Completed')
           const awaitingSchedule = clientBookings.filter((b: any) => !b.preferred_date && !b.proposed_date && isUnresolved(b.status))
-          const completedProjects = clientProjects.filter((p: any) => p.stage === 'Awaiting Confirmation' || p.drive_url)
+          // Archiving is an internal studio/invoicing bookkeeping step — it must
+          // never make a client's own delivered content disappear on them, so
+          // these use allClientProjects (unfiltered by archived) rather than
+          // clientProjects (active-only).
+          const completedProjects = allClientProjects.filter((p: any) => p.stage === 'Awaiting Confirmation' || p.stage === 'Completed' || p.drive_url)
           const pendingBookings = clientBookings.filter((b: any) => isAwaitingProject(b))
           // Same scoping as the studio dashboard's "Recent deliveries" slider.
-          const recentDeliveries = clientProjects.filter((p: any) => p.drive_url && !p.archived && (p.stage === 'Awaiting Confirmation' || p.stage === 'Completed')).slice(0, 10)
+          const recentDeliveries = allClientProjects.filter((p: any) => p.drive_url && (p.stage === 'Awaiting Confirmation' || p.stage === 'Completed')).sort((a: any, b: any) => new Date(b.delivered_at || b.created_at).getTime() - new Date(a.delivered_at || a.created_at).getTime()).slice(0, 10)
 
           // Calendar
           const startOfWeek = new Date(now)
@@ -2002,8 +2007,16 @@ export default function ClientPortal() {
         {activeView === 'upcoming' && (() => {
           const now = new Date()
           const upcomingProjects = clientProjects.filter((p: any) => p.shoot_date && new Date(p.shoot_date) >= now).sort((a: any, b: any) => new Date(a.shoot_date).getTime() - new Date(b.shoot_date).getTime())
-          const deliveredProjects = clientProjects.filter((p: any) => p.stage === 'Awaiting Confirmation' || p.stage === 'Completed').sort((a: any, b: any) => new Date(b.delivery_due || b.created_at).getTime() - new Date(a.delivery_due || a.created_at).getTime())
+          const deliveredProjects = allClientProjects.filter((p: any) => p.stage === 'Awaiting Confirmation' || p.stage === 'Completed').sort((a: any, b: any) => new Date(b.delivery_due || b.created_at).getTime() - new Date(a.delivery_due || a.created_at).getTime())
           const pendingBookings = clientBookings.filter((b: any) => b.status === 'pending' || b.status === 'date_proposed' || b.status === 'alt_requested' || (b.status === 'confirmed' && !b.project_id))
+          // Full shoot history, regardless of archived/invoiced status — a client's
+          // own record of past shoots should never shrink just because the studio
+          // invoiced the project.
+          const PREVIOUS_PAGE_SIZE = 25
+          const previousProjects = allClientProjects.filter((p: any) => p.shoot_date && new Date(p.shoot_date) < now).sort((a: any, b: any) => new Date(b.shoot_date).getTime() - new Date(a.shoot_date).getTime())
+          const previousTotalPages = Math.max(1, Math.ceil(previousProjects.length / PREVIOUS_PAGE_SIZE))
+          const previousPageClamped = Math.min(previousShootsPage, previousTotalPages)
+          const previousPageItems = previousProjects.slice((previousPageClamped - 1) * PREVIOUS_PAGE_SIZE, previousPageClamped * PREVIOUS_PAGE_SIZE)
           return (
             <div>
               <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'16px 28px', borderBottom:'0.5px solid rgba(200,194,187,0.09)', background:'#14181F', position:'sticky', top:0, zIndex:10 }}>
@@ -2121,6 +2134,40 @@ export default function ClientPortal() {
                     </div>
                   )}
                 </div>
+                {/* PREVIOUS SHOOTS */}
+                {previousProjects.length > 0 && (
+                  <div>
+                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
+                      <div style={{ fontSize:10, letterSpacing:'0.16em', textTransform:'uppercase', color:'rgba(200,194,187,0.3)' }}>Previous shoots</div>
+                      <div style={{ fontSize:11, color:'rgba(200,194,187,0.3)' }}>{previousProjects.length} total</div>
+                    </div>
+                    <div style={{ background:'#1A1F28', border:'0.5px solid rgba(200,194,187,0.09)', borderRadius:7, overflow:'hidden' }}>
+                      {previousPageItems.map((p: any, i: number) => {
+                        const d = new Date(p.shoot_date+'T12:00:00')
+                        return (
+                          <div key={p.id} onClick={() => setSelectedProject(p)} style={{ display:'flex', alignItems:'center', gap:14, padding:'14px 18px', borderBottom: i < previousPageItems.length-1 ? '0.5px solid rgba(200,194,187,0.06)':'none', cursor:'pointer' }}>
+                            <div style={{ width:42, flexShrink:0, textAlign:'center', background:'rgba(61,71,86,0.3)', border:'0.5px solid rgba(200,194,187,0.09)', borderRadius:5, padding:'6px 4px' }}>
+                              <div style={{ fontSize:16, fontWeight:600, color:'#fff', lineHeight:1 }}>{d.getDate()}</div>
+                              <div style={{ fontSize:9, color:'rgba(200,194,187,0.4)', textTransform:'uppercase' }}>{d.toLocaleDateString('en-NZ',{month:'short',year:'numeric'})}</div>
+                            </div>
+                            <div style={{ flex:1 }}>
+                              <div style={{ fontSize:13, fontWeight:500, color:'#C8C2BB', marginBottom:2 }}>{p.title}</div>
+                              <div style={{ fontSize:11, color:'rgba(200,194,187,0.4)' }}>{p.address?.split(',')[0]}</div>
+                            </div>
+                            <span style={{ fontSize:9, letterSpacing:'0.08em', textTransform:'uppercase', padding:'3px 9px', borderRadius:2, background:'rgba(200,194,187,0.08)', color:'rgba(200,194,187,0.5)', border:'0.5px solid rgba(200,194,187,0.15)' }}>{stageLabel(p.stage)}</span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                    {previousTotalPages > 1 && (
+                      <div style={{ display:'flex', justifyContent:'center', alignItems:'center', gap:14, marginTop:14 }}>
+                        <button disabled={previousPageClamped <= 1} onClick={() => setPreviousShootsPage(p => Math.max(1, p - 1))} style={{ fontSize:11, letterSpacing:'0.08em', textTransform:'uppercase', padding:'7px 14px', borderRadius:3, border:'0.5px solid rgba(200,194,187,0.2)', color: previousPageClamped <= 1 ? 'rgba(200,194,187,0.15)' : 'rgba(200,194,187,0.5)', background:'transparent', cursor: previousPageClamped <= 1 ? 'not-allowed' : 'pointer', fontFamily:'inherit' }}>← Prev</button>
+                        <span style={{ fontSize:11, color:'rgba(200,194,187,0.35)' }}>Page {previousPageClamped} of {previousTotalPages}</span>
+                        <button disabled={previousPageClamped >= previousTotalPages} onClick={() => setPreviousShootsPage(p => Math.min(previousTotalPages, p + 1))} style={{ fontSize:11, letterSpacing:'0.08em', textTransform:'uppercase', padding:'7px 14px', borderRadius:3, border:'0.5px solid rgba(200,194,187,0.2)', color: previousPageClamped >= previousTotalPages ? 'rgba(200,194,187,0.15)' : 'rgba(200,194,187,0.5)', background:'transparent', cursor: previousPageClamped >= previousTotalPages ? 'not-allowed' : 'pointer', fontFamily:'inherit' }}>Next →</button>
+                      </div>
+                    )}
+                  </div>
+                )}
                 {/* DELIVERED */}
                 {deliveredProjects.length > 0 && (
                   <div>
@@ -2145,7 +2192,7 @@ export default function ClientPortal() {
 
         {/* ===== LIBRARY ===== */}
         {activeView === 'library' && (() => {
-          const projectsWithDrive = clientProjects.filter((p: any) => p.drive_url)
+          const projectsWithDrive = allClientProjects.filter((p: any) => p.drive_url)
           return (
             <div>
               <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'16px 28px', borderBottom:'0.5px solid rgba(200,194,187,0.09)', background:'#14181F', position:'sticky', top:0, zIndex:10 }}>
