@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase'
 import { xeroAuthedFetch } from '@/lib/xeroClient'
 import { notify, confirmDialog, ToastHost, ConfirmHost } from '@/lib/notify'
 import { formatTime12 } from '@/lib/time'
+import { stageLabel } from '@/lib/stages'
 
 function formatDate(dateStr: string | null | undefined): string {
   if (!dateStr) return '—'
@@ -37,7 +38,7 @@ function briefTemplate(title: string): string {
   )
 }
 
-const STAGES =['Enquiry', 'Pre-Production', 'Shooting', 'Post-Production', 'Revisions', 'Awaiting Confirmation']
+const STAGES =['Enquiry', 'Pre-Production', 'Shooting', 'Post-Production', 'Revisions', 'Awaiting Confirmation', 'Completed']
 
 // Mirrors the client-facing property packages in portal/client/page.tsx so a manually
 // added property job records the same package name + price the client would pick.
@@ -55,6 +56,7 @@ const STAGE_COLORS: Record<string, { color: string; bg: string; border: string }
   'Post-Production': { color: 'rgba(160,100,220,0.9)', bg: 'rgba(50,25,80,0.4)', border: 'rgba(160,100,220,0.25)' },
   'Revisions': { color: 'rgba(220,120,60,0.9)', bg: 'rgba(80,35,15,0.4)', border: 'rgba(220,120,60,0.25)' },
   'Awaiting Confirmation': { color: 'rgba(100,200,130,0.9)', bg: 'rgba(30,70,45,0.4)', border: 'rgba(100,200,130,0.25)' },
+  'Completed': { color: 'rgba(100,200,130,0.9)', bg: 'rgba(30,70,45,0.6)', border: 'rgba(100,200,130,0.4)' },
 }
 
 type Project = {
@@ -93,6 +95,9 @@ type Project = {
   invoice_id: string | null
   attachment_urls: { name: string; url: string; size: number }[]
   archived_at: string | null
+  delivered_at: string | null
+  redelivered_at: string | null
+  invoiced_at: string | null
 }
 
 function attachmentIcon(name: string): string {
@@ -120,6 +125,8 @@ function ProjectsPageInner() {
   const [modalSaving, setModalSaving] = useState(false)
   const [modalSaved, setModalSaved] = useState(false)
   const [autoSaveTimer, setAutoSaveTimer] = useState<any>(null)
+  const [uploadingAttachment, setUploadingAttachment] = useState(false)
+  const [previewAttachment, setPreviewAttachment] = useState<{ name: string; url: string; size: number } | null>(null)
   const [calendarSyncTimer, setCalendarSyncTimer] = useState<any>(null)
 
   // Keeps the Google Calendar event in step whenever the shoot date or time is
@@ -153,6 +160,41 @@ function ProjectsPageInner() {
       setTimeout(() => setModalSaved(false), 2000)
     }, 1000)
     setAutoSaveTimer(timer)
+  }
+
+  // Studio-added attachments go straight to the DB (not the debounced
+  // autosave, which doesn't carry attachment_urls) — same storage bucket the
+  // client's own booking attachments use, so one "Client attachments" panel
+  // can hold files either side added.
+  async function addProjectAttachments(project: Project, files: FileList) {
+    setUploadingAttachment(true)
+    try {
+      const uploaded: { name: string; url: string; size: number }[] = []
+      for (const file of Array.from(files)) {
+        const safeName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_')
+        const path = `${Date.now()}-${safeName}`
+        const { error } = await supabase.storage.from('booking-attachments').upload(path, file)
+        if (error) { notify('Attachment upload error: ' + error.message, 'error'); continue }
+        const { data: { publicUrl } } = supabase.storage.from('booking-attachments').getPublicUrl(path)
+        uploaded.push({ name: file.name, url: publicUrl, size: file.size })
+      }
+      if (uploaded.length === 0) return
+      const nextAttachments = [...(project.attachment_urls || []), ...uploaded]
+      const { error } = await supabase.from('projects1').update({ attachment_urls: nextAttachments }).eq('id', project.id)
+      if (error) { notify('Error saving attachment: ' + error.message, 'error'); return }
+      setModalProject(p => p && p.id === project.id ? { ...p, attachment_urls: nextAttachments } : p)
+      setProjects(p => p.map(proj => proj.id === project.id ? { ...proj, attachment_urls: nextAttachments } : proj))
+    } finally {
+      setUploadingAttachment(false)
+    }
+  }
+
+  async function removeProjectAttachment(project: Project, url: string) {
+    const nextAttachments = (project.attachment_urls || []).filter(a => a.url !== url)
+    const { error } = await supabase.from('projects1').update({ attachment_urls: nextAttachments }).eq('id', project.id)
+    if (error) { notify('Error removing attachment: ' + error.message, 'error'); return }
+    setModalProject(p => p && p.id === project.id ? { ...p, attachment_urls: nextAttachments } : p)
+    setProjects(p => p.map(proj => proj.id === project.id ? { ...proj, attachment_urls: nextAttachments } : proj))
   }
 
   // Additional shoot dates — for the uncommon project shot across multiple days/months.
@@ -325,11 +367,12 @@ function ProjectsPageInner() {
     'Shooting': 35,
     'Post-Production': 65,
     'Revisions': 85,
-    'Awaiting Confirmation': 100,
+    'Awaiting Confirmation': 95,
+    'Completed': 100,
   }
 
   function stageForProgress(val: number): string {
-    return val >= 100 ? 'Awaiting Confirmation' : val >= 85 ? 'Revisions' : val >= 65 ? 'Post-Production' : val >= 35 ? 'Shooting' : val >= 10 ? 'Pre-Production' : 'Enquiry'
+    return val >= 100 ? 'Completed' : val >= 95 ? 'Awaiting Confirmation' : val >= 85 ? 'Revisions' : val >= 65 ? 'Post-Production' : val >= 35 ? 'Shooting' : val >= 10 ? 'Pre-Production' : 'Enquiry'
   }
 
   async function moveProject(id: string, stage: string) {
@@ -423,11 +466,19 @@ function ProjectsPageInner() {
   async function deliverProject(project: Project) {
     if (!project.drive_url) return
     if (!(await confirmDialog('Mark this project as delivered and notify the client?'))) return
-    
-    // Update project stage to Awaiting Confirmation and progress to 100
+
+    const now = new Date().toISOString()
+    // First delivery stamps delivered_at; any delivery after that is a
+    // redelivery — stamps/updates redelivered_at instead, so the Completed
+    // view can show both without the first delivery ever being overwritten.
+    const timestampField: 'delivered_at' | 'redelivered_at' = project.delivered_at ? 'redelivered_at' : 'delivered_at'
+
+    // Update project stage to Awaiting Confirmation and progress to 95 — still
+    // waiting on the client to confirm/approve before this is Completed.
     await supabase.from('projects1').update({
       stage: 'Awaiting Confirmation',
-      progress: 100,
+      progress: 95,
+      [timestampField]: now,
     }).eq('id', project.id)
 
     // Notify the client — in-portal notification + email, both handled server-side
@@ -451,15 +502,21 @@ function ProjectsPageInner() {
     setProjectFeedback(p => p.map(f => f.status === 'pending' ? { ...f, status: 'resolved' } : f))
 
     // Update local state
-    setModalProject(p => p ? { ...p, stage: 'Awaiting Confirmation', progress: 100 } : p)
-    setProjects(p => p.map(proj => proj.id === project.id ? { ...proj, stage: 'Awaiting Confirmation', progress: 100 } : proj))
+    setModalProject(p => p ? { ...p, stage: 'Awaiting Confirmation', progress: 95, [timestampField]: now } : p)
+    setProjects(p => p.map(proj => proj.id === project.id ? { ...proj, stage: 'Awaiting Confirmation', progress: 95, [timestampField]: now } : proj))
     setModalSaved(true)
     setTimeout(() => setModalSaved(false), 2000)
+  }
 
-    // Auto-add this project to the client's open draft invoice (or start one) the
-    // moment it's delivered, rather than waiting on a separate manual step — the
-    // studio only needs to review and send the drafts at the end of the month.
-    if (project.amount && !project.invoice_id) sendToInvoice(project)
+  // The studio's own sign-off that a delivered project is fully wrapped (no
+  // more revisions coming) — this is what actually makes it "ready to
+  // invoice", separate from the client having received the delivery.
+  async function markProjectCompleted(project: Project) {
+    await supabase.from('projects1').update({ stage: 'Completed', progress: 100 }).eq('id', project.id)
+    setModalProject(p => p ? { ...p, stage: 'Completed', progress: 100 } : p)
+    setProjects(p => p.map(proj => proj.id === project.id ? { ...proj, stage: 'Completed', progress: 100 } : proj))
+    setModalSaved(true)
+    setTimeout(() => setModalSaved(false), 2000)
   }
 
   async function deleteProject(project: Project) {
@@ -556,14 +613,15 @@ function ProjectsPageInner() {
       // client has ever had, just this one plus whatever the draft already holds
       // from earlier deliveries this cycle, so completing one project doesn't sweep
       // in unrelated older ones that were never invoiced for some other reason.
-      await supabase.from('projects1').update({ invoice_id: invoice.id }).eq('id', project.id)
+      const invoiced_at = new Date().toISOString()
+      await supabase.from('projects1').update({ invoice_id: invoice.id, invoiced_at }).eq('id', project.id)
       const { data: existingLines } = await supabase.from('projects1').select('amount').eq('invoice_id', invoice.id)
       const subtotal = (existingLines || []).reduce((sum, r) => sum + (r.amount || 0), 0)
       const gst = Math.round(subtotal * 0.15 * 100) / 100
       const total = subtotal + gst
       await supabase.from('invoices1').update({ subtotal, gst, total }).eq('id', invoice.id)
-      setProjects(p => p.map(proj => proj.id === project.id ? { ...proj, invoice_id: invoice.id } : proj))
-      setModalProject(p => p && p.id === project.id ? { ...p, invoice_id: invoice.id } : p)
+      setProjects(p => p.map(proj => proj.id === project.id ? { ...proj, invoice_id: invoice.id, invoiced_at } : proj))
+      setModalProject(p => p && p.id === project.id ? { ...p, invoice_id: invoice.id, invoiced_at } : p)
       try {
         const res = await xeroAuthedFetch('/api/xero/invoice', { method: 'POST', body: JSON.stringify({ invoiceId: invoice.id }) })
         const xeroData = await res.json()
@@ -624,6 +682,7 @@ function ProjectsPageInner() {
     const matchesConfirmed = hideUnconfirmed ? p.stage !== 'Enquiry' : true
     return matchesCat && matchesArchived && matchesConfirmed
   }).sort((a, b) => {
+    if (showArchived) return new Date(b.archived_at || b.created_at).getTime() - new Date(a.archived_at || a.created_at).getTime()
     if (sortBy === 'shoot_date') return (a.shoot_date || '9999') < (b.shoot_date || '9999') ? -1 : 1
     if (sortBy === 'delivery_due') return (a.delivery_due || '9999') < (b.delivery_due || '9999') ? -1 : 1
     if (sortBy === 'client') return (a.client || '').localeCompare(b.client || '')
@@ -637,7 +696,7 @@ function ProjectsPageInner() {
 
   function StagePill({ stage }: { stage: string }) {
     const c = STAGE_COLORS[stage] || { color: '#C8C2BB', bg: 'rgba(200,194,187,0.1)', border: 'rgba(200,194,187,0.2)' }
-    return <span style={{ fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '3px 9px', borderRadius: 2, background: c.bg, color: c.color, border: `0.5px solid ${c.border}`, whiteSpace: 'nowrap' }}>{stage}</span>
+    return <span style={{ fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '3px 9px', borderRadius: 2, background: c.bg, color: c.color, border: `0.5px solid ${c.border}`, whiteSpace: 'nowrap' }}>{stageLabel(stage)}</span>
   }
 
   function ProjectsTable({ list }: { list: Project[] }) {
@@ -754,7 +813,7 @@ function ProjectsPageInner() {
       <div className="ec-toolbar-wrap" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 28px', height: 57, borderBottom: '0.5px solid rgba(200,194,187,0.09)', background: '#14181F', position: 'sticky', top: 0, zIndex: 20 }}>
         <div>
           <div style={{ fontSize: 14, fontWeight: 500, color: '#fff' }}>Projects</div>
-          <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', marginTop: 1 }}>{projects.length} projects · {projects.filter(p => p.stage === 'Awaiting Confirmation').length} invoicing</div>
+          <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', marginTop: 1 }}>{projects.length} projects · {projects.filter(p => p.stage === 'Completed' && !p.invoice_id).length} ready to invoice</div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -809,7 +868,7 @@ function ProjectsPageInner() {
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <div style={{ width: 6, height: 6, borderRadius: '50%', background: c.color }} />
-                      <span style={{ fontSize: 11, fontWeight: 500, color: '#C8C2BB' }}>{stage}</span>
+                      <span style={{ fontSize: 11, fontWeight: 500, color: '#C8C2BB' }}>{stageLabel(stage)}</span>
                     </div>
                     <span style={{ fontSize: 10, color: 'rgba(200,194,187,0.3)', background: 'rgba(200,194,187,0.07)', padding: '2px 7px', borderRadius: 10 }}>{stageProjects.length}</span>
                   </div>
@@ -839,7 +898,7 @@ function ProjectsPageInner() {
                   <div key={stage}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
                       <div style={{ width: 8, height: 8, borderRadius: '50%', background: sc.color }} />
-                      <span style={{ fontSize: 11, fontWeight: 500, color: sc.color, letterSpacing: '0.08em', textTransform: 'uppercase' }}>{stage}</span>
+                      <span style={{ fontSize: 11, fontWeight: 500, color: sc.color, letterSpacing: '0.08em', textTransform: 'uppercase' }}>{stageLabel(stage)}</span>
                       <span style={{ fontSize: 11, color: 'rgba(200,194,187,0.3)' }}>— {stageProjects.length} project{stageProjects.length !== 1 ? 's' : ''}</span>
                     </div>
                     <div style={{ background: '#1A1F28', border: `0.5px solid ${sc.color}33`, borderRadius: 7, overflow: 'hidden' }}>
@@ -914,7 +973,7 @@ function ProjectsPageInner() {
               )}
               <div><label style={lbl}>Starting stage</label>
                 <select style={inp} value={newForm.stage} onChange={e => setNewForm(f => ({ ...f, stage: e.target.value }))}>
-                  {STAGES.map(s => <option key={s}>{s}</option>)}
+                  {STAGES.map(s => <option key={s} value={s}>{stageLabel(s)}</option>)}
                 </select>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -966,7 +1025,7 @@ function ProjectsPageInner() {
                     return (
                       <div key={stage} onClick={() => moveProject(modalProject.id, stage)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, cursor: 'pointer', flex: 1 }}>
                         <div style={{ width: 26, height: 26, borderRadius: '50%', background: isDone ? 'rgba(100,200,130,0.15)' : isCurrent ? 'rgba(200,194,187,0.08)' : 'transparent', border: `1.5px solid ${isDone ? 'rgba(100,200,130,0.5)' : isCurrent ? STAGE_COLORS[stage].color : 'rgba(200,194,187,0.15)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: isDone ? 'rgba(100,200,130,0.8)' : isCurrent ? STAGE_COLORS[stage].color : 'rgba(200,194,187,0.2)' }}>{isDone ? '✓' : idx+1}</div>
-                        <span style={{ fontSize: 9, color: isCurrent ? '#C8C2BB' : 'rgba(200,194,187,0.3)', textAlign: 'center', lineHeight: 1.3 }}>{stage}</span>
+                        <span style={{ fontSize: 9, color: isCurrent ? '#C8C2BB' : 'rgba(200,194,187,0.3)', textAlign: 'center', lineHeight: 1.3 }}>{stageLabel(stage)}</span>
                       </div>
                     )
                   })}
@@ -985,19 +1044,59 @@ function ProjectsPageInner() {
                   })
                 }} style={{ width: '100%', accentColor: '#C8C2BB', cursor: 'pointer' }} />
               </div>
-              {modalProject.attachment_urls && modalProject.attachment_urls.length > 0 && (
-                <div style={{ marginBottom: 20, background: 'rgba(100,150,220,0.06)', border: '0.5px solid rgba(100,150,220,0.2)', borderRadius: 6, padding: '14px 16px' }}>
-                  <div style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(100,150,220,0.85)', marginBottom: 10 }}>Client attachments ({modalProject.attachment_urls.length})</div>
+              <div style={{ marginBottom: 20, background: 'rgba(100,150,220,0.06)', border: '0.5px solid rgba(100,150,220,0.2)', borderRadius: 6, padding: '14px 16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                  <div style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(100,150,220,0.85)' }}>Attachments ({modalProject.attachment_urls?.length || 0})</div>
+                  <label style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '5px 10px', borderRadius: 3, border: '0.5px solid rgba(100,150,220,0.3)', color: uploadingAttachment ? 'rgba(100,150,220,0.4)' : 'rgba(100,150,220,0.85)', cursor: uploadingAttachment ? 'default' : 'pointer', fontFamily: 'inherit' }}>
+                    {uploadingAttachment ? 'Uploading...' : '+ Add'}
+                    <input type="file" multiple disabled={uploadingAttachment} style={{ display: 'none' }} onChange={e => { if (e.target.files && e.target.files.length > 0) addProjectAttachments(modalProject, e.target.files); e.target.value = '' }} />
+                  </label>
+                </div>
+                {(!modalProject.attachment_urls || modalProject.attachment_urls.length === 0) ? (
+                  <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.3)' }}>No attachments yet</div>
+                ) : (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                     {modalProject.attachment_urls.map((a, ai) => (
-                      <a key={ai} href={a.url} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#C8C2BB', textDecoration: 'none', background: 'rgba(200,194,187,0.06)', border: '0.5px solid rgba(200,194,187,0.12)', borderRadius: 4, padding: '6px 10px', maxWidth: 240 }}>
-                        <span>{attachmentIcon(a.name)}</span>
-                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.name}</span>
-                      </a>
+                      <div key={ai} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#C8C2BB', background: 'rgba(200,194,187,0.06)', border: '0.5px solid rgba(200,194,187,0.12)', borderRadius: 4, padding: '6px 6px 6px 10px', maxWidth: 260 }}>
+                        <span onClick={() => setPreviewAttachment(a)} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', overflow: 'hidden' }}>
+                          <span>{attachmentIcon(a.name)}</span>
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.name}</span>
+                        </span>
+                        <button onClick={() => removeProjectAttachment(modalProject, a.url)} style={{ fontSize: 12, color: 'rgba(210,90,90,0.6)', background: 'transparent', border: 'none', cursor: 'pointer', flexShrink: 0, padding: '0 2px' }}>✕</button>
+                      </div>
                     ))}
                   </div>
-                </div>
-              )}
+                )}
+              </div>
+              {previewAttachment && (() => {
+                const ext = previewAttachment.name.split('.').pop()?.toLowerCase() || ''
+                const isImg = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic'].includes(ext)
+                const isPdf = ext === 'pdf'
+                const isVid = ['mp4', 'mov', 'webm'].includes(ext)
+                return (
+                  <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 400, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24 }} onClick={() => setPreviewAttachment(null)}>
+                    <div style={{ position: 'absolute', top: 20, right: 20, display: 'flex', gap: 12, alignItems: 'center' }} onClick={e => e.stopPropagation()}>
+                      <a href={previewAttachment.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, background: '#C8C2BB', color: '#111', textDecoration: 'none', fontFamily: 'inherit', fontWeight: 500 }}>Download</a>
+                      <button onClick={() => setPreviewAttachment(null)} style={{ fontSize: 24, color: 'rgba(200,194,187,0.5)', background: 'transparent', border: 'none', cursor: 'pointer' }}>×</button>
+                    </div>
+                    <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxWidth: isImg ? '90vw' : 900, height: isImg ? 'auto' : '85vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14 }}>
+                      {isImg ? (
+                        <img src={previewAttachment.url} alt={previewAttachment.name} style={{ maxWidth: '90vw', maxHeight: '82vh', objectFit: 'contain', borderRadius: 6 }} />
+                      ) : isPdf ? (
+                        <iframe src={previewAttachment.url} style={{ width: '100%', height: '100%', border: 'none', borderRadius: 6, background: '#fff' }} />
+                      ) : isVid ? (
+                        <video src={previewAttachment.url} controls autoPlay style={{ maxWidth: '90vw', maxHeight: '82vh', borderRadius: 6 }} />
+                      ) : (
+                        <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 8, padding: '40px 48px', textAlign: 'center' }}>
+                          <div style={{ fontSize: 32, marginBottom: 14 }}>{attachmentIcon(previewAttachment.name)}</div>
+                          <div style={{ fontSize: 13, color: 'rgba(200,194,187,0.6)' }}>No in-browser preview for this file type.</div>
+                        </div>
+                      )}
+                      <div style={{ fontSize: 13, color: 'rgba(200,194,187,0.6)' }}>{previewAttachment.name}</div>
+                    </div>
+                  </div>
+                )
+              })()}
               <div style={{ display: 'flex', gap: 4, marginBottom: 20, borderBottom: '0.5px solid rgba(200,194,187,0.09)' }}>
                 {[{ id: 'overview', label: 'Overview' }, { id: 'notes', label: 'Notes & Files' }, { id: 'brief', label: 'Brief' }].map(tab => (
                   <button key={tab.id} onClick={() => setModalTab(tab.id as any)} style={{ fontSize: 12, padding: '10px 14px', background: 'transparent', border: 'none', borderBottom: `2px solid ${modalTab === tab.id ? '#C8C2BB' : 'transparent'}`, color: modalTab === tab.id ? '#C8C2BB' : 'rgba(200,194,187,0.35)', cursor: 'pointer', fontFamily: 'inherit', marginBottom: -1 }}>{tab.label}</button>
@@ -1020,9 +1119,9 @@ function ProjectsPageInner() {
                   <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>Stage</div>
                   {modalEditing ? (
                     <select value={modalProject.stage} onChange={e => setModalProject(p => { const u = p ? { ...p, stage: e.target.value, progress: STAGE_PROGRESS[e.target.value] } : p; if (u) triggerAutoSave(u); return u })} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '8px 10px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }}>
-                      {STAGES.map(s => <option key={s}>{s}</option>)}
+                      {STAGES.map(s => <option key={s} value={s}>{stageLabel(s)}</option>)}
                     </select>
-                  ) : <div style={{ fontSize: 13, color: '#C8C2BB' }}>{modalProject.stage}</div>}
+                  ) : <div style={{ fontSize: 13, color: '#C8C2BB' }}>{stageLabel(modalProject.stage)}</div>}
                 </div>
                 <div>
                   <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>Amount ($)</div>
@@ -1064,13 +1163,10 @@ function ProjectsPageInner() {
                 ))}
               </div>
               <div style={{ marginBottom: 20 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                  <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)' }}>Additional shoot dates <span style={{ color: 'rgba(200,194,187,0.2)', textTransform: 'none', letterSpacing: 0 }}>— for shoots spanning multiple days</span></div>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: 10 }}>
                   <button onClick={addShootDate} style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '4px 10px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>+ Add date</button>
                 </div>
-                {(modalProject.shoot_dates || []).length === 0 ? (
-                  <div style={{ fontSize: 12, color: 'rgba(200,194,187,0.2)' }}>No additional dates — just the single shoot date above</div>
-                ) : (
+                {(modalProject.shoot_dates || []).length > 0 && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {(modalProject.shoot_dates || []).map(d => (
                       <div key={d.id} className="ec-shoot-date-row" style={{ display: 'grid', gridTemplateColumns: '1fr 100px 100px 1fr 24px', gap: 8, alignItems: 'center', background: 'rgba(200,194,187,0.03)', border: '0.5px solid rgba(200,194,187,0.07)', borderRadius: 5, padding: '8px 10px' }}>
@@ -1252,14 +1348,25 @@ function ProjectsPageInner() {
                   </div>
                 </div>
               )}
+              {modalProject.stage === 'Completed' && (
+                <div style={{ marginBottom: 16, padding: '14px 16px', background: 'rgba(100,200,130,0.04)', border: '0.5px solid rgba(100,200,130,0.15)', borderRadius: 6, display: 'flex', gap: 24, flexWrap: 'wrap' as const }}>
+                  {modalProject.delivered_at && (
+                    <div><div style={{ fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 3 }}>Delivered</div><div style={{ fontSize: 12, color: '#C8C2BB' }}>{new Date(modalProject.delivered_at).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })}</div></div>
+                  )}
+                  {modalProject.redelivered_at && (
+                    <div><div style={{ fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 3 }}>Redelivered</div><div style={{ fontSize: 12, color: '#C8C2BB' }}>{new Date(modalProject.redelivered_at).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })}</div></div>
+                  )}
+                  <div><div style={{ fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 3 }}>Invoice</div><div style={{ fontSize: 12, color: modalProject.invoiced_at ? '#C8C2BB' : 'rgba(200,194,187,0.3)' }}>{modalProject.invoiced_at ? new Date(modalProject.invoiced_at).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Not yet invoiced'}</div></div>
+                </div>
+              )}
               <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 16, borderTop: '0.5px solid rgba(200,194,187,0.09)' }}>
                 <div style={{ display: 'flex', gap: 8 }}>
                 {modalProject.drive_url && (
-                  <button onClick={() => deliverProject(modalProject)} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(100,200,130,0.4)', color: modalProject.stage === 'Awaiting Confirmation' ? 'rgba(100,200,130,0.4)' : 'rgba(100,200,130,0.9)', background: modalProject.stage === 'Awaiting Confirmation' ? 'transparent' : 'rgba(100,200,130,0.08)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>
-                    {modalProject.stage === 'Awaiting Confirmation' ? 'Redeliver to client' : 'Deliver to client'}
+                  <button onClick={() => deliverProject(modalProject)} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(100,200,130,0.4)', color: modalProject.stage === 'Awaiting Confirmation' || modalProject.stage === 'Completed' ? 'rgba(100,200,130,0.4)' : 'rgba(100,200,130,0.9)', background: modalProject.stage === 'Awaiting Confirmation' || modalProject.stage === 'Completed' ? 'transparent' : 'rgba(100,200,130,0.08)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>
+                    {modalProject.stage === 'Awaiting Confirmation' || modalProject.stage === 'Completed' ? 'Redeliver to client' : 'Deliver to client'}
                   </button>
                 )}
-                {modalProject.category === 'Property' && modalProject.address && (
+                {modalProject.category === 'Property' && modalProject.address && modalProject.stage === 'Enquiry' && (
                   <button onClick={() => generateProjectBrief(modalProject)} disabled={briefLoading} style={{ position: 'relative', overflow: 'hidden', fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: `0.5px solid ${briefGenerated ? 'rgba(100,200,130,0.3)' : 'rgba(200,194,187,0.2)'}`, color: briefGenerated ? 'rgba(100,200,130,0.8)' : 'rgba(200,194,187,0.5)', background: briefGenerated ? 'rgba(100,200,130,0.06)' : 'transparent', cursor: briefLoading ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>
                     {briefLoading && (
                       <>
@@ -1270,11 +1377,17 @@ function ProjectsPageInner() {
                     <span style={{ position: 'relative' }}>{briefLoading ? 'Researching...' : briefGenerated ? 'Brief saved' : 'Generate brief'}</span>
                   </button>
                 )}
-                {modalProject.stage === 'Awaiting Confirmation' && !modalProject.archived && !modalProject.invoice_id && (
+                {modalProject.stage === 'Awaiting Confirmation' && !modalProject.archived && (
+                  <button onClick={() => markProjectCompleted(modalProject)} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(100,200,130,0.4)', color: 'rgba(100,200,130,0.9)', background: 'rgba(100,200,130,0.08)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>Mark as completed</button>
+                )}
+                {modalProject.stage === 'Completed' && !modalProject.archived && !modalProject.invoice_id && (
                   <button disabled={sendingInvoice} onClick={() => sendToInvoice(modalProject)} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(210,175,80,0.3)', color: 'rgba(210,175,80,0.8)', background: 'rgba(210,175,80,0.06)', cursor: sendingInvoice ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>{sendingInvoice ? 'Sending...' : 'Send to invoice'}</button>
                 )}
-                {modalProject.stage === 'Awaiting Confirmation' && !modalProject.archived && modalProject.invoice_id && (
+                {modalProject.stage === 'Completed' && !modalProject.archived && modalProject.invoice_id && (
                   <span style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(210,175,80,0.25)', color: 'rgba(210,175,80,0.7)' }}>Invoiced — Draft</span>
+                )}
+                {modalProject.stage === 'Completed' && !modalProject.archived && (
+                  <button onClick={() => archiveProject(modalProject.id, true)} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Archive</button>
                 )}
                 {modalProject.archived && (
                   <button onClick={() => archiveProject(modalProject.id, false)} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(100,200,130,0.3)', color: 'rgba(100,200,130,0.8)', background: 'rgba(100,200,130,0.06)', cursor: 'pointer', fontFamily: 'inherit' }}>Unarchive</button>

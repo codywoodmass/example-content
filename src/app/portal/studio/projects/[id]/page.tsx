@@ -3,8 +3,9 @@ import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import StudioSidebar from '../../StudioSidebar'
+import { stageLabel } from '@/lib/stages'
 
-const STAGES = ['Enquiry', 'Pre-Production', 'Shooting', 'Post-Production', 'Revisions', 'Awaiting Confirmation']
+const STAGES = ['Enquiry', 'Pre-Production', 'Shooting', 'Post-Production', 'Revisions', 'Awaiting Confirmation', 'Completed']
 const STAGE_COLORS: Record<string, { color: string; bg: string }> = {
   'Enquiry': { color: 'rgba(200,194,187,0.55)', bg: 'rgba(200,194,187,0.06)' },
   'Pre-Production': { color: 'rgba(100,150,220,0.9)', bg: 'rgba(25,45,80,0.4)' },
@@ -12,6 +13,7 @@ const STAGE_COLORS: Record<string, { color: string; bg: string }> = {
   'Post-Production': { color: 'rgba(160,100,220,0.9)', bg: 'rgba(50,25,80,0.4)' },
   'Revisions': { color: 'rgba(220,120,60,0.9)', bg: 'rgba(80,35,15,0.4)' },
   'Awaiting Confirmation': { color: 'rgba(100,200,130,0.9)', bg: 'rgba(30,70,45,0.4)' },
+  'Completed': { color: 'rgba(100,200,130,0.9)', bg: 'rgba(30,70,45,0.6)' },
 }
 type Project = {
   id: string; title: string; client: string; contact: string; email: string
@@ -123,7 +125,7 @@ export default function ProjectDetailPage() {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <select value={project.stage} onChange={e => updateField('stage', e.target.value)} style={{ ...inp, width: 'auto', padding: '6px 12px', fontSize: 11, background: STAGE_COLORS[project.stage]?.bg, color: STAGE_COLORS[project.stage]?.color, border: `0.5px solid ${STAGE_COLORS[project.stage]?.color}44` }}>
-              {STAGES.map(s => <option key={s} value={s}>{s}</option>)}
+              {STAGES.map(s => <option key={s} value={s}>{stageLabel(s)}</option>)}
             </select>
             <button onClick={saveProject} disabled={saving} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 16px', borderRadius: 3, background: saved ? 'rgba(100,200,130,0.2)' : '#C8C2BB', color: saved ? 'rgba(100,200,130,0.9)' : '#111', border: saved ? '0.5px solid rgba(100,200,130,0.4)' : 'none', cursor: saving ? 'not-allowed' : 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>
               {saving ? 'Saving...' : saved ? '✓ Saved' : 'Save changes'}
@@ -139,7 +141,7 @@ export default function ProjectDetailPage() {
                 <div key={stage} style={{ display: 'flex', alignItems: 'center', flex: idx < STAGES.length - 1 ? 1 : 'none' }}>
                   <div onClick={() => updateField('stage', stage)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer', gap: 6 }}>
                     <div style={{ width: 28, height: 28, borderRadius: '50%', background: isDone ? 'rgba(100,200,130,0.2)' : isCurrent ? c.bg : 'rgba(200,194,187,0.05)', border: `1.5px solid ${isDone ? 'rgba(100,200,130,0.5)' : isCurrent ? c.color : 'rgba(200,194,187,0.1)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: isDone ? 'rgba(100,200,130,0.8)' : isCurrent ? c.color : 'rgba(200,194,187,0.2)' }}>{isDone ? '✓' : idx + 1}</div>
-                    <span style={{ fontSize: 10, color: isCurrent ? '#C8C2BB' : 'rgba(200,194,187,0.3)', whiteSpace: 'nowrap' }}>{stage}</span>
+                    <span style={{ fontSize: 10, color: isCurrent ? '#C8C2BB' : 'rgba(200,194,187,0.3)', whiteSpace: 'nowrap' }}>{stageLabel(stage)}</span>
                   </div>
                   {idx < STAGES.length - 1 && <div style={{ flex: 1, height: 1.5, background: isDone ? 'rgba(100,200,130,0.3)' : 'rgba(200,194,187,0.08)', margin: '0 8px', marginBottom: 22 }} />}
                 </div>
@@ -329,7 +331,7 @@ export default function ProjectDetailPage() {
                   const c = STAGE_COLORS[stage]; const isCurrent = project.stage === stage
                   return (
                     <button key={stage} onClick={() => updateField('stage', stage)} style={{ fontSize: 11, padding: '8px 12px', borderRadius: 4, border: `0.5px solid ${isCurrent ? c.color : 'rgba(200,194,187,0.09)'}`, background: isCurrent ? c.bg : 'transparent', color: isCurrent ? c.color : 'rgba(200,194,187,0.35)', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8 }}>
-                      {isCurrent && <span style={{ fontSize: 10 }}>✓</span>}{stage}
+                      {isCurrent && <span style={{ fontSize: 10 }}>✓</span>}{stageLabel(stage)}
                     </button>
                   )
                 })}

@@ -112,7 +112,7 @@ export default function InvoicesPage() {
       const items = lineItems[invoice.id] || []
       const sent_at = new Date().toISOString()
       await supabase.from('invoices1').update({ status: 'sent', sent_at }).eq('id', invoice.id)
-      await supabase.from('projects1').update({ archived: true }).in('id', items.map(i => i.id))
+      await supabase.from('projects1').update({ archived: true, archived_at: sent_at }).in('id', items.map(i => i.id))
       setInvoices(p => p.map(inv => inv.id === invoice.id ? { ...inv, status: 'sent', sent_at } : inv))
     } finally {
       setBusyId(null)

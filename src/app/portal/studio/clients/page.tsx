@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import StudioSidebar from '../StudioSidebar'
 import { notify, ToastHost } from '@/lib/notify'
+import { stageLabel } from '@/lib/stages'
 
 type Client = {
   id: string
@@ -99,6 +100,7 @@ export default function ClientsPage() {
     'Post-Production': { color: 'rgba(160,100,220,0.9)', bg: 'rgba(50,25,80,0.4)' },
     'Revisions': { color: 'rgba(220,120,60,0.9)', bg: 'rgba(80,35,15,0.4)' },
     'Awaiting Confirmation': { color: 'rgba(100,200,130,0.9)', bg: 'rgba(30,70,45,0.4)' },
+    'Completed': { color: 'rgba(100,200,130,0.9)', bg: 'rgba(30,70,45,0.6)' },
   }
 
   return (
@@ -226,7 +228,7 @@ export default function ClientsPage() {
                         <div style={{ width: 60, height: 3, background: 'rgba(200,194,187,0.07)', borderRadius: 2 }}>
                           <div style={{ height: '100%', width: `${p.progress}%`, background: '#C8C2BB', opacity: 0.5, borderRadius: 2 }} />
                         </div>
-                        <span style={{ fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '3px 8px', borderRadius: 2, background: sc.bg, color: sc.color }}>{p.stage}</span>
+                        <span style={{ fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '3px 8px', borderRadius: 2, background: sc.bg, color: sc.color }}>{stageLabel(p.stage)}</span>
                       </div>
                     </div>
                   )

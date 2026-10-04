@@ -3,6 +3,7 @@ import React from 'react'
 import { useEffect, useState } from 'react'
 import { supabase, ensureClientProfile } from '@/lib/supabase'
 import { formatTime12, localDateKey, addBusinessDays } from '@/lib/time'
+import { stageLabel } from '@/lib/stages'
 import { useRouter } from 'next/navigation'
 
 const VIDEO_FORMATS = ['1920×1080', '1080×1080', '9×16 Vertical', '4×5', '4K 3840×2160']
@@ -155,6 +156,97 @@ function DriveThumb({ project, onClick }: { project: any; onClick: () => void })
         <div style={{ fontSize:11, color:'rgba(200,194,187,0.4)', marginBottom:8 }}>{project.delivery_due ? new Date(project.delivery_due+'T12:00:00').toLocaleDateString('en-NZ',{day:'numeric',month:'short',year:'numeric'}) : ''}</div>
         <span style={{ fontSize:9, letterSpacing:'0.08em', textTransform:'uppercase', padding:'2px 7px', borderRadius:2, background:'rgba(100,200,130,0.15)', color:'rgba(100,200,130,0.9)', border:'0.5px solid rgba(100,200,130,0.3)' }}>Delivered</span>
       </div>
+    </div>
+  )
+}
+
+function DeliveryThumbBanner({ project }: { project: any }) {
+  const [firstFile, setFirstFile] = React.useState<any>(null)
+  const [loading, setLoading] = React.useState(true)
+
+  React.useEffect(() => {
+    if (!project?.drive_url) { setLoading(false); return }
+    const isMedia = (f: any) => f.mimeType?.includes('video') || f.mimeType?.includes('image')
+    fetch(`/api/drive?url=${encodeURIComponent(project.drive_url)}`)
+      .then(r => r.json())
+      .then(async data => {
+        const files = data.files || []
+        const media = files.find(isMedia)
+        if (media) { setFirstFile(media); setLoading(false); return }
+        const folder = files.find((f: any) => f.mimeType === 'application/vnd.google-apps.folder')
+        if (folder) {
+          const res2 = await fetch(`/api/drive?folderId=${folder.id}`)
+          const data2 = await res2.json()
+          setFirstFile((data2.files || []).find(isMedia) || null)
+        } else {
+          setFirstFile(null)
+        }
+        setLoading(false)
+      })
+      .catch(() => setLoading(false))
+  }, [project?.drive_url])
+
+  const isVideo = (mime: string) => mime?.includes('video')
+
+  return (
+    <div style={{ width: '100%', height: 170, background: 'linear-gradient(135deg, #1A1F28 0%, #14181F 100%)', position: 'relative', overflow: 'hidden' }}>
+      {!loading && firstFile && (
+        isVideo(firstFile.mimeType) ? (
+          <img src={`/api/drive?thumb=${firstFile.id}`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.55 }} onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
+        ) : (
+          <img src={`https://lh3.googleusercontent.com/d/${firstFile.id}`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.55 }} onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
+        )
+      )}
+      <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(14,16,20,0) 0%, rgba(14,16,20,0.9) 100%)' }} />
+      <div style={{ position: 'absolute', top: 18, left: 18, width: 44, height: 44, borderRadius: '50%', background: 'rgba(100,200,130,0.15)', border: '1.5px solid rgba(100,200,130,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 20px rgba(100,200,130,0.25)' }}>
+        <span style={{ fontSize: 20, color: 'rgba(100,200,130,0.95)' }}>✓</span>
+      </div>
+    </div>
+  )
+}
+
+function ProjectThumbSquare({ project }: { project: any }) {
+  const [firstFile, setFirstFile] = React.useState<any>(null)
+  const [loading, setLoading] = React.useState(true)
+
+  React.useEffect(() => {
+    if (!project.drive_url) { setLoading(false); return }
+    const isMedia = (f: any) => f.mimeType?.includes('video') || f.mimeType?.includes('image')
+    fetch(`/api/drive?url=${encodeURIComponent(project.drive_url)}`)
+      .then(r => r.json())
+      .then(async data => {
+        const files = data.files || []
+        const media = files.find(isMedia)
+        if (media) { setFirstFile(media); setLoading(false); return }
+        const folder = files.find((f: any) => f.mimeType === 'application/vnd.google-apps.folder')
+        if (folder) {
+          const res2 = await fetch(`/api/drive?folderId=${folder.id}`)
+          const data2 = await res2.json()
+          setFirstFile((data2.files || []).find(isMedia) || null)
+        } else {
+          setFirstFile(null)
+        }
+        setLoading(false)
+      })
+      .catch(() => setLoading(false))
+  }, [project.drive_url])
+
+  const isVideo = (mime: string) => mime?.includes('video')
+
+  return (
+    <div style={{ width: 56, height: 56, borderRadius: 8, background: '#0E1014', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, overflow: 'hidden', position: 'relative' }}>
+      {!loading && firstFile ? (
+        isVideo(firstFile.mimeType) ? (
+          <>
+            <img src={`/api/drive?thumb=${firstFile.id}`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.8 }} onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
+            <div style={{ position: 'absolute', width: 20, height: 20, borderRadius: '50%', background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><IconPlay size={9} style={{ marginLeft: 1, color: '#C8C2BB' }} /></div>
+          </>
+        ) : (
+          <img src={`https://lh3.googleusercontent.com/d/${firstFile.id}`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
+        )
+      ) : (
+        <IconFolder size={20} style={{ color: 'rgba(200,194,187,0.5)' }} />
+      )}
     </div>
   )
 }
@@ -335,12 +427,15 @@ function DriveFolder({ project, clientEmail, clientName }: { project: any; clien
         <div style={{ fontSize:10, letterSpacing:'0.16em', textTransform:'uppercase', color:'rgba(200,194,187,0.28)' }}>{project.title}</div>
         <a href={project.drive_url} target="_blank" rel="noopener noreferrer" style={{ fontSize:10, color:'rgba(200,194,187,0.35)', textDecoration:'none', letterSpacing:'0.08em', textTransform:'uppercase' }}>Open in Drive →</a>
       </div>
-      <div style={{ background:'#1A1F28', border:'0.5px solid rgba(200,194,187,0.09)', borderRadius:7, overflow:'hidden', marginBottom:8, padding:'14px 18px' }}>
-        <div style={{ fontSize:13, fontWeight:500, color:'#C8C2BB', marginBottom:4 }}>{project.title}</div>
-        <div style={{ display:'flex', gap:16 }}>
-          {project.shoot_date && <div style={{ fontSize:11, color:'rgba(200,194,187,0.4)' }}>Shoot: {new Date(project.shoot_date+'T12:00:00').toLocaleDateString('en-NZ',{day:'numeric',month:'short',year:'numeric'})}</div>}
-          {project.address && <div style={{ fontSize:11, color:'rgba(200,194,187,0.4)' }}>{project.address.split(',')[0]}</div>}
-          <div style={{ fontSize:11, color:'rgba(100,200,130,0.7)' }}>{files.length} item{files.length!==1?'s':''}</div>
+      <div style={{ background:'#1A1F28', border:'0.5px solid rgba(200,194,187,0.09)', borderRadius:7, overflow:'hidden', marginBottom:8, padding:'14px 18px', display:'flex', alignItems:'center', gap:14 }}>
+        <ProjectThumbSquare project={project} />
+        <div>
+          <div style={{ fontSize:13, fontWeight:500, color:'#C8C2BB', marginBottom:4 }}>{project.title}</div>
+          <div style={{ display:'flex', gap:16 }}>
+            {project.shoot_date && <div style={{ fontSize:11, color:'rgba(200,194,187,0.4)' }}>Shoot: {new Date(project.shoot_date+'T12:00:00').toLocaleDateString('en-NZ',{day:'numeric',month:'short',year:'numeric'})}</div>}
+            {project.address && <div style={{ fontSize:11, color:'rgba(200,194,187,0.4)' }}>{project.address.split(',')[0]}</div>}
+            <div style={{ fontSize:11, color:'rgba(100,200,130,0.7)' }}>{files.length} item{files.length!==1?'s':''}</div>
+          </div>
         </div>
       </div>
       <div style={{ background:'#1A1F28', border:'0.5px solid rgba(200,194,187,0.09)', borderRadius:7, overflow:'hidden', marginBottom:14, padding:'14px 18px' }}>
@@ -381,12 +476,9 @@ function DriveFolder({ project, clientEmail, clientName }: { project: any; clien
               {isFolder(file.mimeType) ? (
                 <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center' }}><IconFolder size={32} style={{ color:'rgba(200,194,187,0.5)' }} /></div>
               ) : isVideo(file.mimeType) ? (
-                <div style={{ width:'100%', height:'100%', position:'relative', overflow:'hidden', background:'#0a0c10' }} onClick={e => e.stopPropagation()}>
-                  {file.videoMediaMetadata && parseInt(file.videoMediaMetadata.height) > parseInt(file.videoMediaMetadata.width) ? (
-                <iframe src={`https://drive.google.com/file/d/${file.id}/preview`} style={{ width:'56%', height:'calc(100% + 220px)', border:'none', marginTop:'-110px', marginBottom:'-110px' }} allow="autoplay; fullscreen" allowFullScreen />
-              ) : (
-                <iframe src={`https://drive.google.com/file/d/${file.id}/preview`} style={{ width:'100%', height:'calc(100% + 220px)', border:'none', marginTop:'-110px', marginBottom:'-110px' }} allow="autoplay; fullscreen" allowFullScreen />
-              )}
+                <div style={{ width:'100%', height:'100%', position:'relative', overflow:'hidden', background:'#0a0c10', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                  <img src={`/api/drive?thumb=${file.id}`} alt={file.name} style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', opacity:0.75 }} onError={e=>{(e.target as HTMLImageElement).style.display='none'}} />
+                  <div style={{ position:'relative', width:40, height:40, borderRadius:'50%', background:'rgba(0,0,0,0.65)', display:'flex', alignItems:'center', justifyContent:'center', border:'1.5px solid rgba(200,194,187,0.4)' }}><IconPlay size={15} style={{ marginLeft:2, color:'#C8C2BB' }} /></div>
                 </div>
               ) : isImage(file.mimeType) ? (
                 <img src={`https://lh3.googleusercontent.com/d/${file.id}`} alt={file.name} style={{ width:'100%', height:'100%', objectFit:'cover' }} onError={e => { const t=e.target as HTMLImageElement; t.src=`https://drive.google.com/thumbnail?id=${file.id}&sz=w800`; t.onerror=()=>{t.style.display='none'} }} />
@@ -416,55 +508,60 @@ function DriveFolder({ project, clientEmail, clientName }: { project: any; clien
           </div>
         ))}
       </div>
-      {/* PREVIEW MODAL — fills nearly the whole screen */}
+      {/* PREVIEW MODAL — scrolls vertically; feedback sits below the video */}
       {previewFile && (
-        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.95)', zIndex:300, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:16 }} onClick={() => setPreviewFile(null)}>
-          <div style={{ position:'absolute', top:20, right:20, display:'flex', gap:12, alignItems:'center', zIndex:10 }} onClick={e => e.stopPropagation()}>
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.95)', zIndex:300, overflowY:'auto' }} onClick={() => setPreviewFile(null)}>
+          <div style={{ position:'fixed', top:20, right:20, display:'flex', gap:12, alignItems:'center', zIndex:10 }} onClick={e => e.stopPropagation()}>
             <a href={`/api/drive/download?id=${previewFile.id}&name=${encodeURIComponent(previewFile.name)}`} download={previewFile.name} style={{ fontSize:11, letterSpacing:'0.09em', textTransform:'uppercase', padding:'8px 16px', borderRadius:3, background:'#C8C2BB', color:'#111', textDecoration:'none', fontFamily:'inherit', fontWeight:500 }}>Download</a>
             <button onClick={() => setPreviewFile(null)} style={{ fontSize:24, color:'rgba(200,194,187,0.5)', background:'transparent', border:'none', cursor:'pointer' }}>×</button>
           </div>
-          <div style={{ width:'96vw', height:'90vh', display:'flex', flexDirection: isVideo(previewFile.mimeType) ? 'row' as const : 'column' as const, alignItems:'center', justifyContent:'center', gap:16 }} onClick={e => e.stopPropagation()}>
+          <div style={{ maxWidth: 920, margin:'0 auto', padding:'70px 20px 60px', display:'flex', flexDirection:'column', alignItems:'center' }} onClick={e => e.stopPropagation()}>
             {isVideo(previewFile.mimeType) ? (
               <>
-                <div style={{ flex:'1 1 auto', height:'90vh', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:10, minWidth:0 }}>
-                  <iframe src={`https://drive.google.com/file/d/${previewFile.id}/preview`} style={{ width:'100%', maxWidth: previewFile.videoMediaMetadata && parseInt(previewFile.videoMediaMetadata.height) > parseInt(previewFile.videoMediaMetadata.width) ? 'min(40vw,700px)' : '68vw', height:'82vh', border:'none', borderRadius:6 }} allow="autoplay" allowFullScreen />
-                  <div style={{ fontSize:13, color:'rgba(200,194,187,0.6)' }}>{previewFile.name}</div>
+                <div style={{ width:'100%', maxWidth: previewFile.videoMediaMetadata && parseInt(previewFile.videoMediaMetadata.height) > parseInt(previewFile.videoMediaMetadata.width) ? 420 : 880, aspectRatio: previewFile.videoMediaMetadata && parseInt(previewFile.videoMediaMetadata.height) > parseInt(previewFile.videoMediaMetadata.width) ? '9/16' : '16/9', borderRadius:10, overflow:'hidden', background:'#000', boxShadow:'0 20px 60px rgba(0,0,0,0.5)' }}>
+                  <iframe src={`https://drive.google.com/file/d/${previewFile.id}/preview`} style={{ width:'100%', height:'100%', border:'none' }} allow="autoplay" allowFullScreen />
                 </div>
-                <div style={{ width:320, flexShrink:0, height:'90vh', background:'#14181F', border:'0.5px solid rgba(200,194,187,0.12)', borderRadius:8, display:'flex', flexDirection:'column', overflow:'hidden' }}>
-                  <div style={{ padding:'16px 18px', borderBottom:'0.5px solid rgba(200,194,187,0.1)' }}>
-                    <div style={{ fontSize:13, fontWeight:500, color:'#fff', marginBottom:2 }}>Feedback</div>
-                    <div style={{ fontSize:11, color:'rgba(200,194,187,0.4)' }}>Note the time you see on the player, then describe the change</div>
+                <div style={{ fontSize:13, color:'rgba(200,194,187,0.6)', margin:'14px 0 28px' }}>{previewFile.name}</div>
+                {/* FEEDBACK — below the player */}
+                <div style={{ width:'100%', maxWidth:620, background:'#14181F', border:'0.5px solid rgba(200,194,187,0.12)', borderRadius:12, overflow:'hidden', boxShadow:'0 10px 40px rgba(0,0,0,0.3)' }}>
+                  <div style={{ padding:'18px 22px', borderBottom:'0.5px solid rgba(200,194,187,0.1)', display:'flex', alignItems:'center', gap:10 }}>
+                    <div style={{ width:30, height:30, borderRadius:'50%', background:'rgba(200,194,187,0.08)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}><IconDocument size={14} style={{ color:'rgba(200,194,187,0.6)' }} /></div>
+                    <div>
+                      <div style={{ fontSize:13, fontWeight:600, color:'#fff' }}>Feedback on this clip</div>
+                      <div style={{ fontSize:11, color:'rgba(200,194,187,0.4)' }}>Note the time you see on the player, then describe the change</div>
+                    </div>
                   </div>
-                  <div style={{ flex:1, overflowY:'auto', padding:'12px 18px', display:'flex', flexDirection:'column', gap:10 }}>
-                    {feedbackList.length === 0 && <div style={{ fontSize:12, color:'rgba(200,194,187,0.25)' }}>No feedback yet</div>}
-                    {feedbackList.map(fb => (
-                      <div key={fb.id} style={{ background:'rgba(200,194,187,0.04)', border:'0.5px solid rgba(200,194,187,0.08)', borderRadius:5, padding:'8px 10px' }}>
-                        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:4 }}>
-                          <span style={{ fontSize:11, fontWeight:600, color:'#C8C2BB' }}>{formatSeconds(fb.timestamp_seconds)}</span>
-                          {fb.status === 'resolved' && <span style={{ fontSize:9, letterSpacing:'0.06em', textTransform:'uppercase', color:'rgba(100,200,130,0.8)' }}>✓ Resolved</span>}
+                  {feedbackList.length > 0 && (
+                    <div style={{ maxHeight:220, overflowY:'auto', padding:'14px 22px 0', display:'flex', flexDirection:'column', gap:8 }}>
+                      {feedbackList.map(fb => (
+                        <div key={fb.id} style={{ background:'rgba(200,194,187,0.04)', border:'0.5px solid rgba(200,194,187,0.08)', borderRadius:8, padding:'10px 14px', display:'flex', gap:12, alignItems:'flex-start' }}>
+                          <span style={{ fontSize:11, fontWeight:700, color:'#C8C2BB', background:'rgba(200,194,187,0.08)', borderRadius:4, padding:'3px 8px', flexShrink:0 }}>{formatSeconds(fb.timestamp_seconds)}</span>
+                          <div style={{ flex:1 }}>
+                            <div style={{ fontSize:12, color:'rgba(200,194,187,0.75)', lineHeight:1.5 }}>{fb.message}</div>
+                            {fb.status === 'resolved' && <span style={{ fontSize:9, letterSpacing:'0.06em', textTransform:'uppercase', color:'rgba(100,200,130,0.8)' }}>✓ Resolved</span>}
+                          </div>
                         </div>
-                        <div style={{ fontSize:12, color:'rgba(200,194,187,0.7)', lineHeight:1.5 }}>{fb.message}</div>
-                      </div>
-                    ))}
-                  </div>
-                  <div style={{ padding:'14px 18px', borderTop:'0.5px solid rgba(200,194,187,0.1)', display:'flex', flexDirection:'column', gap:8 }}>
-                    <input value={feedbackTimestamp} onChange={e => setFeedbackTimestamp(e.target.value)} placeholder="Timestamp e.g. 1:23" style={{ background:'rgba(200,194,187,0.05)', border:'0.5px solid rgba(200,194,187,0.12)', borderRadius:4, padding:'8px 10px', fontSize:12, color:'#C8C2BB', fontFamily:'inherit', outline:'none' }} />
-                    <textarea value={feedbackMessage} onChange={e => setFeedbackMessage(e.target.value)} placeholder="What would you like changed?" rows={3} style={{ background:'rgba(200,194,187,0.05)', border:'0.5px solid rgba(200,194,187,0.12)', borderRadius:4, padding:'8px 10px', fontSize:12, color:'#C8C2BB', fontFamily:'inherit', outline:'none', resize:'vertical' as const }} />
-                    <button onClick={submitFeedback} disabled={submittingFeedback || !feedbackMessage.trim()} style={{ fontSize:11, letterSpacing:'0.08em', textTransform:'uppercase', padding:'9px 14px', borderRadius:3, background: feedbackSent ? 'rgba(100,200,130,0.15)' : '#C8C2BB', color: feedbackSent ? 'rgba(100,200,130,0.9)' : '#111', border: feedbackSent ? '0.5px solid rgba(100,200,130,0.3)' : 'none', cursor: submittingFeedback || !feedbackMessage.trim() ? 'not-allowed' : 'pointer', fontWeight:500, fontFamily:'inherit', opacity: !feedbackMessage.trim() && !submittingFeedback ? 0.5 : 1 }}>
-                      {submittingFeedback ? 'Sending...' : feedbackSent ? '✓ Sent' : 'Send feedback'}
+                      ))}
+                    </div>
+                  )}
+                  <div style={{ padding:'18px 22px', display:'flex', gap:10, alignItems:'flex-start' }}>
+                    <input value={feedbackTimestamp} onChange={e => setFeedbackTimestamp(e.target.value)} placeholder="1:23" style={{ width:64, flexShrink:0, background:'rgba(200,194,187,0.06)', border:'0.5px solid rgba(200,194,187,0.15)', borderRadius:6, padding:'10px 10px', fontSize:12, color:'#C8C2BB', fontFamily:'inherit', outline:'none', textAlign:'center' }} />
+                    <textarea value={feedbackMessage} onChange={e => setFeedbackMessage(e.target.value)} placeholder="What would you like changed?" rows={1} style={{ flex:1, background:'rgba(200,194,187,0.06)', border:'0.5px solid rgba(200,194,187,0.15)', borderRadius:6, padding:'10px 12px', fontSize:12, color:'#C8C2BB', fontFamily:'inherit', outline:'none', resize:'vertical' as const, minHeight:40 }} />
+                    <button onClick={submitFeedback} disabled={submittingFeedback || !feedbackMessage.trim()} style={{ fontSize:11, letterSpacing:'0.08em', textTransform:'uppercase', padding:'11px 16px', borderRadius:6, background: feedbackSent ? 'rgba(100,200,130,0.15)' : '#C8C2BB', color: feedbackSent ? 'rgba(100,200,130,0.9)' : '#111', border: feedbackSent ? '0.5px solid rgba(100,200,130,0.3)' : 'none', cursor: submittingFeedback || !feedbackMessage.trim() ? 'not-allowed' : 'pointer', fontWeight:500, fontFamily:'inherit', flexShrink:0, opacity: !feedbackMessage.trim() && !submittingFeedback ? 0.5 : 1 }}>
+                      {submittingFeedback ? 'Sending...' : feedbackSent ? '✓ Sent' : 'Send'}
                     </button>
                   </div>
                 </div>
               </>
             ) : isImage(previewFile.mimeType) ? (
               <>
-                <img src={`https://drive.google.com/uc?id=${previewFile.id}`} alt={previewFile.name} style={{ maxWidth:'94vw', maxHeight:'86vh', objectFit:'contain', borderRadius:6 }} />
-                <div style={{ fontSize:13, color:'rgba(200,194,187,0.6)' }}>{previewFile.name}</div>
+                <img src={`https://drive.google.com/uc?id=${previewFile.id}`} alt={previewFile.name} style={{ maxWidth:'100%', maxHeight:'80vh', objectFit:'contain', borderRadius:10, boxShadow:'0 20px 60px rgba(0,0,0,0.5)' }} />
+                <div style={{ fontSize:13, color:'rgba(200,194,187,0.6)', marginTop:14 }}>{previewFile.name}</div>
               </>
             ) : (
               <>
                 <a href={previewFile.webViewLink} target="_blank" rel="noopener noreferrer" style={{ color:'#C8C2BB', fontSize:14 }}>Open file in Google Drive</a>
-                <div style={{ fontSize:13, color:'rgba(200,194,187,0.6)' }}>{previewFile.name}</div>
+                <div style={{ fontSize:13, color:'rgba(200,194,187,0.6)', marginTop:14 }}>{previewFile.name}</div>
               </>
             )}
           </div>
@@ -558,6 +655,11 @@ export default function ClientPortal() {
   const [clientBookings, setClientBookings] = useState<any[]>([])
   const [clientBriefs, setClientBriefs] = useState<any[]>([])
   const [clientInvoices, setClientInvoices] = useState<any[]>([])
+  // Unlike clientProjects (active only — markSent archives every project on an
+  // invoice), this includes archived ones too, so invoice line items and
+  // lifetime stats don't go blank the moment an invoice is actually sent.
+  const [allClientProjects, setAllClientProjects] = useState<any[]>([])
+  const [openInvoiceId, setOpenInvoiceId] = useState<string | null>(null)
   const [selectedBrief, setSelectedBrief] = useState<any>(null)
   const [libraryProject, setLibraryProject] = useState<any>(null)
   const [briefFeedback, setBriefFeedback] = useState('')
@@ -570,6 +672,7 @@ export default function ClientPortal() {
   useEffect(() => { if (clientProfile?.phone && !clientPhone) setClientPhone(clientProfile.phone) }, [clientProfile])
   const [selectedProject, setSelectedProject] = useState<any>(null)
   const [notifications, setNotifications] = useState<any[]>([])
+  const [deliveryPopup, setDeliveryPopup] = useState<{ notif: any; project: any } | null>(null)
   const [respondingBookingId, setRespondingBookingId] = useState<string | null>(null)
   const [altTimeBookingId, setAltTimeBookingId] = useState<string | null>(null)
   const [altTimeMessage, setAltTimeMessage] = useState('')
@@ -599,15 +702,28 @@ export default function ClientPortal() {
       // Load projects linked to this client
       const { data: projects } = await supabase.from('projects1').select('*').eq('email', email).eq('archived', false).order('created_at', { ascending: false })
       if (projects) setClientProjects(projects)
+      // Also load every project regardless of archived state — invoice line
+      // items and lifetime stats need projects that markSent already archived.
+      const { data: allProjects } = await supabase.from('projects1').select('*').ilike('email', email || '').order('created_at', { ascending: false })
+      if (allProjects) setAllClientProjects(allProjects)
       // Load bookings linked to this client
       const { data: bookings } = await supabase.from('bookings1').select('*').eq('client_email', email).order('created_at', { ascending: false })
       if (bookings) setClientBookings(bookings)
       const { data: briefs } = await supabase.from('briefs').select('*').eq('client_email', email).order('created_at', { ascending: false })
       if (briefs) setClientBriefs(briefs)
-      const { data: invoices } = await supabase.from('invoices1').select('*').eq('client_email', email).neq('status', 'draft').order('created_at', { ascending: false })
+      const { data: invoices } = await supabase.from('invoices1').select('*').ilike('client_email', email || '').neq('status', 'draft').order('created_at', { ascending: false })
       if (invoices) setClientInvoices(invoices)
       const { data: notifs } = await supabase.from('notifications').select('*').eq('user_email', email).eq('read', false).order('created_at', { ascending: false })
-      if (notifs) { setNotifications(notifs); if (notifs.length > 0) setShowNotifications(true) }
+      if (notifs) {
+        // Content-delivered gets its own celebratory popup with a thumbnail
+        // and a direct "view now" action, rather than sitting as a plain
+        // line in the generic notifications list.
+        const delivery = notifs.find(n => n.type === 'content_delivered')
+        const rest = notifs.filter(n => n.id !== delivery?.id)
+        setNotifications(rest)
+        if (delivery) setDeliveryPopup({ notif: delivery, project: (projects || []).find((p: any) => p.id === delivery.project_id) || null })
+        else if (rest.length > 0) setShowNotifications(true)
+      }
     })
 
     // Background token refresh can silently fail if the tab sits idle for a
@@ -645,22 +761,16 @@ export default function ClientPortal() {
   async function confirmProposedTime(booking: any) {
     setRespondingBookingId(booking.id)
     try {
-      const { error } = await supabase.from('bookings1').update({ status: 'confirmed' }).eq('id', booking.id)
-      if (error) { console.error('Confirm time error:', error); return }
-      setClientBookings(prev => prev.map(b => b.id === booking.id ? { ...b, status: 'confirmed' } : b))
-      try {
-        await fetch('/api/notify-time-confirmed', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            clientName: booking.client_name,
-            clientEmail: booking.client_email,
-            title: booking.address || booking.shoot_package || '',
-            date: booking.proposed_date,
-            startTime: booking.proposed_start_time,
-          }),
-        })
-      } catch (e) { console.error('Notify-time-confirmed error:', e) }
+      const res = await fetch('/api/confirm-booking-time', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bookingId: booking.id }),
+      })
+      const data = await res.json()
+      if (!res.ok || !data.success) { console.error('Confirm time error:', data.error); return }
+      setClientBookings(prev => prev.map(b => b.id === booking.id ? { ...b, status: 'confirmed', project_id: data.project?.id } : b))
+    } catch (e) {
+      console.error('Confirm time error:', e)
     } finally {
       setRespondingBookingId(null)
     }
@@ -941,12 +1051,12 @@ export default function ClientPortal() {
           const isAwaitingProject = (b: any) => isUnresolved(b.status) || (b.status === 'confirmed' && !b.project_id)
           const pendingShootBookings = clientBookings.filter((b: any) => (b.proposed_date || b.preferred_date) && new Date(b.proposed_date || b.preferred_date) >= now && isAwaitingProject(b) && !confirmedShootDates.has(b.proposed_date || b.preferred_date)).map((b: any) => ({ id: b.id, title: b.address || b.shoot_package || 'Pending booking', shoot_date: b.proposed_date || b.preferred_date, stage: b.status === 'date_proposed' ? 'Time proposed' : b.status === 'alt_requested' ? 'Awaiting new time' : b.status === 'confirmed' ? 'Confirmed' : 'Pending', client: b.client_name, address: b.address, progress: 0, isPending: true, shoot_package: b.shoot_package, deliverables_type: b.deliverables, addons: b.addons, total: b.total }))
           const upcomingShoots = [...confirmedShoots, ...pendingShootBookings].sort((a: any, b: any) => new Date(a.shoot_date).getTime() - new Date(b.shoot_date).getTime())
-          const activeProjects = clientProjects.filter((p: any) => p.stage !== 'Awaiting Confirmation')
+          const activeProjects = clientProjects.filter((p: any) => p.stage !== 'Awaiting Confirmation' && p.stage !== 'Completed')
           const awaitingSchedule = clientBookings.filter((b: any) => !b.preferred_date && !b.proposed_date && isUnresolved(b.status))
           const completedProjects = clientProjects.filter((p: any) => p.stage === 'Awaiting Confirmation' || p.drive_url)
-          const pendingBookings = clientBookings.filter((b: any) => isUnresolved(b.status))
+          const pendingBookings = clientBookings.filter((b: any) => isAwaitingProject(b))
           // Same scoping as the studio dashboard's "Recent deliveries" slider.
-          const recentDeliveries = clientProjects.filter((p: any) => p.drive_url && !p.archived && p.stage === 'Awaiting Confirmation').slice(0, 10)
+          const recentDeliveries = clientProjects.filter((p: any) => p.drive_url && !p.archived && (p.stage === 'Awaiting Confirmation' || p.stage === 'Completed')).slice(0, 10)
 
           // Calendar
           const startOfWeek = new Date(now)
@@ -1031,7 +1141,7 @@ export default function ClientPortal() {
                         <div style={{ padding: '24px 18px', fontSize: 12, color: 'rgba(200,194,187,0.25)', textAlign: 'center' }}>No upcoming shoots — book one above</div>
                       ) : upcomingShoots.map((p: any, i: number) => {
                         const d = new Date(p.shoot_date + 'T12:00:00')
-                        const STAGE_C: Record<string,any> = { 'Pre-Production': {color:'rgba(100,150,220,0.9)',bg:'rgba(25,45,80,0.4)'}, 'Shooting': {color:'rgba(210,175,80,0.9)',bg:'rgba(65,52,18,0.4)'}, 'Post-Production': {color:'rgba(160,100,220,0.9)',bg:'rgba(50,25,80,0.4)'}, 'Revisions': {color:'rgba(220,120,60,0.9)',bg:'rgba(80,35,15,0.4)'}, 'Awaiting Confirmation': {color:'rgba(100,200,130,0.9)',bg:'rgba(30,70,45,0.4)'}, 'Pending': {color:'rgba(210,175,80,0.9)',bg:'rgba(65,52,18,0.4)'}, 'Time proposed': {color:'rgba(100,150,220,0.9)',bg:'rgba(25,45,80,0.4)'}, 'Awaiting new time': {color:'rgba(160,100,220,0.9)',bg:'rgba(50,25,80,0.4)'}, 'Confirmed': {color:'rgba(100,200,130,0.9)',bg:'rgba(30,70,45,0.4)'} }
+                        const STAGE_C: Record<string,any> = { 'Pre-Production': {color:'rgba(100,150,220,0.9)',bg:'rgba(25,45,80,0.4)'}, 'Shooting': {color:'rgba(210,175,80,0.9)',bg:'rgba(65,52,18,0.4)'}, 'Post-Production': {color:'rgba(160,100,220,0.9)',bg:'rgba(50,25,80,0.4)'}, 'Revisions': {color:'rgba(220,120,60,0.9)',bg:'rgba(80,35,15,0.4)'}, 'Awaiting Confirmation': {color:'rgba(100,200,130,0.9)',bg:'rgba(30,70,45,0.4)'}, 'Completed': {color:'rgba(100,200,130,0.9)',bg:'rgba(30,70,45,0.6)'}, 'Pending': {color:'rgba(210,175,80,0.9)',bg:'rgba(65,52,18,0.4)'}, 'Time proposed': {color:'rgba(100,150,220,0.9)',bg:'rgba(25,45,80,0.4)'}, 'Awaiting new time': {color:'rgba(160,100,220,0.9)',bg:'rgba(50,25,80,0.4)'}, 'Confirmed': {color:'rgba(100,200,130,0.9)',bg:'rgba(30,70,45,0.4)'} }
                         const sc = STAGE_C[p.stage] || {color:'#C8C2BB',bg:'rgba(200,194,187,0.1)'}
                         return (
                           <div key={p.id} onClick={() => p.isPending ? setActiveView('upcoming') : setSelectedProject(p)} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '13px 18px', borderBottom: i < upcomingShoots.length - 1 ? '0.5px solid rgba(200,194,187,0.06)' : 'none', cursor: 'pointer' }}>
@@ -1043,7 +1153,7 @@ export default function ClientPortal() {
                               <div style={{ fontSize: 13, fontWeight: 500, color: '#C8C2BB', marginBottom: 3 }}>{p.title}</div>
                               <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>{p.address ? p.address.split(',')[0] : p.client}</div>
                             </div>
-                            <span style={{ fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '3px 8px', borderRadius: 2, background: sc.bg, color: sc.color, whiteSpace: 'nowrap' }}>{p.stage}</span>
+                            <span style={{ fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '3px 8px', borderRadius: 2, background: sc.bg, color: sc.color, whiteSpace: 'nowrap' }}>{stageLabel(p.stage)}</span>
                           </div>
                         )
                       })}
@@ -1056,7 +1166,7 @@ export default function ClientPortal() {
                           <span style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>Active projects</span>
                         </div>
                         {activeProjects.map((p: any, i: number) => {
-                          const STAGE_C: Record<string,any> = { 'Pre-Production': {color:'rgba(100,150,220,0.9)',bg:'rgba(25,45,80,0.4)'}, 'Shooting': {color:'rgba(210,175,80,0.9)',bg:'rgba(65,52,18,0.4)'}, 'Post-Production': {color:'rgba(160,100,220,0.9)',bg:'rgba(50,25,80,0.4)'}, 'Revisions': {color:'rgba(220,120,60,0.9)',bg:'rgba(80,35,15,0.4)'} }
+                          const STAGE_C: Record<string,any> = { 'Pre-Production': {color:'rgba(100,150,220,0.9)',bg:'rgba(25,45,80,0.4)'}, 'Shooting': {color:'rgba(210,175,80,0.9)',bg:'rgba(65,52,18,0.4)'}, 'Post-Production': {color:'rgba(160,100,220,0.9)',bg:'rgba(50,25,80,0.4)'}, 'Revisions': {color:'rgba(220,120,60,0.9)',bg:'rgba(80,35,15,0.4)'}, 'Awaiting Confirmation': {color:'rgba(100,200,130,0.9)',bg:'rgba(30,70,45,0.4)'}, 'Completed': {color:'rgba(100,200,130,0.9)',bg:'rgba(30,70,45,0.6)'} }
                           const sc = STAGE_C[p.stage] || {color:'#C8C2BB',bg:'rgba(200,194,187,0.1)'}
                           return (
                             <div key={p.id} onClick={() => setSelectedProject(p)} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 18px', borderBottom: i < activeProjects.length - 1 ? '0.5px solid rgba(200,194,187,0.06)' : 'none', cursor: 'pointer' }}>
@@ -1067,7 +1177,7 @@ export default function ClientPortal() {
                               <div style={{ width: 80, height: 3, background: 'rgba(200,194,187,0.07)', borderRadius: 2 }}>
                                 <div style={{ height: '100%', width: p.progress + '%', background: '#C8C2BB', opacity: 0.5, borderRadius: 2 }} />
                               </div>
-                              <span style={{ fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '3px 8px', borderRadius: 2, background: sc.bg, color: sc.color, whiteSpace: 'nowrap' }}>{p.stage}</span>
+                              <span style={{ fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '3px 8px', borderRadius: 2, background: sc.bg, color: sc.color, whiteSpace: 'nowrap' }}>{stageLabel(p.stage)}</span>
                             </div>
                           )
                         })}
@@ -1148,9 +1258,83 @@ export default function ClientPortal() {
 
                     {/* PENDING BOOKINGS */}
                     {pendingBookings.length > 0 && (
-                      <div style={{ marginTop: 14, background: 'rgba(210,175,80,0.06)', border: '0.5px solid rgba(210,175,80,0.2)', borderRadius: 7, padding: '14px 18px' }}>
-                        <div style={{ fontSize: 12, fontWeight: 500, color: 'rgba(210,175,80,0.9)', marginBottom: 6 }}>{pendingBookings.length} pending booking{pendingBookings.length !== 1 ? 's' : ''}</div>
-                        <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>Awaiting confirmation from Example Content</div>
+                      <div style={{ marginTop: 20 }}>
+                        <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 14 }}>Pending bookings</div>
+                        <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, overflow: 'hidden' }}>
+                          {pendingBookings.map((b: any, i: number) => {
+                            const isLast = i === pendingBookings.length - 1
+                            if (b.status === 'date_proposed') {
+                              return (
+                                <div key={b.id} style={{ padding:'14px 18px', borderBottom: isLast ? 'none' : '0.5px solid rgba(200,194,187,0.06)' }}>
+                                  <div style={{ display:'flex', alignItems:'center', gap:14, marginBottom:12 }}>
+                                    <div style={{ width:42, flexShrink:0, textAlign:'center', background:'rgba(100,150,220,0.08)', border:'0.5px solid rgba(100,150,220,0.2)', borderRadius:5, padding:'10px 4px' }}>
+                                      <IconCalendar size={16} style={{ color: 'rgba(100,150,220,0.85)' }} />
+                                    </div>
+                                    <div style={{ flex:1 }}>
+                                      <div style={{ fontSize:13, fontWeight:500, color:'#C8C2BB', marginBottom:2 }}>{b.address || b.shoot_package || 'Booking request'}</div>
+                                      <div style={{ fontSize:11, color:'rgba(100,150,220,0.9)' }}>Proposed: {new Date(b.proposed_date+'T12:00:00').toLocaleDateString('en-NZ',{weekday:'long',day:'numeric',month:'long'})} · {formatTime12(b.proposed_start_time)}{b.proposed_end_time ? ' – ' + formatTime12(b.proposed_end_time) : ''}</div>
+                                    </div>
+                                    <span style={{ fontSize:9, letterSpacing:'0.08em', textTransform:'uppercase', padding:'3px 9px', borderRadius:2, background:'rgba(100,150,220,0.12)', color:'rgba(100,150,220,0.9)', border:'0.5px solid rgba(100,150,220,0.25)' }}>Time proposed</span>
+                                  </div>
+                                  {altTimeBookingId === b.id ? (
+                                    <div style={{ paddingLeft:56 }}>
+                                      <textarea value={altTimeMessage} onChange={e => setAltTimeMessage(e.target.value)} placeholder="Optional — let us know what times work better" rows={2} style={{ width:'100%', background:'rgba(200,194,187,0.04)', border:'0.5px solid rgba(200,194,187,0.09)', borderRadius:4, padding:'8px 10px', fontSize:12, color:'#C8C2BB', fontFamily:'inherit', outline:'none', resize:'vertical', marginBottom:8 }} />
+                                      <div style={{ display:'flex', gap:8 }}>
+                                        <button onClick={() => { setAltTimeBookingId(null); setAltTimeMessage('') }} style={{ fontSize:11, letterSpacing:'0.09em', textTransform:'uppercase', padding:'7px 14px', borderRadius:3, border:'0.5px solid rgba(200,194,187,0.2)', color:'rgba(200,194,187,0.5)', background:'transparent', cursor:'pointer', fontFamily:'inherit' }}>Cancel</button>
+                                        <button disabled={respondingBookingId === b.id} onClick={() => submitAltTimeRequest(b)} style={{ fontSize:11, letterSpacing:'0.09em', textTransform:'uppercase', padding:'7px 14px', borderRadius:3, background: respondingBookingId === b.id ? 'rgba(200,194,187,0.1)' : '#C8C2BB', color: respondingBookingId === b.id ? 'rgba(200,194,187,0.3)' : '#111', border:'none', cursor: respondingBookingId === b.id ? 'not-allowed' : 'pointer', fontWeight:500, fontFamily:'inherit' }}>{respondingBookingId === b.id ? 'Sending...' : 'Send request'}</button>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div style={{ display:'flex', gap:8, paddingLeft:56 }}>
+                                      <button disabled={respondingBookingId === b.id} onClick={() => confirmProposedTime(b)} style={{ fontSize:11, letterSpacing:'0.09em', textTransform:'uppercase', padding:'7px 14px', borderRadius:3, background: respondingBookingId === b.id ? 'rgba(200,194,187,0.1)' : '#C8C2BB', color: respondingBookingId === b.id ? 'rgba(200,194,187,0.3)' : '#111', border:'none', cursor: respondingBookingId === b.id ? 'not-allowed' : 'pointer', fontWeight:500, fontFamily:'inherit' }}>{respondingBookingId === b.id ? 'Saving...' : 'Confirm this time'}</button>
+                                      <button disabled={respondingBookingId === b.id} onClick={() => { setAltTimeBookingId(b.id); setAltTimeMessage('') }} style={{ fontSize:11, letterSpacing:'0.09em', textTransform:'uppercase', padding:'7px 14px', borderRadius:3, border:'0.5px solid rgba(200,194,187,0.2)', color:'rgba(200,194,187,0.5)', background:'transparent', cursor:'pointer', fontFamily:'inherit' }}>Request another time</button>
+                                    </div>
+                                  )}
+                                </div>
+                              )
+                            }
+                            if (b.status === 'alt_requested') {
+                              return (
+                                <div key={b.id} style={{ display:'flex', alignItems:'center', gap:14, padding:'14px 18px', borderBottom: isLast ? 'none' : '0.5px solid rgba(200,194,187,0.06)' }}>
+                                  <div style={{ width:42, flexShrink:0, textAlign:'center', background:'rgba(160,100,220,0.08)', border:'0.5px solid rgba(160,100,220,0.2)', borderRadius:5, padding:'10px 4px' }}>
+                                    <IconClock size={16} style={{ color: 'rgba(160,100,220,0.85)' }} />
+                                  </div>
+                                  <div style={{ flex:1 }}>
+                                    <div style={{ fontSize:13, fontWeight:500, color:'#C8C2BB', marginBottom:2 }}>{b.address || b.shoot_package || 'Booking request'}</div>
+                                    <div style={{ fontSize:11, color:'rgba(200,194,187,0.4)' }}>Waiting on Example Content for a new time{b.client_response_message ? ' · "' + b.client_response_message + '"' : ''}</div>
+                                  </div>
+                                  <span style={{ fontSize:9, letterSpacing:'0.08em', textTransform:'uppercase', padding:'3px 9px', borderRadius:2, background:'rgba(160,100,220,0.12)', color:'rgba(160,100,220,0.9)', border:'0.5px solid rgba(160,100,220,0.25)' }}>Awaiting new time</span>
+                                </div>
+                              )
+                            }
+                            if (b.status === 'confirmed') {
+                              return (
+                                <div key={b.id} style={{ display:'flex', alignItems:'center', gap:14, padding:'14px 18px', borderBottom: isLast ? 'none' : '0.5px solid rgba(200,194,187,0.06)' }}>
+                                  <div style={{ width:42, flexShrink:0, textAlign:'center', background:'rgba(100,200,130,0.08)', border:'0.5px solid rgba(100,200,130,0.2)', borderRadius:5, padding:'6px 4px' }}>
+                                    <div style={{ fontSize:16, opacity:0.6 }}>✓</div>
+                                  </div>
+                                  <div style={{ flex:1 }}>
+                                    <div style={{ fontSize:13, fontWeight:500, color:'#C8C2BB', marginBottom:2 }}>{b.address || b.shoot_package || 'Booking request'}</div>
+                                    <div style={{ fontSize:11, color:'rgba(200,194,187,0.4)' }}>{b.proposed_date ? new Date(b.proposed_date+'T12:00:00').toLocaleDateString('en-NZ',{weekday:'long',day:'numeric',month:'long'}) + (b.proposed_start_time ? ' · ' + formatTime12(b.proposed_start_time) : '') + ' — ' : ''}We're setting up your project</div>
+                                  </div>
+                                  <span style={{ fontSize:9, letterSpacing:'0.08em', textTransform:'uppercase', padding:'3px 9px', borderRadius:2, background:'rgba(100,200,130,0.12)', color:'rgba(100,200,130,0.9)', border:'0.5px solid rgba(100,200,130,0.25)' }}>Confirmed</span>
+                                </div>
+                              )
+                            }
+                            return (
+                              <div key={b.id} style={{ display:'flex', alignItems:'center', gap:14, padding:'14px 18px', borderBottom: isLast ? 'none' : '0.5px solid rgba(200,194,187,0.06)' }}>
+                                <div style={{ width:42, flexShrink:0, textAlign:'center', background:'rgba(210,175,80,0.08)', border:'0.5px solid rgba(210,175,80,0.2)', borderRadius:5, padding:'10px 4px' }}>
+                                  <IconClock size={16} style={{ color: 'rgba(210,175,80,0.8)' }} />
+                                </div>
+                                <div style={{ flex:1 }}>
+                                  <div style={{ fontSize:13, fontWeight:500, color:'#C8C2BB', marginBottom:2 }}>{b.address || b.shoot_package || 'Booking request'}</div>
+                                  <div style={{ fontSize:11, color:'rgba(200,194,187,0.4)' }}>{b.shoot_package} {b.preferred_date ? '· ' + new Date(b.preferred_date+'T12:00:00').toLocaleDateString('en-NZ',{day:'numeric',month:'short',year:'numeric'}) : ''}</div>
+                                </div>
+                                <span style={{ fontSize:9, letterSpacing:'0.08em', textTransform:'uppercase', padding:'3px 9px', borderRadius:2, background:'rgba(210,175,80,0.12)', color:'rgba(210,175,80,0.9)', border:'0.5px solid rgba(210,175,80,0.25)' }}>Pending</span>
+                              </div>
+                            )
+                          })}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -1591,7 +1775,11 @@ export default function ClientPortal() {
                       <textarea rows={3} value={suggestedStoryline} onChange={e => setSuggestedStoryline(e.target.value)} placeholder='e.g. A warm family home nestled in a quiet cul-de-sac...' style={{ background:'rgba(200,194,187,0.04)', border:'0.5px solid rgba(200,194,187,0.09)', borderRadius:4, padding:'9px 12px', fontSize:12, color:'#C8C2BB', fontFamily:'inherit', outline:'none', resize:'vertical', lineHeight:1.65, width:'100%' }} />
                     </div>
                     <div style={{ marginTop:16 }}>
-                      <label style={{ fontSize:10, letterSpacing:'0.12em', textTransform:'uppercase', color:'rgba(200,194,187,0.4)', display:'block', marginBottom:6 }}>Suggested shot list</label>
+                      <label style={{ fontSize:10, letterSpacing:'0.12em', textTransform:'uppercase', color:'rgba(200,194,187,0.4)', display:'block', marginBottom:6 }}>Talent required</label>
+                      <textarea rows={3} value={talentDetails} onChange={e => setTalentDetails(e.target.value)} placeholder="Describe the talent needed on shoot (e.g. homeowner walk-through, 2 lifestyle models), and whether you're providing/sourcing the talent yourself or need us to source it" style={{ background:'rgba(200,194,187,0.04)', border:'0.5px solid rgba(200,194,187,0.09)', borderRadius:4, padding:'9px 12px', fontSize:12, color:'#C8C2BB', fontFamily:'inherit', outline:'none', resize:'vertical', lineHeight:1.65, width:'100%' }} />
+                    </div>
+                    <div style={{ marginTop:16 }}>
+                      <label style={{ fontSize:10, letterSpacing:'0.12em', textTransform:'uppercase', color:'rgba(200,194,187,0.4)', display:'block', marginBottom:6 }}>Talent / lifestyle suggested shot list</label>
                       <textarea rows={6} value={shotList} onChange={e => setShotList(e.target.value)} style={{ background:'rgba(200,194,187,0.04)', border:'0.5px solid rgba(200,194,187,0.09)', borderRadius:4, padding:'9px 12px', fontSize:12, color:'#C8C2BB', fontFamily:'inherit', outline:'none', resize:'vertical', lineHeight:1.75, width:'100%' }} />
                     </div>
                     <div style={{ marginTop:16 }}>
@@ -1663,11 +1851,11 @@ export default function ClientPortal() {
                     <strong style={{ color: 'rgba(200,194,187,0.5)' }}>Terms & Conditions — Example Content Ltd</strong><br /><br />
                     <ol style={{ margin: 0, padding: '0 0 0 16px' }}>
                       <li style={{ marginBottom: 8 }}>A booking request does not constitute a confirmed engagement until Example Content Ltd has confirmed availability and acceptance in writing.</li>
-                      <li style={{ marginBottom: 8 }}>Postponement of a scheduled shoot within 24 hours of the confirmed shoot date, for reasons other than adverse weather conditions, will incur a postponement fee of 25% of the total shoot cost.</li>
-                      <li style={{ marginBottom: 8 }}>Three or more postponements for reasons other than adverse weather conditions will incur a fee of 25% of the total shoot cost per occurrence.</li>
-                      <li style={{ marginBottom: 8 }}>Cancellation of a confirmed booking within 24 hours of the scheduled shoot date will incur a cancellation fee of 25% of the total shoot cost.</li>
+                      <li style={{ marginBottom: 8 }}>Postponement of a scheduled shoot within 24 hours of the confirmed shoot date, for reasons other than adverse weather conditions, will incur a postponement fee of 25% of the total package cost.</li>
+                      <li style={{ marginBottom: 8 }}>Cancellation of a confirmed booking within 24 hours of the scheduled shoot date will incur a cancellation fee of 25% of the total package cost.</li>
                       <li style={{ marginBottom: 8 }}>Example Content Ltd retains full intellectual property rights over all footage, photography, and associated media produced during the engagement, and reserves the right to use such material for portfolio, marketing, and promotional purposes without limitation.</li>
                       <li style={{ marginBottom: 8 }}>All quoted prices are exclusive of GST, which will be applied at the prevailing rate.</li>
+                      <li style={{ marginBottom: 8 }}>Expected delivery time is 3 business days from the shoot date, unless otherwise stated.</li>
                       <li>Final deliverables will be stored securely in Google Drive for a period of 12 months from the date of delivery, after which all files will be permanently deleted. Clients are advised to download and retain their own copies.</li>
                     </ol></div>
                   <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 20, cursor: 'pointer' }} onClick={() => setTcAccepted(!tcAccepted)}>
@@ -1729,7 +1917,8 @@ export default function ClientPortal() {
                             bookingNotes ? 'Notes: ' + bookingNotes : '',
                             accessNotes ? 'Access: ' + accessNotes : '',
                             suggestedStoryline ? 'Storyline: ' + suggestedStoryline : '',
-                            shotList.replace(/[•\s]/g, '') ? 'Shot list:\n' + shotList : '',
+                            talentDetails ? 'Talent required: ' + talentDetails : '',
+                            shotList.replace(/[•\s]/g, '') ? 'Talent/lifestyle shot list:\n' + shotList : '',
                             referenceLinks ? 'References: ' + referenceLinks : '',
                             (twilightDate || twilightTime) ? 'Twilight shoot requested: ' + (twilightDate ? new Date(twilightDate + 'T12:00:00').toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' }) : 'date TBC') + (twilightTime ? ' at ' + formatTime12(twilightTime) : '') : '',
                             clientPhone ? 'Phone: ' + clientPhone : '',
@@ -1813,7 +2002,7 @@ export default function ClientPortal() {
         {activeView === 'upcoming' && (() => {
           const now = new Date()
           const upcomingProjects = clientProjects.filter((p: any) => p.shoot_date && new Date(p.shoot_date) >= now).sort((a: any, b: any) => new Date(a.shoot_date).getTime() - new Date(b.shoot_date).getTime())
-          const deliveredProjects = clientProjects.filter((p: any) => p.stage === 'Awaiting Confirmation').sort((a: any, b: any) => new Date(b.delivery_due || b.created_at).getTime() - new Date(a.delivery_due || a.created_at).getTime())
+          const deliveredProjects = clientProjects.filter((p: any) => p.stage === 'Awaiting Confirmation' || p.stage === 'Completed').sort((a: any, b: any) => new Date(b.delivery_due || b.created_at).getTime() - new Date(a.delivery_due || a.created_at).getTime())
           const pendingBookings = clientBookings.filter((b: any) => b.status === 'pending' || b.status === 'date_proposed' || b.status === 'alt_requested' || (b.status === 'confirmed' && !b.project_id))
           return (
             <div>
@@ -1925,7 +2114,7 @@ export default function ClientPortal() {
                               <div style={{ fontSize:13, fontWeight:500, color:'#C8C2BB', marginBottom:2 }}>{p.title}</div>
                               <div style={{ fontSize:11, color:'rgba(200,194,187,0.4)' }}>{p.address?.split(',')[0]} {p.delivery_due ? '· Due: '+new Date(p.delivery_due+'T12:00:00').toLocaleDateString('en-NZ',{day:'numeric',month:'short'}) : ''}</div>
                             </div>
-                            <span style={{ fontSize:9, letterSpacing:'0.08em', textTransform:'uppercase', padding:'3px 9px', borderRadius:2, background:'rgba(100,150,220,0.12)', color:'rgba(100,150,220,0.9)', border:'0.5px solid rgba(100,150,220,0.2)' }}>{p.stage}</span>
+                            <span style={{ fontSize:9, letterSpacing:'0.08em', textTransform:'uppercase', padding:'3px 9px', borderRadius:2, background:'rgba(100,150,220,0.12)', color:'rgba(100,150,220,0.9)', border:'0.5px solid rgba(100,150,220,0.2)' }}>{stageLabel(p.stage)}</span>
                           </div>
                         )
                       })}
@@ -1938,12 +2127,11 @@ export default function ClientPortal() {
                     <div style={{ fontSize:10, letterSpacing:'0.16em', textTransform:'uppercase', color:'rgba(200,194,187,0.3)', marginBottom:12 }}>Delivered</div>
                     <div style={{ background:'#1A1F28', border:'0.5px solid rgba(200,194,187,0.09)', borderRadius:7, overflow:'hidden' }}>
                       {deliveredProjects.map((p: any, i: number) => (
-                        <div key={p.id} onClick={() => setSelectedProject(p)} style={{ display:'flex', alignItems:'center', gap:14, padding:'14px 18px', borderBottom: i < deliveredProjects.length-1 ? '0.5px solid rgba(200,194,187,0.06)':'none', cursor:'pointer' }}>
+                        <div key={p.id} onClick={() => { setLibraryProject(p); setActiveView('library') }} style={{ display:'flex', alignItems:'center', gap:14, padding:'14px 18px', borderBottom: i < deliveredProjects.length-1 ? '0.5px solid rgba(200,194,187,0.06)':'none', cursor:'pointer' }}>
                           <div style={{ flex:1 }}>
                             <div style={{ fontSize:13, fontWeight:500, color:'#C8C2BB', marginBottom:2 }}>{p.title}</div>
                             <div style={{ fontSize:11, color:'rgba(200,194,187,0.4)' }}>{p.address?.split(',')[0]}</div>
                           </div>
-                          {p.drive_url && <a href={p.drive_url} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} style={{ fontSize:11, letterSpacing:'0.09em', textTransform:'uppercase', padding:'6px 12px', borderRadius:3, border:'0.5px solid rgba(200,194,187,0.2)', color:'rgba(200,194,187,0.5)', background:'transparent', cursor:'pointer', fontFamily:'inherit', textDecoration:'none' }}>View files</a>}
                           <span style={{ fontSize:9, letterSpacing:'0.08em', textTransform:'uppercase', padding:'3px 9px', borderRadius:2, background:'rgba(100,200,130,0.12)', color:'rgba(100,200,130,0.9)', border:'0.5px solid rgba(100,200,130,0.2)' }}>Delivered</span>
                         </div>
                       ))}
@@ -1986,7 +2174,7 @@ export default function ClientPortal() {
                     <div className="ec-grid-resp" style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:16 }}>
                       {projectsWithDrive.map((p: any) => (
                         <div key={p.id} onClick={() => setLibraryProject(p)} style={{ background:'#1A1F28', border:'0.5px solid rgba(200,194,187,0.09)', borderRadius:7, padding:'20px 22px', cursor:'pointer', display:'flex', alignItems:'center', gap:16 }} onMouseEnter={e=>(e.currentTarget.style.borderColor='rgba(200,194,187,0.2)')} onMouseLeave={e=>(e.currentTarget.style.borderColor='rgba(200,194,187,0.09)')}>
-                          <div style={{ width:48, height:48, borderRadius:8, background:'rgba(200,194,187,0.06)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}><IconFolder size={20} style={{ color: 'rgba(200,194,187,0.5)' }} /></div>
+                          <ProjectThumbSquare project={p} />
                           <div style={{ flex:1 }}>
                             <div style={{ fontSize:13, fontWeight:500, color:'#C8C2BB', marginBottom:4 }}>{p.title}</div>
                             <div style={{ fontSize:11, color:'rgba(200,194,187,0.4)' }}>{p.shoot_date ? new Date(p.shoot_date+'T12:00:00').toLocaleDateString('en-NZ',{day:'numeric',month:'short',year:'numeric'}) : ''}{p.address ? ' · '+p.address.split(',')[0] : ''}</div>
@@ -2207,37 +2395,108 @@ export default function ClientPortal() {
             )}
           </div>
         )}
-                {activeView === 'invoices' && (
+                {activeView === 'invoices' && (() => {
+          const totalBooked = allClientProjects.length
+          const totalSpend = allClientProjects.reduce((sum: number, p: any) => sum + (p.amount || 0), 0)
+          const avgSpend = totalBooked > 0 ? totalSpend / totalBooked : 0
+          return (
           <div>
             <div style={{ padding: '16px 28px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', background: '#14181F' }}>
               <div style={{ fontSize: 14, fontWeight: 500, color: '#fff' }}>Invoices</div>
             </div>
-            {clientInvoices.length === 0 ? (
-              <div style={{ padding: 28, textAlign: 'center', paddingTop: 80 }}>
-                <IconReceipt size={36} style={{ marginBottom: 16, color: 'rgba(200,194,187,0.3)' }} />
-                <div style={{ fontSize: 14, color: 'rgba(200,194,187,0.4)', marginBottom: 8 }}>No invoices yet</div>
-                <div style={{ fontSize: 12, color: 'rgba(200,194,187,0.25)' }}>Invoice and payment history will appear here once we send one.</div>
-              </div>
-            ) : (
-              <div style={{ padding: 28, display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {clientInvoices.map((invoice: any) => {
-                  const sc = invoice.status === 'paid' ? { color: 'rgba(100,200,130,0.9)', bg: 'rgba(30,70,45,0.4)' } : { color: 'rgba(100,150,220,0.9)', bg: 'rgba(25,45,80,0.4)' }
-                  return (
-                    <div key={invoice.id} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '16px 20px', background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7 }}>
-                      <div style={{ width: 36, height: 36, borderRadius: 5, background: 'rgba(61,71,86,0.4)', border: '0.5px solid rgba(200,194,187,0.09)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><IconReceipt size={17} style={{ color: 'rgba(200,194,187,0.5)' }} /></div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 13, fontWeight: 500, color: '#C8C2BB', marginBottom: 2 }}>Invoice #{invoice.id.slice(0, 8).toUpperCase()}</div>
-                        <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>{invoice.sent_at ? new Date(invoice.sent_at).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' }) : ''}</div>
+            <div style={{ padding: 28 }}>
+              {totalBooked > 0 && (
+                <div className="ec-grid-resp" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 24 }}>
+                  <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, padding: '16px 18px' }}>
+                    <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 8 }}>Shoots booked</div>
+                    <div style={{ fontSize: 22, fontWeight: 600, color: '#C8C2BB' }}>{totalBooked}</div>
+                  </div>
+                  <div style={{ background: '#1A1F28', border: '0.5px solid rgba(100,200,130,0.2)', borderRadius: 7, padding: '16px 18px' }}>
+                    <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 8 }}>Total spend</div>
+                    <div style={{ fontSize: 22, fontWeight: 600, color: 'rgba(100,200,130,0.9)' }}>${totalSpend.toLocaleString()}</div>
+                  </div>
+                  <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, padding: '16px 18px' }}>
+                    <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 8 }}>Average per shoot</div>
+                    <div style={{ fontSize: 22, fontWeight: 600, color: '#C8C2BB' }}>${Math.round(avgSpend).toLocaleString()}</div>
+                  </div>
+                </div>
+              )}
+              {clientInvoices.length === 0 ? (
+                <div style={{ textAlign: 'center', paddingTop: 50 }}>
+                  <IconReceipt size={36} style={{ marginBottom: 16, color: 'rgba(200,194,187,0.3)' }} />
+                  <div style={{ fontSize: 14, color: 'rgba(200,194,187,0.4)', marginBottom: 8 }}>No invoices yet</div>
+                  <div style={{ fontSize: 12, color: 'rgba(200,194,187,0.25)' }}>Invoice and payment history will appear here once we send one.</div>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {clientInvoices.map((invoice: any) => {
+                    const sc = invoice.status === 'paid' ? { color: 'rgba(100,200,130,0.9)', bg: 'rgba(30,70,45,0.4)' } : { color: 'rgba(100,150,220,0.9)', bg: 'rgba(25,45,80,0.4)' }
+                    const isOpen = openInvoiceId === invoice.id
+                    const lineItems = allClientProjects.filter((p: any) => p.invoice_id === invoice.id)
+                    return (
+                      <div key={invoice.id} style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, overflow: 'hidden' }}>
+                        <div onClick={() => setOpenInvoiceId(isOpen ? null : invoice.id)} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '16px 20px', cursor: 'pointer' }}>
+                          <div style={{ width: 36, height: 36, borderRadius: 5, background: 'rgba(61,71,86,0.4)', border: '0.5px solid rgba(200,194,187,0.09)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><IconReceipt size={17} style={{ color: 'rgba(200,194,187,0.5)' }} /></div>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: 13, fontWeight: 500, color: '#C8C2BB', marginBottom: 2 }}>Invoice #{invoice.id.slice(0, 8).toUpperCase()}</div>
+                            <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>{invoice.sent_at ? new Date(invoice.sent_at).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' }) : ''}</div>
+                          </div>
+                          <div style={{ fontSize: 15, fontWeight: 600, color: '#fff' }}>${(invoice.total || 0).toLocaleString()}</div>
+                          <span style={{ fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '3px 9px', borderRadius: 2, background: sc.bg, color: sc.color }}>{invoice.status}</span>
+                          <span style={{ fontSize: 12, color: 'rgba(200,194,187,0.3)', transform: isOpen ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }}>›</span>
+                        </div>
+                        {isOpen && (
+                          <div style={{ borderTop: '0.5px solid rgba(200,194,187,0.09)', padding: '28px 32px', background: 'linear-gradient(135deg, #14181F 0%, #0E1014 100%)' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28 }}>
+                              <div>
+                                <div style={{ fontSize: 11, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.5)', marginBottom: 6 }}>Example Content</div>
+                                <div style={{ fontSize: 18, fontWeight: 700, color: '#fff' }}>Invoice #{invoice.id.slice(0, 8).toUpperCase()}</div>
+                              </div>
+                              <span style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '4px 11px', borderRadius: 3, background: sc.bg, color: sc.color, border: `0.5px solid ${sc.color}44` }}>{invoice.status}</span>
+                            </div>
+                            <div className="ec-grid-resp" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24 }}>
+                              <div>
+                                <div style={{ fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 4 }}>Billed to</div>
+                                <div style={{ fontSize: 13, color: '#C8C2BB' }}>{invoice.client_name || clientProfile?.name}</div>
+                                <div style={{ fontSize: 12, color: 'rgba(200,194,187,0.4)' }}>{invoice.client_email}</div>
+                              </div>
+                              <div>
+                                <div style={{ fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 4 }}>{invoice.status === 'paid' ? 'Paid' : 'Sent'}</div>
+                                <div style={{ fontSize: 13, color: '#C8C2BB' }}>{(invoice.status === 'paid' ? invoice.paid_at : invoice.sent_at) ? new Date(invoice.status === 'paid' ? invoice.paid_at : invoice.sent_at).toLocaleDateString('en-NZ', { day: 'numeric', month: 'long', year: 'numeric' }) : '—'}</div>
+                              </div>
+                            </div>
+                            {lineItems.length > 0 && (
+                              <div style={{ marginBottom: 20 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0 0 8px', borderBottom: '0.5px solid rgba(200,194,187,0.12)', fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)' }}>
+                                  <span>Shoot</span><span>Amount</span>
+                                </div>
+                                {lineItems.map((p: any) => (
+                                  <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderBottom: '0.5px solid rgba(200,194,187,0.06)' }}>
+                                    <div>
+                                      <div style={{ fontSize: 13, color: '#C8C2BB', marginBottom: 2 }}>{p.title}</div>
+                                      {p.shoot_date && <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.35)' }}>{new Date(p.shoot_date + 'T12:00:00').toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })}</div>}
+                                    </div>
+                                    <div style={{ fontSize: 13, color: '#C8C2BB' }}>${(p.amount || 0).toLocaleString()}</div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginLeft: 'auto', width: 220 }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'rgba(200,194,187,0.5)' }}><span>Subtotal</span><span>${(invoice.subtotal || 0).toLocaleString()}</span></div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'rgba(200,194,187,0.5)' }}><span>GST</span><span>${(invoice.gst || 0).toLocaleString()}</span></div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 16, fontWeight: 700, color: '#fff', paddingTop: 8, borderTop: '0.5px solid rgba(200,194,187,0.15)' }}><span>Total</span><span>${(invoice.total || 0).toLocaleString()}</span></div>
+                            </div>
+                          </div>
+                        )}
                       </div>
-                      <div style={{ fontSize: 15, fontWeight: 600, color: '#fff' }}>${(invoice.total || 0).toLocaleString()}</div>
-                      <span style={{ fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '3px 9px', borderRadius: 2, background: sc.bg, color: sc.color }}>{invoice.status}</span>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
+                    )
+                  })}
+                </div>
+              )}
+            </div>
           </div>
-        )}
+          )
+        })()}
 
       </div>
 
@@ -2248,7 +2507,7 @@ export default function ClientPortal() {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 24px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', position: 'sticky', top: 0, background: '#1A1F28', zIndex: 1 }}>
               <div>
                 <div style={{ fontSize: 15, fontWeight: 500, color: '#fff' }}>{selectedProject.title}</div>
-                <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', marginTop: 2 }}>{selectedProject.stage}</div>
+                <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', marginTop: 2 }}>{stageLabel(selectedProject.stage)}</div>
               </div>
               <button onClick={() => { setSelectedProject(null); setChangeRequest(''); setChangeRequestSent(false) }} style={{ fontSize: 20, color: 'rgba(200,194,187,0.4)', background: 'transparent', border: 'none', cursor: 'pointer' }}>×</button>
             </div>
@@ -2322,6 +2581,29 @@ export default function ClientPortal() {
                 </div>
               )}
 
+              {/* DETAILS PROVIDED */}
+              {selectedProject.general_notes && (
+                <div style={{ marginBottom: 20 }}>
+                  <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 10 }}>Details you provided</div>
+                  <div style={{ fontSize: 12, color: 'rgba(200,194,187,0.75)', lineHeight: 1.7, whiteSpace: 'pre-wrap', padding: '10px 12px', background: 'rgba(200,194,187,0.04)', borderRadius: 4, border: '0.5px solid rgba(200,194,187,0.08)' }}>{selectedProject.general_notes}</div>
+                </div>
+              )}
+
+              {/* ATTACHMENTS */}
+              {selectedProject.attachment_urls && selectedProject.attachment_urls.length > 0 && (
+                <div style={{ marginBottom: 20 }}>
+                  <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 10 }}>Attachments</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {selectedProject.attachment_urls.map((a: any, ai: number) => (
+                      <a key={ai} href={a.url} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#C8C2BB', textDecoration: 'none', padding: '8px 12px', background: 'rgba(200,194,187,0.04)', borderRadius: 4, border: '0.5px solid rgba(200,194,187,0.08)' }}>
+                        <IconPaperclip size={13} style={{ color: 'rgba(200,194,187,0.4)', flexShrink: 0 }} />
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.name}</span>
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* DRIVE LINK */}
               {selectedProject.drive_url && (
                 <div style={{ marginBottom: 20 }}>
@@ -2374,6 +2656,33 @@ export default function ClientPortal() {
         </div>
       )}
 
+      {/* CONTENT DELIVERED POPUP — shows before the generic notifications list */}
+      {deliveryPopup && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 250, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div style={{ background: '#1A1F28', border: '0.5px solid rgba(100,200,130,0.25)', borderRadius: 14, width: '100%', maxWidth: 420, overflow: 'hidden', boxShadow: '0 24px 70px rgba(0,0,0,0.6)' }}>
+            <DeliveryThumbBanner project={deliveryPopup.project} />
+            <div style={{ padding: '22px 26px 26px' }}>
+              <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(100,200,130,0.85)', marginBottom: 6, fontWeight: 600 }}>Delivered</div>
+              <div style={{ fontSize: 17, fontWeight: 600, color: '#fff', marginBottom: 6 }}>Your content is ready!</div>
+              <div style={{ fontSize: 13, color: 'rgba(200,194,187,0.6)', lineHeight: 1.6, marginBottom: 22 }}>{deliveryPopup.notif.message}</div>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button onClick={async () => {
+                  await supabase.from('notifications').update({ read: true }).eq('id', deliveryPopup.notif.id)
+                  if (deliveryPopup.project) { setLibraryProject(deliveryPopup.project); setActiveView('library') }
+                  setDeliveryPopup(null)
+                  if (notifications.length > 0) setShowNotifications(true)
+                }} style={{ flex: 1, fontSize: 12, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '12px 16px', borderRadius: 6, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 600, fontFamily: 'inherit' }}>View now →</button>
+                <button onClick={async () => {
+                  await supabase.from('notifications').update({ read: true }).eq('id', deliveryPopup.notif.id)
+                  setDeliveryPopup(null)
+                  if (notifications.length > 0) setShowNotifications(true)
+                }} style={{ fontSize: 12, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '12px 16px', borderRadius: 6, background: 'transparent', color: 'rgba(200,194,187,0.5)', border: '0.5px solid rgba(200,194,187,0.15)', cursor: 'pointer', fontFamily: 'inherit' }}>Later</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* NOTIFICATION POPUP */}
       {showNotifications && notifications.length > 0 && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
@@ -2383,18 +2692,23 @@ export default function ClientPortal() {
               <button onClick={async () => { await supabase.from('notifications').update({ read: true }).eq('user_email', user?.email); setNotifications([]); setShowNotifications(false) }} style={{ fontSize: 20, color: 'rgba(200,194,187,0.4)', background: 'transparent', border: 'none', cursor: 'pointer', lineHeight: 1 }}>×</button>
             </div>
             <div style={{ maxHeight: '60vh', overflowY: 'auto' }}>
-              {notifications.map((n: any, i: number) => (
-                <div key={n.id} style={{ padding: '18px 24px', borderBottom: i < notifications.length - 1 ? '0.5px solid rgba(200,194,187,0.06)' : 'none', display: 'flex', gap: 14, alignItems: 'flex-start' }}>
-                  <div style={{ width: 36, height: 36, borderRadius: '50%', background: n.type === 'booking_confirmed' ? 'rgba(100,200,130,0.15)' : 'rgba(210,175,80,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    {n.type === 'booking_confirmed' ? <span style={{ fontSize: 16, color: 'rgba(100,200,130,0.9)' }}>✓</span> : <IconCalendar size={16} style={{ color: 'rgba(210,175,80,0.9)' }} />}
+              {notifications.map((n: any, i: number) => {
+                const [tone, toneBg] = n.type === 'booking_confirmed' ? ['rgba(100,200,130,0.9)', 'rgba(100,200,130,0.15)']
+                  : n.type === 'date_proposed' ? ['rgba(210,90,90,0.9)', 'rgba(210,90,90,0.15)']
+                  : ['rgba(210,175,80,0.9)', 'rgba(210,175,80,0.15)']
+                return (
+                  <div key={n.id} style={{ padding: '18px 24px', borderBottom: i < notifications.length - 1 ? '0.5px solid rgba(200,194,187,0.06)' : 'none', display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+                    <div style={{ width: 36, height: 36, borderRadius: '50%', background: toneBg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      {n.type === 'booking_confirmed' ? <span style={{ fontSize: 16, color: tone }}>✓</span> : <IconCalendar size={16} style={{ color: tone }} />}
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: tone, marginBottom: 5 }}>{n.title}</div>
+                      <div style={{ fontSize: 12, color: 'rgba(200,194,187,0.6)', lineHeight: 1.7 }}>{n.message}</div>
+                      <div style={{ fontSize: 10, color: 'rgba(200,194,187,0.3)', marginTop: 6 }}>{new Date(n.created_at).toLocaleDateString('en-NZ',{day:'numeric',month:'long',year:'numeric'})}</div>
+                    </div>
                   </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: n.type === 'booking_confirmed' ? 'rgba(100,200,130,0.9)' : 'rgba(210,175,80,0.9)', marginBottom: 5 }}>{n.title}</div>
-                    <div style={{ fontSize: 12, color: 'rgba(200,194,187,0.6)', lineHeight: 1.7 }}>{n.message}</div>
-                    <div style={{ fontSize: 10, color: 'rgba(200,194,187,0.3)', marginTop: 6 }}>{new Date(n.created_at).toLocaleDateString('en-NZ',{day:'numeric',month:'long',year:'numeric'})}</div>
-                  </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
             <div style={{ padding: '16px 24px', borderTop: '0.5px solid rgba(200,194,187,0.09)', display: 'flex', justifyContent: 'flex-end' }}>
               <button onClick={async () => { await supabase.from('notifications').update({ read: true }).eq('user_email', user?.email); setNotifications([]); setShowNotifications(false) }} style={{ fontSize: 12, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '10px 28px', borderRadius: 4, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 600, fontFamily: 'inherit' }}>OK</button>

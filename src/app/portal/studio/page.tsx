@@ -1,9 +1,10 @@
 'use client'
 import React from 'react'
 import StudioSidebar from './StudioSidebar'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { formatTime12, localDateKey } from '@/lib/time'
+import { stageLabel } from '@/lib/stages'
 import { xeroAuthedFetch } from '@/lib/xeroClient'
 import { notify, confirmDialog, ToastHost, ConfirmHost } from '@/lib/notify'
 import { useRouter } from 'next/navigation'
@@ -441,7 +442,7 @@ export default function StudioPortal() {
     } catch (e) { console.error(e) }
   }
   const STAGE_PROGRESS: Record<string, number> = {
-    'Enquiry': 0, 'Pre-Production': 10, 'Shooting': 35, 'Post-Production': 65, 'Revisions': 85, 'Awaiting Confirmation': 100,
+    'Enquiry': 0, 'Pre-Production': 10, 'Shooting': 35, 'Post-Production': 65, 'Revisions': 85, 'Awaiting Confirmation': 95, 'Completed': 100,
   }
 
   async function saveModalProject() {
@@ -488,7 +489,7 @@ export default function StudioPortal() {
         const d = new Date(p.shoot_date)
         return d >= now && d <= in14
       }).sort((a: any, b: any) => new Date(a.shoot_date).getTime() - new Date(b.shoot_date).getTime()))
-      setRecentDeliveries(projects.filter((p: any) => p.drive_url && !p.archived && p.stage === 'Awaiting Confirmation').slice(0, 10))
+      setRecentDeliveries(projects.filter((p: any) => p.drive_url && !p.archived && (p.stage === 'Awaiting Confirmation' || p.stage === 'Completed')).slice(0, 10))
       setScheduleProjects(projects.filter((p: any) => !p.archived))
 
       // Once-a-day "what's coming up" popup, gated per signed-in user so Fin
@@ -500,7 +501,7 @@ export default function StudioPortal() {
           const in7 = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
           const shoots = projects.filter((p: any) => !p.archived && p.shoot_date && new Date(p.shoot_date) >= now && new Date(p.shoot_date) <= in7)
             .sort((a: any, b: any) => new Date(a.shoot_date).getTime() - new Date(b.shoot_date).getTime())
-          const deliveries = projects.filter((p: any) => !p.archived && p.delivery_due && p.stage !== 'Awaiting Confirmation' && new Date(p.delivery_due) >= now && new Date(p.delivery_due) <= in7)
+          const deliveries = projects.filter((p: any) => !p.archived && p.delivery_due && p.stage !== 'Awaiting Confirmation' && p.stage !== 'Completed' && new Date(p.delivery_due) >= now && new Date(p.delivery_due) <= in7)
             .sort((a: any, b: any) => new Date(a.delivery_due).getTime() - new Date(b.delivery_due).getTime())
           const { data: todaysTodos } = await supabase.from('todos').select('*').eq('user_email', digestUserEmail).eq('due_date', today).eq('done', false)
           const actionableCount = (data || []).filter((b: any) => b.status !== 'confirmed' || !b.project_id).length
@@ -517,6 +518,35 @@ export default function StudioPortal() {
       }
     }
   }
+
+  // A project created from the client's own browser (confirmProposedTime ->
+  // /api/confirm-booking-time) has no Drive folder yet — only the studio's
+  // browser carries the Google OAuth cookies needed to create one. Backfill
+  // it automatically as soon as the studio dashboard loads, so the folder
+  // (and its url on the project) exists without anyone having to click
+  // the manual "+ Create folder" button.
+  const attemptedDriveFolders = useRef<Set<string>>(new Set())
+  useEffect(() => {
+    const candidates = dashProjects.filter((p: any) => p.from_booking && !p.drive_url && !attemptedDriveFolders.current.has(p.id))
+    if (candidates.length === 0) return
+    candidates.forEach((p: any) => attemptedDriveFolders.current.add(p.id))
+    ;(async () => {
+      for (const p of candidates) {
+        try {
+          const res = await fetch('/api/drive/folder', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ category: p.category, client: p.client, projectTitle: p.title }),
+          })
+          const data = await res.json()
+          if (data.url) {
+            await supabase.from('projects1').update({ drive_url: data.url }).eq('id', p.id)
+            setDashProjects(prev => prev.map(pr => pr.id === p.id ? { ...pr, drive_url: data.url } : pr))
+          }
+        } catch (e) { console.error('Auto drive folder creation error:', e) }
+      }
+    })()
+  }, [dashProjects])
 
   async function resolveDashboardFeedback(id: string) {
     await supabase.from('video_feedback').update({ status: 'resolved' }).eq('id', id)
@@ -932,7 +962,7 @@ export default function StudioPortal() {
                   })() },
                   { label: 'Revision requests', value: videoFeedbackCount, sub: videoFeedbackCount > 0 ? 'Client feedback awaiting a response' : 'All clear', alert: videoFeedbackCount > 0, onClick: () => setActiveView('revisions') },
                   { label: 'In post-production', value: dashProjects.filter((p: any) => p.stage === 'Post-Production' || p.stage === 'Revisions').length, sub: 'Editing & revisions' },
-                  { label: 'Ready to invoice', value: dashProjects.filter((p: any) => p.stage === 'Awaiting Confirmation' && !p.invoice_id).length, sub: (() => { const now = new Date(); const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0); const days = Math.ceil((lastDay.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)); return days === 0 ? 'Last day of month!' : `${days} day${days !== 1 ? 's' : ''} until end of month` })(), alert: dashProjects.filter((p: any) => p.stage === 'Awaiting Confirmation' && !p.invoice_id).length > 0 },
+                  { label: 'Ready to invoice', value: dashProjects.filter((p: any) => p.stage === 'Completed' && !p.invoice_id).length, sub: (() => { const now = new Date(); const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0); const days = Math.ceil((lastDay.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)); return days === 0 ? 'Last day of month!' : `${days} day${days !== 1 ? 's' : ''} until end of month` })(), alert: dashProjects.filter((p: any) => p.stage === 'Completed' && !p.invoice_id).length > 0 },
                 ].map(({ label, value, sub, alert, onClick }: any) => (
                   <div key={label} onClick={onClick} style={{ background: 'linear-gradient(135deg, rgba(30,36,48,0.9) 0%, rgba(20,24,32,0.95) 100%)', border: '0.5px solid ' + (alert ? 'rgba(210,90,90,0.4)' : 'rgba(200,194,187,0.08)'), borderRadius: 12, padding: '20px 22px', position: 'relative', overflow: 'hidden', boxShadow: alert ? '0 0 20px rgba(210,90,90,0.08) inset' : '0 0 0 0 transparent', cursor: onClick ? 'pointer' : 'default' }}>
                     <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '1px', background: alert ? 'linear-gradient(90deg, transparent, rgba(210,90,90,0.5), transparent)' : 'linear-gradient(90deg, transparent, rgba(200,194,187,0.12), transparent)' }} />
@@ -952,7 +982,7 @@ export default function StudioPortal() {
                     <button onClick={() => router.push('/portal/studio/projects')} style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>View all →</button>
                   </div>
                   {(() => {
-                    const SC: Record<string,any> = {'Enquiry':{color:'rgba(200,194,187,0.55)',bg:'rgba(200,194,187,0.06)'},'Pre-Production':{color:'rgba(100,150,220,0.9)',bg:'rgba(25,45,80,0.4)'},'Shooting':{color:'rgba(210,175,80,0.9)',bg:'rgba(65,52,18,0.4)'},'Post-Production':{color:'rgba(210,90,90,0.9)',bg:'rgba(50,25,80,0.4)'},'Revisions':{color:'rgba(220,120,60,0.9)',bg:'rgba(80,35,15,0.4)'},'Awaiting Confirmation':{color:'rgba(100,200,130,0.9)',bg:'rgba(30,70,45,0.4)'}}
+                    const SC: Record<string,any> = {'Enquiry':{color:'rgba(200,194,187,0.55)',bg:'rgba(200,194,187,0.06)'},'Pre-Production':{color:'rgba(100,150,220,0.9)',bg:'rgba(25,45,80,0.4)'},'Shooting':{color:'rgba(210,175,80,0.9)',bg:'rgba(65,52,18,0.4)'},'Post-Production':{color:'rgba(210,90,90,0.9)',bg:'rgba(50,25,80,0.4)'},'Revisions':{color:'rgba(220,120,60,0.9)',bg:'rgba(80,35,15,0.4)'},'Awaiting Confirmation':{color:'rgba(100,200,130,0.9)',bg:'rgba(30,70,45,0.4)'},'Completed':{color:'rgba(100,200,130,0.9)',bg:'rgba(30,70,45,0.6)'}}
                     const now = new Date()
                     const in14 = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000)
                     const recentBookings = [...dashProjects].filter(p => p.from_booking).sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0,5)
@@ -971,7 +1001,7 @@ export default function StudioPortal() {
                             <div style={{ width: 60, height: 3, background: 'rgba(200,194,187,0.07)', borderRadius: 2 }}>
                               <div style={{ height: '100%', width: p.progress + '%', background: '#C8C2BB', opacity: 0.5, borderRadius: 2 }} />
                             </div>
-                            <span style={{ fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '2px 7px', borderRadius: 2, background: sc.bg, color: sc.color, whiteSpace: 'nowrap' }}>{p.stage}</span>
+                            <span style={{ fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '2px 7px', borderRadius: 2, background: sc.bg, color: sc.color, whiteSpace: 'nowrap' }}>{stageLabel(p.stage)}</span>
                           </div>
                         </div>
                       )
@@ -1366,7 +1396,7 @@ export default function StudioPortal() {
                   <div style={{ width: 60, height: 3, background: 'rgba(200,194,187,0.07)', borderRadius: 2 }}>
                     <div style={{ height: '100%', width: p.progress + '%', background: '#C8C2BB', opacity: 0.5, borderRadius: 2 }} />
                   </div>
-                  <span style={{ fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '3px 8px', borderRadius: 2, background: sc.bg, color: sc.color, whiteSpace: 'nowrap' }}>{p.stage}</span>
+                  <span style={{ fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '3px 8px', borderRadius: 2, background: sc.bg, color: sc.color, whiteSpace: 'nowrap' }}>{stageLabel(p.stage)}</span>
                 </div>
               </div>
             )
@@ -2264,14 +2294,14 @@ export default function StudioPortal() {
             <div style={{ padding: 24 }}>
               <div style={{ marginBottom: 24 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-                  {['Enquiry','Pre-Production','Shooting','Post-Production','Revisions','Awaiting Confirmation'].map((stage, idx) => {
-                    const SC: Record<string,string> = {'Enquiry':'rgba(200,194,187,0.55)','Pre-Production':'rgba(100,150,220,0.9)','Shooting':'rgba(210,175,80,0.9)','Post-Production':'rgba(210,90,90,0.9)','Revisions':'rgba(220,120,60,0.9)','Awaiting Confirmation':'rgba(100,200,130,0.9)'}
-                    const stageIdx = ['Enquiry','Pre-Production','Shooting','Post-Production','Revisions','Awaiting Confirmation'].indexOf(modalProject.stage)
+                  {['Enquiry','Pre-Production','Shooting','Post-Production','Revisions','Awaiting Confirmation','Completed'].map((stage, idx) => {
+                    const SC: Record<string,string> = {'Enquiry':'rgba(200,194,187,0.55)','Pre-Production':'rgba(100,150,220,0.9)','Shooting':'rgba(210,175,80,0.9)','Post-Production':'rgba(210,90,90,0.9)','Revisions':'rgba(220,120,60,0.9)','Awaiting Confirmation':'rgba(100,200,130,0.9)','Completed':'rgba(100,200,130,0.9)'}
+                    const stageIdx = ['Enquiry','Pre-Production','Shooting','Post-Production','Revisions','Awaiting Confirmation','Completed'].indexOf(modalProject.stage)
                     const isDone = idx < stageIdx; const isCurrent = idx === stageIdx
                     return (
                       <div key={stage} onClick={() => setModalProject((p: any) => p ? { ...p, stage, progress: STAGE_PROGRESS[stage] } : p)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, cursor: 'pointer', flex: 1 }}>
                         <div style={{ width: 26, height: 26, borderRadius: '50%', background: isDone ? 'rgba(100,200,130,0.15)' : isCurrent ? 'rgba(200,194,187,0.08)' : 'transparent', border: `1.5px solid ${isDone ? 'rgba(100,200,130,0.5)' : isCurrent ? SC[stage] : 'rgba(200,194,187,0.15)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: isDone ? 'rgba(100,200,130,0.8)' : isCurrent ? SC[stage] : 'rgba(200,194,187,0.2)' }}>{isDone ? '✓' : idx+1}</div>
-                        <span style={{ fontSize: 9, color: isCurrent ? '#C8C2BB' : 'rgba(200,194,187,0.3)', textAlign: 'center', lineHeight: 1.3 }}>{stage}</span>
+                        <span style={{ fontSize: 9, color: isCurrent ? '#C8C2BB' : 'rgba(200,194,187,0.3)', textAlign: 'center', lineHeight: 1.3 }}>{stageLabel(stage)}</span>
                       </div>
                     )
                   })}
@@ -2282,7 +2312,7 @@ export default function StudioPortal() {
                 </div>
                 <input type="range" min="0" max="100" value={modalProject.progress} onChange={e => {
                   const val = parseInt(e.target.value)
-                  const stage = val >= 100 ? 'Awaiting Confirmation' : val >= 85 ? 'Revisions' : val >= 65 ? 'Post-Production' : val >= 35 ? 'Shooting' : 'Pre-Production'
+                  const stage = val >= 100 ? 'Completed' : val >= 95 ? 'Awaiting Confirmation' : val >= 85 ? 'Revisions' : val >= 65 ? 'Post-Production' : val >= 35 ? 'Shooting' : 'Pre-Production'
                   setModalProject((p: any) => p ? { ...p, progress: val, stage } : p)
                 }} style={{ width: '100%', accentColor: '#C8C2BB', cursor: 'pointer' }} />
               </div>
@@ -2301,7 +2331,7 @@ export default function StudioPortal() {
                   <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>Stage</div>
                   {modalEditing ? (
                     <select value={modalProject.stage} onChange={e => setModalProject((p: any) => p ? { ...p, stage: e.target.value, progress: STAGE_PROGRESS[e.target.value] } : p)} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '8px 10px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }}>
-                      {['Enquiry','Pre-Production','Shooting','Post-Production','Revisions','Awaiting Confirmation'].map(s => <option key={s}>{s}</option>)}
+                      {['Enquiry','Pre-Production','Shooting','Post-Production','Revisions','Awaiting Confirmation','Completed'].map(s => <option key={s} value={s}>{stageLabel(s)}</option>)}
                     </select>
                   ) : <div style={{ fontSize: 13, color: '#C8C2BB' }}>{modalProject.stage}</div>}
                 </div>
@@ -2401,14 +2431,14 @@ export default function StudioPortal() {
             <div style={{ padding: 24 }}>
               <div style={{ marginBottom: 24 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-                  {['Enquiry','Pre-Production','Shooting','Post-Production','Revisions','Awaiting Confirmation'].map((stage, idx) => {
-                    const SC: Record<string,string> = {'Enquiry':'rgba(200,194,187,0.55)','Pre-Production':'rgba(100,150,220,0.9)','Shooting':'rgba(210,175,80,0.9)','Post-Production':'rgba(210,90,90,0.9)','Revisions':'rgba(220,120,60,0.9)','Awaiting Confirmation':'rgba(100,200,130,0.9)'}
-                    const stageIdx = ['Enquiry','Pre-Production','Shooting','Post-Production','Revisions','Awaiting Confirmation'].indexOf(modalProject.stage)
+                  {['Enquiry','Pre-Production','Shooting','Post-Production','Revisions','Awaiting Confirmation','Completed'].map((stage, idx) => {
+                    const SC: Record<string,string> = {'Enquiry':'rgba(200,194,187,0.55)','Pre-Production':'rgba(100,150,220,0.9)','Shooting':'rgba(210,175,80,0.9)','Post-Production':'rgba(210,90,90,0.9)','Revisions':'rgba(220,120,60,0.9)','Awaiting Confirmation':'rgba(100,200,130,0.9)','Completed':'rgba(100,200,130,0.9)'}
+                    const stageIdx = ['Enquiry','Pre-Production','Shooting','Post-Production','Revisions','Awaiting Confirmation','Completed'].indexOf(modalProject.stage)
                     const isDone = idx < stageIdx; const isCurrent = idx === stageIdx
                     return (
                       <div key={stage} onClick={() => setModalProject((p: any) => p ? { ...p, stage, progress: STAGE_PROGRESS[stage] } : p)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, cursor: 'pointer', flex: 1 }}>
                         <div style={{ width: 26, height: 26, borderRadius: '50%', background: isDone ? 'rgba(100,200,130,0.15)' : isCurrent ? 'rgba(200,194,187,0.08)' : 'transparent', border: `1.5px solid ${isDone ? 'rgba(100,200,130,0.5)' : isCurrent ? SC[stage] : 'rgba(200,194,187,0.15)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: isDone ? 'rgba(100,200,130,0.8)' : isCurrent ? SC[stage] : 'rgba(200,194,187,0.2)' }}>{isDone ? '✓' : idx+1}</div>
-                        <span style={{ fontSize: 9, color: isCurrent ? '#C8C2BB' : 'rgba(200,194,187,0.3)', textAlign: 'center', lineHeight: 1.3 }}>{stage}</span>
+                        <span style={{ fontSize: 9, color: isCurrent ? '#C8C2BB' : 'rgba(200,194,187,0.3)', textAlign: 'center', lineHeight: 1.3 }}>{stageLabel(stage)}</span>
                       </div>
                     )
                   })}
@@ -2419,7 +2449,7 @@ export default function StudioPortal() {
                 </div>
                 <input type="range" min="0" max="100" value={modalProject.progress} onChange={e => {
                   const val = parseInt(e.target.value)
-                  const stage = val >= 100 ? 'Awaiting Confirmation' : val >= 85 ? 'Revisions' : val >= 65 ? 'Post-Production' : val >= 35 ? 'Shooting' : 'Pre-Production'
+                  const stage = val >= 100 ? 'Completed' : val >= 95 ? 'Awaiting Confirmation' : val >= 85 ? 'Revisions' : val >= 65 ? 'Post-Production' : val >= 35 ? 'Shooting' : 'Pre-Production'
                   setModalProject((p: any) => p ? { ...p, progress: val, stage } : p)
                 }} style={{ width: '100%', accentColor: '#C8C2BB', cursor: 'pointer' }} />
               </div>
@@ -2438,7 +2468,7 @@ export default function StudioPortal() {
                   <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>Stage</div>
                   {modalEditing ? (
                     <select value={modalProject.stage} onChange={e => setModalProject((p: any) => p ? { ...p, stage: e.target.value, progress: STAGE_PROGRESS[e.target.value] } : p)} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '8px 10px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }}>
-                      {['Enquiry','Pre-Production','Shooting','Post-Production','Revisions','Awaiting Confirmation'].map(s => <option key={s}>{s}</option>)}
+                      {['Enquiry','Pre-Production','Shooting','Post-Production','Revisions','Awaiting Confirmation','Completed'].map(s => <option key={s} value={s}>{stageLabel(s)}</option>)}
                     </select>
                   ) : <div style={{ fontSize: 13, color: '#C8C2BB' }}>{modalProject.stage}</div>}
                 </div>
