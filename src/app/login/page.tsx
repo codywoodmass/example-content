@@ -101,7 +101,7 @@ export default function LoginPage() {
           </button>
 
           <div style={{ textAlign: 'center', marginTop: 8 }}>
-            <button onClick={async () => {
+            <button type="button" onClick={async () => {
                 if (!email) { notify('Enter your email address first', 'error'); return }
                 setResetLoading(true)
                 await supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + '/reset-password' })
