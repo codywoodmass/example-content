@@ -1,16 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { formatTime12 } from '@/lib/time'
+import { formatTime12, nzOffset } from '@/lib/time'
+import { getGoogleClients } from '@/lib/google'
 
 const STUDIO_EMAIL = 'cody@examplecontent.co.nz'
 
-// The client accepting a proposed time happens in the CLIENT's browser,
-// which never has the studio's Google OAuth cookies — so unlike
-// confirmBooking/finalizeBooking (studio-triggered), this route can create
-// the project row itself but cannot create the Drive folder or calendar
-// event. The studio dashboard auto-creates the Drive folder for any
-// from_booking project missing one on its next load (it has the cookies),
-// which backfills projects1.drive_url so the client portal picks it up.
+// The client accepting a proposed time happens in the client's browser, but
+// since the Google connection lives in the database (not a browser cookie —
+// see src/lib/google.ts), this route can still create the Drive folder and
+// calendar event itself, synchronously, with no dependency on the studio
+// ever opening their own dashboard.
 export async function POST(req: NextRequest) {
   const { bookingId } = await req.json()
   if (!bookingId) return NextResponse.json({ error: 'Missing bookingId' }, { status: 400 })
@@ -56,6 +55,47 @@ export async function POST(req: NextRequest) {
   const timeLabel = booking.proposed_start_time ? formatTime12(booking.proposed_start_time) : null
   const projectUrl = new URL(`/portal/studio/projects?open=${project.id}`, req.nextUrl.origin).toString()
 
+  // Create the Drive folder (reuses the existing folder-matching logic via
+  // an internal call rather than duplicating it) and attach it to the project.
+  let driveUrl: string | null = null
+  try {
+    const driveRes = await fetch(new URL('/api/drive/folder', req.nextUrl.origin).toString(), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ category: booking.category, client: project.client, projectTitle: project.title }),
+    })
+    const driveData = await driveRes.json()
+    if (driveData.url) {
+      driveUrl = driveData.url
+      await admin.from('projects1').update({ drive_url: driveData.url }).eq('id', project.id)
+    }
+  } catch (e) { console.error('Drive folder creation error:', e) }
+
+  // Create the calendar event for the confirmed shoot time.
+  if (booking.proposed_date && booking.proposed_start_time && booking.proposed_end_time) {
+    try {
+      const clients = await getGoogleClients()
+      if (clients) {
+        const event = await clients.calendar.events.insert({
+          calendarId: 'primary',
+          sendUpdates: 'all',
+          requestBody: {
+            summary: `Example Content — ${project.title}`,
+            location: project.address || '',
+            description: `Confirmed shoot for ${booking.client_name || booking.client_email}\nPackage: ${booking.shoot_package || ''}\nDeliverables: ${booking.deliverables || ''}`,
+            start: { dateTime: new Date(`${booking.proposed_date}T${booking.proposed_start_time}:00${nzOffset(booking.proposed_date)}`).toISOString(), timeZone: 'Pacific/Auckland' },
+            end: { dateTime: new Date(`${booking.proposed_date}T${booking.proposed_end_time}:00${nzOffset(booking.proposed_date)}`).toISOString(), timeZone: 'Pacific/Auckland' },
+            attendees: [
+              { email: STUDIO_EMAIL, displayName: 'Example Content' },
+              ...(booking.client_email ? [{ email: booking.client_email, displayName: 'Client' }] : []),
+            ],
+          },
+        })
+        if (event.data.id) await admin.from('projects1').update({ calendar_event_id: event.data.id }).eq('id', project.id)
+      }
+    } catch (e) { console.error('Calendar event creation error:', e) }
+  }
+
   try {
     await admin.from('notifications').insert([{
       user_email: STUDIO_EMAIL,
@@ -89,7 +129,7 @@ export async function POST(req: NextRequest) {
               ${booking.addons ? `<li><strong>Add-ons:</strong> ${booking.addons}</li>` : ''}
               ${project.amount ? `<li><strong>Amount:</strong> $${project.amount}</li>` : ''}
             </ul>
-            <p>The Google Drive folder will be created automatically next time you open the studio portal.</p>
+            ${driveUrl ? `<p>Drive folder: <a href="${driveUrl}">${driveUrl}</a></p>` : ''}
             <p><a href="${projectUrl}" style="display:inline-block;padding:10px 18px;background:#C8C2BB;color:#111;text-decoration:none;border-radius:4px;font-size:13px;">Open project →</a></p>
           `,
         }),

@@ -9,6 +9,28 @@ export function formatTime12(time: string | null | undefined): string {
   return `${hour12}:${String(m).padStart(2, '0')} ${period}`
 }
 
+// NZ alternates between NZST (+12:00) and NZDT (+13:00) — a hardcoded +12:00
+// offset is wrong for roughly half the year, and silently shifts any
+// Date.toISOString() derived from an NZ-local date/time by an hour.
+export function nzOffset(dateStr: string): string {
+  const d = new Date(`${dateStr}T12:00:00Z`)
+  const parts = new Intl.DateTimeFormat('en-NZ', { timeZone: 'Pacific/Auckland', timeZoneName: 'longOffset' }).formatToParts(d)
+  const tz = parts.find(p => p.type === 'timeZoneName')?.value
+  return tz ? tz.replace('GMT', '') : '+12:00'
+}
+
+// The inverse of combining a local NZ date+time with nzOffset() into an ISO
+// instant — given that instant back, returns the NZ-local 'YYYY-MM-DD' date
+// and 'HH:MM' time it represents. Used when a change made directly in Google
+// Calendar (a different timezone's instant) needs to be read back as the
+// local date/time fields this app stores.
+export function nzLocalDateTime(iso: string): { date: string; time: string } {
+  const d = new Date(iso)
+  const date = new Intl.DateTimeFormat('en-CA', { timeZone: 'Pacific/Auckland' }).format(d)
+  const time = new Intl.DateTimeFormat('en-GB', { timeZone: 'Pacific/Auckland', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(d)
+  return { date, time }
+}
+
 // A calendar-grid day (built via local Date arithmetic, e.g. startOfWeek.setDate(...))
 // represents a *local* calendar date, not a UTC instant. `.toISOString()` converts
 // through UTC first, which shifts it back a day for any positive-offset timezone

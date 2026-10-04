@@ -1,11 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { google } from 'googleapis'
-
-const oauth2Client = new google.auth.OAuth2(
-  process.env.GOOGLE_CLIENT_ID,
-  process.env.GOOGLE_CLIENT_SECRET,
-  process.env.GOOGLE_REDIRECT_URI
-)
+import { getGoogleClients } from '@/lib/google'
 
 const FOLDER_MIME = 'application/vnd.google-apps.folder'
 
@@ -62,12 +57,9 @@ async function findOrCreateCategoryFolder(drive: ReturnType<typeof google.drive>
 }
 
 export async function POST(req: NextRequest) {
-  const accessToken = req.cookies.get('google_access_token')?.value
-  const refreshToken = req.cookies.get('google_refresh_token')?.value
-
-  if (!accessToken && !refreshToken) {
-    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
-  }
+  const clients = await getGoogleClients()
+  if (!clients) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+  const { drive } = clients
 
   const rootId = process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID
   if (!rootId) {
@@ -78,9 +70,6 @@ export async function POST(req: NextRequest) {
   if (!client || !projectTitle) {
     return NextResponse.json({ error: 'Missing client or projectTitle' }, { status: 400 })
   }
-
-  oauth2Client.setCredentials({ access_token: accessToken, refresh_token: refreshToken })
-  const drive = google.drive({ version: 'v3', auth: oauth2Client })
 
   try {
     const categoryFolderId = await findOrCreateCategoryFolder(drive, category, rootId)

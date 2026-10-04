@@ -705,6 +705,26 @@ export default function StudioPortal() {
     // Fast path (no negotiation) — set project_id in the same write so this
     // booking never also shows up in the "ready to create project" queue.
     await supabase.from('bookings1').update({ status: 'confirmed', project_id: data?.id || null }).eq('id', booking.id)
+    const finalShootDate = shootDate || booking.preferred_date || null
+    if (data?.id && finalShootDate && startTime && endTime) {
+      try {
+        const res = await fetch('/api/calendar', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: `Example Content — ${booking.address || booking.shoot_package || 'Shoot'}`,
+            date: finalShootDate,
+            startTime, endTime,
+            clientEmail: booking.client_email,
+            location: booking.address || '',
+            description: `Confirmed shoot for ${booking.client_name || booking.client_email}\nPackage: ${booking.shoot_package || ''}\nDeliverables: ${booking.deliverables || ''}`,
+          }),
+        })
+        const calData = await res.json()
+        if (calData.success && calData.eventId) await supabase.from('projects1').update({ calendar_event_id: calData.eventId }).eq('id', data.id)
+        else if (!calData.success && calData.error !== 'Not authenticated') notify('Project created, but the calendar event failed: ' + calData.error, 'error')
+      } catch (e) { console.error('Calendar event error:', e) }
+    }
     // Send notification to client
     if (data?.id) {
       await supabase.from('notifications').insert([{
@@ -852,7 +872,8 @@ export default function StudioPortal() {
           }),
         })
         const calData = await res.json()
-        if (!calData.success && calData.error !== 'Not authenticated') {
+        if (calData.success && calData.eventId) await supabase.from('projects1').update({ calendar_event_id: calData.eventId }).eq('id', data.id)
+        else if (!calData.success && calData.error !== 'Not authenticated') {
           notify('Project created, but the calendar event failed: ' + calData.error, 'error')
         }
       } catch (e) { console.error('Calendar event error:', e) }

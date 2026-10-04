@@ -1,21 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { google } from 'googleapis'
-
-const oauth2Client = new google.auth.OAuth2(
-  process.env.GOOGLE_CLIENT_ID,
-  process.env.GOOGLE_CLIENT_SECRET,
-  process.env.GOOGLE_REDIRECT_URI
-)
-
-// NZ alternates between NZST (+12:00) and NZDT (+13:00) — a hardcoded +12:00
-// offset (the old behaviour here) is wrong for roughly half the year, currently
-// included, and silently shifts every event/availability check by an hour.
-function nzOffset(dateStr: string): string {
-  const d = new Date(`${dateStr}T12:00:00Z`)
-  const parts = new Intl.DateTimeFormat('en-NZ', { timeZone: 'Pacific/Auckland', timeZoneName: 'longOffset' }).formatToParts(d)
-  const tz = parts.find(p => p.type === 'timeZoneName')?.value
-  return tz ? tz.replace('GMT', '') : '+12:00'
-}
+import { googleOAuthClient, getGoogleClients, isGoogleConnected, GOOGLE_SCOPES } from '@/lib/google'
+import { nzOffset } from '@/lib/time'
 
 // Converts a UTC instant to its NZ-local calendar date (YYYY-MM-DD) — en-CA
 // formats dates in ISO order, a reliable trick for this.
@@ -27,27 +12,22 @@ export async function GET(req: NextRequest) {
   const action = req.nextUrl.searchParams.get('action')
 
   if (action === 'auth_url') {
+    const oauth2Client = googleOAuthClient()
     const url = oauth2Client.generateAuthUrl({
       access_type: 'offline',
-      scope: ['https://www.googleapis.com/auth/calendar', 'https://www.googleapis.com/auth/drive'],
+      scope: GOOGLE_SCOPES,
       prompt: 'consent',
     })
     return NextResponse.json({ url })
   }
 
-  const accessToken = req.cookies.get('google_access_token')?.value
-  const refreshToken = req.cookies.get('google_refresh_token')?.value
-
   if (action === 'status') {
-    return NextResponse.json({ connected: !!refreshToken })
+    return NextResponse.json({ connected: await isGoogleConnected() })
   }
 
-  if (!accessToken && !refreshToken) {
-    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
-  }
-
-  oauth2Client.setCredentials({ access_token: accessToken, refresh_token: refreshToken })
-  const calendar = google.calendar({ version: 'v3', auth: oauth2Client })
+  const clients = await getGoogleClients()
+  if (!clients) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+  const { calendar } = clients
 
   if (action === 'availability') {
     // Accepts either a single `date` or a `from`/`to` range (e.g. a whole week) —
@@ -86,15 +66,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const accessToken = req.cookies.get('google_access_token')?.value
-  const refreshToken = req.cookies.get('google_refresh_token')?.value
-
-  if (!accessToken && !refreshToken) {
-    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
-  }
-
-  oauth2Client.setCredentials({ access_token: accessToken, refresh_token: refreshToken })
-  const calendar = google.calendar({ version: 'v3', auth: oauth2Client })
+  const clients = await getGoogleClients()
+  if (!clients) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+  const { calendar } = clients
 
   const body = await req.json()
   const { title, date, startTime, endTime, clientEmail, location, description, eventId } = body
