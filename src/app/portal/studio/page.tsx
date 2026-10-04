@@ -1179,118 +1179,6 @@ export default function StudioPortal() {
                 </div>
               </div>
 
-              {/* WEEKLY SCHEDULE — hour-grid week view with Auckland/Waikato weather */}
-              {(() => {
-                const WEATHER_ICONS: Record<number, string> = { 0: '☀️', 1: '🌤️', 2: '⛅', 3: '☁️', 45: '🌫️', 48: '🌫️', 51: '🌦️', 53: '🌦️', 55: '🌦️', 61: '🌧️', 63: '🌧️', 65: '🌧️', 71: '🌨️', 73: '🌨️', 75: '🌨️', 80: '🌧️', 81: '🌧️', 82: '🌧️', 95: '⛈️', 96: '⛈️', 99: '⛈️' }
-                const weatherIcon = (code: number) => WEATHER_ICONS[code] ?? '🌡️'
-                const toHours = (t: string) => { const [h, m] = t.split(':').map(Number); return h + (m || 0) / 60 }
-                const GRID_START = 6, GRID_END = 20, ROW_H = 26
-                const STAGE_C: Record<string, { color: string; bg: string }> = { 'Enquiry': {color:'rgba(200,194,187,0.55)',bg:'rgba(61,71,86,0.5)'}, 'Pre-Production': {color:'rgba(100,150,220,0.9)',bg:'rgba(25,45,80,0.75)'}, 'Shooting': {color:'rgba(210,175,80,0.9)',bg:'rgba(65,52,18,0.75)'}, 'Post-Production': {color:'rgba(160,100,220,0.9)',bg:'rgba(50,25,80,0.75)'}, 'Revisions': {color:'rgba(220,120,60,0.9)',bg:'rgba(80,35,15,0.75)'}, 'Awaiting Confirmation': {color:'rgba(100,200,130,0.9)',bg:'rgba(30,70,45,0.75)'} }
-
-                const today = new Date(); today.setHours(0, 0, 0, 0)
-                const dow = today.getDay() === 0 ? 6 : today.getDay() - 1
-                const monday = new Date(today); monday.setDate(today.getDate() - dow + weekOffset * 7)
-                const days = Array.from({ length: 5 }, (_, i) => { const d = new Date(monday); d.setDate(monday.getDate() + i); return d })
-                const friday = days[4]
-
-                type ShootOcc = { key: string; project: any; date: string; start?: string; end?: string }
-                const occurrences: ShootOcc[] = []
-                dashProjects.forEach((p: any) => {
-                  if (p.shoot_date) occurrences.push({ key: p.id, project: p, date: p.shoot_date, start: p.shoot_window_start, end: p.shoot_window_end })
-                  ;(p.shoot_dates || []).forEach((d: any) => { if (d.date) occurrences.push({ key: p.id + '-' + d.id, project: p, date: d.date, start: d.start_time, end: d.end_time }) })
-                })
-                const occByDate: Record<string, ShootOcc[]> = {}
-                occurrences.forEach(occ => { if (!occByDate[occ.date]) occByDate[occ.date] = []; occByDate[occ.date].push(occ) })
-
-                return (
-                  <div style={{ marginBottom: 28 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-                      <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)' }}>Weekly schedule</div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <span style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>{monday.toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' })} – {friday.toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
-                        <div style={{ display: 'flex', gap: 4 }}>
-                          <button onClick={() => setWeekOffset(w => w - 1)} style={{ width: 26, height: 26, borderRadius: 4, border: '0.5px solid rgba(200,194,187,0.15)', background: 'transparent', color: 'rgba(200,194,187,0.5)', cursor: 'pointer', fontFamily: 'inherit' }}>‹</button>
-                          <button onClick={() => setWeekOffset(0)} disabled={weekOffset === 0} style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '0 10px', borderRadius: 4, border: '0.5px solid rgba(200,194,187,0.15)', background: weekOffset === 0 ? 'rgba(200,194,187,0.06)' : 'transparent', color: 'rgba(200,194,187,0.5)', cursor: weekOffset === 0 ? 'default' : 'pointer', fontFamily: 'inherit' }}>Today</button>
-                          <button onClick={() => setWeekOffset(w => w + 1)} style={{ width: 26, height: 26, borderRadius: 4, border: '0.5px solid rgba(200,194,187,0.15)', background: 'transparent', color: 'rgba(200,194,187,0.5)', cursor: 'pointer', fontFamily: 'inherit' }}>›</button>
-                        </div>
-                      </div>
-                    </div>
-                    <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, overflow: 'hidden' }}>
-                      <div style={{ display: 'grid', gridTemplateColumns: '38px repeat(5, 1fr)', borderBottom: '0.5px solid rgba(200,194,187,0.09)' }}>
-                        <div />
-                        {days.map((d) => {
-                          const key = localDateKey(d)
-                          const isToday = d.toDateString() === new Date().toDateString()
-                          const w = weatherByDate[key]
-                          return (
-                            <div key={key} style={{ padding: '6px 4px', textAlign: 'center', borderLeft: '0.5px solid rgba(200,194,187,0.06)', background: isToday ? 'rgba(200,194,187,0.04)' : 'transparent' }}>
-                              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 4 }}>
-                                <span style={{ fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', color: isToday ? '#C8C2BB' : 'rgba(200,194,187,0.35)' }}>{d.toLocaleDateString('en-NZ', { weekday: 'short' })}</span>
-                                <span style={{ fontSize: 12, fontWeight: isToday ? 700 : 500, color: isToday ? '#fff' : 'rgba(200,194,187,0.7)' }}>{d.getDate()}</span>
-                              </div>
-                              {w ? (
-                                <div style={{ fontSize: 8.5, color: 'rgba(200,194,187,0.4)', lineHeight: 1.4, marginTop: 2 }}>
-                                  <span title="Auckland">🏙️{weatherIcon(w.akl.code)} {Math.round(w.akl.min)}–{Math.round(w.akl.max)}°</span>
-                                  {w.wko && <span title="Waikato"> · 🚜{weatherIcon(w.wko.code)} {Math.round(w.wko.min)}–{Math.round(w.wko.max)}°</span>}
-                                </div>
-                              ) : (
-                                <div style={{ fontSize: 9, color: 'rgba(200,194,187,0.15)' }}>—</div>
-                              )}
-                            </div>
-                          )
-                        })}
-                      </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '38px repeat(5, 1fr)', position: 'relative', maxHeight: 360, overflowY: 'auto' }}>
-                        <div>
-                          {Array.from({ length: GRID_END - GRID_START }, (_, i) => GRID_START + i).map(h => (
-                            <div key={h} style={{ height: ROW_H, fontSize: 8, color: 'rgba(200,194,187,0.25)', textAlign: 'right', paddingRight: 4, position: 'relative' }}>
-                              <span style={{ position: 'absolute', top: -5, right: 4 }}>{h === 12 ? '12p' : h > 12 ? (h - 12) + 'p' : h + 'a'}</span>
-                            </div>
-                          ))}
-                        </div>
-                        {days.map((d) => {
-                          const key = localDateKey(d)
-                          const isToday = d.toDateString() === new Date().toDateString()
-                          const occs = occByDate[key] || []
-                          const timed = occs.filter(o => o.start)
-                          const untimed = occs.filter(o => !o.start)
-                          return (
-                            <div key={key} style={{ position: 'relative', borderLeft: '0.5px solid rgba(200,194,187,0.06)', background: isToday ? 'rgba(200,194,187,0.02)' : 'transparent' }}>
-                              {Array.from({ length: GRID_END - GRID_START }, (_, i) => GRID_START + i).map(h => (
-                                <div key={h} style={{ height: ROW_H, borderBottom: '0.5px solid rgba(200,194,187,0.04)' }} />
-                              ))}
-                              {untimed.length > 0 && (
-                                <div style={{ position: 'absolute', top: 2, left: 2, right: 2, display: 'flex', flexDirection: 'column', gap: 2, zIndex: 1 }}>
-                                  {untimed.map(occ => {
-                                    const sc = STAGE_C[occ.project.stage] || { color: '#C8C2BB', bg: 'rgba(200,194,187,0.15)' }
-                                    return (
-                                      <div key={occ.key} onClick={() => setModalProject(occ.project)} title={occ.project.title + ' (no time set)'} style={{ fontSize: 9, padding: '2px 5px', borderRadius: 3, background: sc.bg, color: sc.color, cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{occ.project.title}</div>
-                                    )
-                                  })}
-                                </div>
-                              )}
-                              {timed.map((occ, oi) => {
-                                const sh = Math.min(Math.max(toHours(occ.start!), GRID_START), GRID_END)
-                                const eh = occ.end ? Math.min(Math.max(toHours(occ.end), sh + 0.5), GRID_END) : sh + 1
-                                const top = (sh - GRID_START) * ROW_H
-                                const height = Math.max((eh - sh) * ROW_H, 16)
-                                const sc = STAGE_C[occ.project.stage] || { color: '#C8C2BB', bg: 'rgba(200,194,187,0.15)' }
-                                const widthPct = timed.length > 1 ? 100 / timed.length : 100
-                                return (
-                                  <div key={occ.key} onClick={() => setModalProject(occ.project)} style={{ position: 'absolute', top, left: `${oi * widthPct}%`, width: `calc(${widthPct}% - 3px)`, height, background: sc.bg, border: `0.5px solid ${sc.color}`, borderRadius: 3, padding: '2px 4px', cursor: 'pointer', overflow: 'hidden', zIndex: 2, lineHeight: 1.25 }}>
-                                    <div style={{ fontSize: 9, fontWeight: 500, color: sc.color, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{occ.project.title}</div>
-                                    {height >= 24 && <div style={{ fontSize: 8, color: 'rgba(200,194,187,0.45)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{formatTime12(occ.start!)}{occ.end ? '–' + formatTime12(occ.end) : ''}</div>}
-                                  </div>
-                                )
-                              })}
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  </div>
-                )
-              })()}
             </div>
           </div>
         )}
@@ -1410,6 +1298,120 @@ export default function StudioPortal() {
                   <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', marginTop: 2 }}>{upcomingShoots.length} upcoming shoot{upcomingShoots.length !== 1 ? 's' : ''}{userRole === 'studio' ? ` · ${preProd.length} enquir${preProd.length !== 1 ? 'ies' : 'y'} / awaiting brief` : ''}</div>
                 </div>
                 <button onClick={() => setActiveView('dashboard')} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>← Dashboard</button>
+              </div>
+              <div style={{ padding: '28px 28px 0 28px' }}>
+              {/* WEEKLY SCHEDULE — hour-grid week view with Auckland/Waikato weather */}
+              {(() => {
+                const WEATHER_ICONS: Record<number, string> = { 0: '☀️', 1: '🌤️', 2: '⛅', 3: '☁️', 45: '🌫️', 48: '🌫️', 51: '🌦️', 53: '🌦️', 55: '🌦️', 61: '🌧️', 63: '🌧️', 65: '🌧️', 71: '🌨️', 73: '🌨️', 75: '🌨️', 80: '🌧️', 81: '🌧️', 82: '🌧️', 95: '⛈️', 96: '⛈️', 99: '⛈️' }
+                const weatherIcon = (code: number) => WEATHER_ICONS[code] ?? '🌡️'
+                const toHours = (t: string) => { const [h, m] = t.split(':').map(Number); return h + (m || 0) / 60 }
+                const GRID_START = 6, GRID_END = 20, ROW_H = 26
+                const STAGE_C: Record<string, { color: string; bg: string }> = { 'Enquiry': {color:'rgba(200,194,187,0.55)',bg:'rgba(61,71,86,0.5)'}, 'Pre-Production': {color:'rgba(100,150,220,0.9)',bg:'rgba(25,45,80,0.75)'}, 'Shooting': {color:'rgba(210,175,80,0.9)',bg:'rgba(65,52,18,0.75)'}, 'Post-Production': {color:'rgba(160,100,220,0.9)',bg:'rgba(50,25,80,0.75)'}, 'Revisions': {color:'rgba(220,120,60,0.9)',bg:'rgba(80,35,15,0.75)'}, 'Awaiting Confirmation': {color:'rgba(100,200,130,0.9)',bg:'rgba(30,70,45,0.75)'} }
+
+                const today = new Date(); today.setHours(0, 0, 0, 0)
+                const dow = today.getDay() === 0 ? 6 : today.getDay() - 1
+                const monday = new Date(today); monday.setDate(today.getDate() - dow + weekOffset * 7)
+                const days = Array.from({ length: 5 }, (_, i) => { const d = new Date(monday); d.setDate(monday.getDate() + i); return d })
+                const friday = days[4]
+
+                type ShootOcc = { key: string; project: any; date: string; start?: string; end?: string }
+                const occurrences: ShootOcc[] = []
+                dashProjects.forEach((p: any) => {
+                  if (p.shoot_date) occurrences.push({ key: p.id, project: p, date: p.shoot_date, start: p.shoot_window_start, end: p.shoot_window_end })
+                  ;(p.shoot_dates || []).forEach((d: any) => { if (d.date) occurrences.push({ key: p.id + '-' + d.id, project: p, date: d.date, start: d.start_time, end: d.end_time }) })
+                })
+                const occByDate: Record<string, ShootOcc[]> = {}
+                occurrences.forEach(occ => { if (!occByDate[occ.date]) occByDate[occ.date] = []; occByDate[occ.date].push(occ) })
+
+                return (
+                  <div style={{ marginBottom: 28 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                      <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)' }}>Weekly schedule</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <span style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>{monday.toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' })} – {friday.toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                        <div style={{ display: 'flex', gap: 4 }}>
+                          <button onClick={() => setWeekOffset(w => w - 1)} style={{ width: 26, height: 26, borderRadius: 4, border: '0.5px solid rgba(200,194,187,0.15)', background: 'transparent', color: 'rgba(200,194,187,0.5)', cursor: 'pointer', fontFamily: 'inherit' }}>‹</button>
+                          <button onClick={() => setWeekOffset(0)} disabled={weekOffset === 0} style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '0 10px', borderRadius: 4, border: '0.5px solid rgba(200,194,187,0.15)', background: weekOffset === 0 ? 'rgba(200,194,187,0.06)' : 'transparent', color: 'rgba(200,194,187,0.5)', cursor: weekOffset === 0 ? 'default' : 'pointer', fontFamily: 'inherit' }}>Today</button>
+                          <button onClick={() => setWeekOffset(w => w + 1)} style={{ width: 26, height: 26, borderRadius: 4, border: '0.5px solid rgba(200,194,187,0.15)', background: 'transparent', color: 'rgba(200,194,187,0.5)', cursor: 'pointer', fontFamily: 'inherit' }}>›</button>
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, overflow: 'hidden' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '38px repeat(5, 1fr)', borderBottom: '0.5px solid rgba(200,194,187,0.09)' }}>
+                        <div />
+                        {days.map((d) => {
+                          const key = localDateKey(d)
+                          const isToday = d.toDateString() === new Date().toDateString()
+                          const w = weatherByDate[key]
+                          return (
+                            <div key={key} style={{ padding: '6px 4px', textAlign: 'center', borderLeft: '0.5px solid rgba(200,194,187,0.06)', background: isToday ? 'rgba(200,194,187,0.04)' : 'transparent' }}>
+                              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 4 }}>
+                                <span style={{ fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', color: isToday ? '#C8C2BB' : 'rgba(200,194,187,0.35)' }}>{d.toLocaleDateString('en-NZ', { weekday: 'short' })}</span>
+                                <span style={{ fontSize: 12, fontWeight: isToday ? 700 : 500, color: isToday ? '#fff' : 'rgba(200,194,187,0.7)' }}>{d.getDate()}</span>
+                              </div>
+                              {w ? (
+                                <div style={{ fontSize: 8.5, color: 'rgba(200,194,187,0.4)', lineHeight: 1.4, marginTop: 2 }}>
+                                  <span title="Auckland">🏙️{weatherIcon(w.akl.code)} {Math.round(w.akl.min)}–{Math.round(w.akl.max)}°</span>
+                                  {w.wko && <span title="Waikato"> · 🚜{weatherIcon(w.wko.code)} {Math.round(w.wko.min)}–{Math.round(w.wko.max)}°</span>}
+                                </div>
+                              ) : (
+                                <div style={{ fontSize: 9, color: 'rgba(200,194,187,0.15)' }}>—</div>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '38px repeat(5, 1fr)', position: 'relative', maxHeight: 360, overflowY: 'auto' }}>
+                        <div>
+                          {Array.from({ length: GRID_END - GRID_START }, (_, i) => GRID_START + i).map(h => (
+                            <div key={h} style={{ height: ROW_H, fontSize: 8, color: 'rgba(200,194,187,0.25)', textAlign: 'right', paddingRight: 4, position: 'relative' }}>
+                              <span style={{ position: 'absolute', top: -5, right: 4 }}>{h === 12 ? '12p' : h > 12 ? (h - 12) + 'p' : h + 'a'}</span>
+                            </div>
+                          ))}
+                        </div>
+                        {days.map((d) => {
+                          const key = localDateKey(d)
+                          const isToday = d.toDateString() === new Date().toDateString()
+                          const occs = occByDate[key] || []
+                          const timed = occs.filter(o => o.start)
+                          const untimed = occs.filter(o => !o.start)
+                          return (
+                            <div key={key} style={{ position: 'relative', borderLeft: '0.5px solid rgba(200,194,187,0.06)', background: isToday ? 'rgba(200,194,187,0.02)' : 'transparent' }}>
+                              {Array.from({ length: GRID_END - GRID_START }, (_, i) => GRID_START + i).map(h => (
+                                <div key={h} style={{ height: ROW_H, borderBottom: '0.5px solid rgba(200,194,187,0.04)' }} />
+                              ))}
+                              {untimed.length > 0 && (
+                                <div style={{ position: 'absolute', top: 2, left: 2, right: 2, display: 'flex', flexDirection: 'column', gap: 2, zIndex: 1 }}>
+                                  {untimed.map(occ => {
+                                    const sc = STAGE_C[occ.project.stage] || { color: '#C8C2BB', bg: 'rgba(200,194,187,0.15)' }
+                                    return (
+                                      <div key={occ.key} onClick={() => setModalProject(occ.project)} title={occ.project.title + ' (no time set)'} style={{ fontSize: 9, padding: '2px 5px', borderRadius: 3, background: sc.bg, color: sc.color, cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{occ.project.title}</div>
+                                    )
+                                  })}
+                                </div>
+                              )}
+                              {timed.map((occ, oi) => {
+                                const sh = Math.min(Math.max(toHours(occ.start!), GRID_START), GRID_END)
+                                const eh = occ.end ? Math.min(Math.max(toHours(occ.end), sh + 0.5), GRID_END) : sh + 1
+                                const top = (sh - GRID_START) * ROW_H
+                                const height = Math.max((eh - sh) * ROW_H, 16)
+                                const sc = STAGE_C[occ.project.stage] || { color: '#C8C2BB', bg: 'rgba(200,194,187,0.15)' }
+                                const widthPct = timed.length > 1 ? 100 / timed.length : 100
+                                return (
+                                  <div key={occ.key} onClick={() => setModalProject(occ.project)} style={{ position: 'absolute', top, left: `${oi * widthPct}%`, width: `calc(${widthPct}% - 3px)`, height, background: sc.bg, border: `0.5px solid ${sc.color}`, borderRadius: 3, padding: '2px 4px', cursor: 'pointer', overflow: 'hidden', zIndex: 2, lineHeight: 1.25 }}>
+                                    <div style={{ fontSize: 9, fontWeight: 500, color: sc.color, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{occ.project.title}</div>
+                                    {height >= 24 && <div style={{ fontSize: 8, color: 'rgba(200,194,187,0.45)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{formatTime12(occ.start!)}{occ.end ? '–' + formatTime12(occ.end) : ''}</div>}
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })()}
               </div>
               <div className="ec-form-grid-2" style={{ padding: 28, display: 'grid', gridTemplateColumns: userRole === 'studio' ? '1fr 1fr' : '1fr', gap: 20 }}>
                 {userRole === 'studio' && (
