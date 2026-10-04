@@ -9,6 +9,98 @@ const VIDEO_FORMATS = ['1920×1080', '1080×1080', '9×16 Vertical', '4×5', '4K
 const PHOTO_FORMATS = ['High-res JPEG', 'RAW Files', 'Web-res JPEG']
 type BriefDeliverable = { id: string; name: string; quantity: number; duration: string; formats: string[]; notes: string }
 
+// Shared line-icon set — plain stroke-based SVGs instead of emoji throughout
+// the client portal (nav, empty states, status markers). Kept deliberately
+// simple/minimal (single stroke weight, no fills bar the play triangle) to
+// match the rest of the portal's restrained visual language.
+type IconProps = { size?: number; color?: string; style?: React.CSSProperties }
+const ICON_BASE = { fill: 'none' as const, stroke: 'currentColor', strokeWidth: 1.6, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const }
+function IconDashboard({ size = 17, color, style }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" style={{ color, ...style }} {...ICON_BASE}>
+      <rect x="3" y="3" width="7.5" height="7.5" rx="1.3" />
+      <rect x="13.5" y="3" width="7.5" height="7.5" rx="1.3" />
+      <rect x="3" y="13.5" width="7.5" height="7.5" rx="1.3" />
+      <rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.3" />
+    </svg>
+  )
+}
+function IconCalendar({ size = 17, color, style }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" style={{ color, ...style }} {...ICON_BASE}>
+      <rect x="3" y="5" width="18" height="16" rx="2" />
+      <line x1="3" y1="9.5" x2="21" y2="9.5" />
+      <line x1="8" y1="3" x2="8" y2="7" />
+      <line x1="16" y1="3" x2="16" y2="7" />
+    </svg>
+  )
+}
+function IconClapper({ size = 17, color, style }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" style={{ color, ...style }} {...ICON_BASE}>
+      <path d="M3 9l1.6-3.6a1 1 0 0 1 1.3-.5L9 6M9.5 9l1.1-3.8a1 1 0 0 1 1.2-.7l3.3.9M16 9l1-3.3a1 1 0 0 1 1.3-.6l1.6.7a1 1 0 0 1 .6 1.3L19.5 9" />
+      <rect x="3" y="9" width="18" height="11.5" rx="1.5" />
+    </svg>
+  )
+}
+function IconFolder({ size = 17, color, style }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" style={{ color, ...style }} {...ICON_BASE}>
+      <path d="M3 7.2A2 2 0 0 1 5 5.2h3.6l1.8 2H19a2 2 0 0 1 2 2v7.6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7.2z" />
+    </svg>
+  )
+}
+function IconDocument({ size = 17, color, style }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" style={{ color, ...style }} {...ICON_BASE}>
+      <path d="M7 3h6.5L19 8.5V19a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" />
+      <path d="M13.5 3v5.5H19" />
+      <line x1="8.3" y1="13" x2="15.5" y2="13" />
+      <line x1="8.3" y1="16.5" x2="15.5" y2="16.5" />
+    </svg>
+  )
+}
+function IconReceipt({ size = 17, color, style }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" style={{ color, ...style }} {...ICON_BASE}>
+      <path d="M6 3h12v18l-2-1.4L14 21l-2-1.4L10 21l-2-1.4L6 21V3z" />
+      <line x1="9" y1="8" x2="15" y2="8" />
+      <line x1="9" y1="12" x2="15" y2="12" />
+    </svg>
+  )
+}
+function IconSignOut({ size = 16, color, style }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" style={{ color, ...style }} {...ICON_BASE}>
+      <path d="M9 21H5.5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2H9" />
+      <polyline points="15.5 16.5 20.5 12 15.5 7.5" />
+      <line x1="20.5" y1="12" x2="9" y2="12" />
+    </svg>
+  )
+}
+function IconPaperclip({ size = 14, color, style }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" style={{ color, ...style }} {...ICON_BASE}>
+      <path d="M20.5 12.6l-8.5 8.5a4.3 4.3 0 1 1-6-6l8.1-8.1a2.8 2.8 0 1 1 4 4l-7.3 7.3a1.2 1.2 0 0 1-1.7-1.7l6.5-6.5" />
+    </svg>
+  )
+}
+function IconClock({ size = 16, color, style }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" style={{ color, ...style }} {...ICON_BASE}>
+      <circle cx="12" cy="12" r="9" />
+      <polyline points="12 7.5 12 12 15.5 14" />
+    </svg>
+  )
+}
+function IconPlay({ size = 14, color, style }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" style={{ color, ...style }}>
+      <polygon points="6 4 20 12 6 20" fill="currentColor" />
+    </svg>
+  )
+}
+
 function DriveThumb({ project, onClick }: { project: any; onClick: () => void }) {
   const [firstFile, setFirstFile] = React.useState<any>(null)
   const [loading, setLoading] = React.useState(true)
@@ -46,14 +138,14 @@ function DriveThumb({ project, onClick }: { project: any; onClick: () => void })
           isVideo(firstFile.mimeType) ? (
             <div style={{ width:'100%', height:'100%', position:'relative', overflow:'hidden', background:'#0a0c10', display:'flex', alignItems:'center', justifyContent:'center' }}>
               <img src={`/api/drive?thumb=${firstFile.id}`} alt={project.title} style={{ width:'100%', height:'100%', objectFit:'cover', opacity:0.8 }} onError={e=>{(e.target as HTMLImageElement).style.display='none'}} />
-              <div style={{ position:'absolute', width:36, height:36, borderRadius:'50%', background:'rgba(0,0,0,0.7)', display:'flex', alignItems:'center', justifyContent:'center', border:'1.5px solid rgba(200,194,187,0.4)' }}><span style={{ fontSize:14, marginLeft:3 }}>▶</span></div>
+              <div style={{ position:'absolute', width:36, height:36, borderRadius:'50%', background:'rgba(0,0,0,0.7)', display:'flex', alignItems:'center', justifyContent:'center', border:'1.5px solid rgba(200,194,187,0.4)' }}><IconPlay size={14} style={{ marginLeft:2, color:'#C8C2BB' }} /></div>
             </div>
           ) : (
             <img src={`https://lh3.googleusercontent.com/d/${firstFile.id}`} alt={project.title} style={{ width:'100%', height:'100%', objectFit:'cover' }} onError={e=>{(e.target as HTMLImageElement).style.display='none'}} />
           )
         ) : (
           <div style={{ width:'100%', height:'100%', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:6 }}>
-            <span style={{ fontSize:28, opacity:0.25 }}>📁</span>
+            <IconFolder size={26} style={{ color: 'rgba(200,194,187,0.25)' }} />
             <span style={{ fontSize:10, color:'rgba(200,194,187,0.25)', letterSpacing:'0.08em', textTransform:'uppercase' }}>Coming soon</span>
           </div>
         )}
@@ -262,7 +354,7 @@ function DriveFolder({ project, clientEmail, clientName }: { project: any; clien
       </div>
       {stack.length > 0 && (
         <div style={{ display:'flex', flexWrap:'wrap' as const, alignItems:'center', gap:4, marginBottom:14, fontSize:11 }}>
-          <span onClick={() => goToCrumb(-1)} style={{ cursor:'pointer', color: 'rgba(200,194,187,0.4)', textDecoration:'underline' }}>📁 {project.title}</span>
+          <span onClick={() => goToCrumb(-1)} style={{ cursor:'pointer', color: 'rgba(200,194,187,0.4)', textDecoration:'underline', display:'inline-flex', alignItems:'center', gap:5 }}><IconFolder size={12} /> {project.title}</span>
           {stack.map((s, i) => (
             <span key={s.id} style={{ display:'flex', alignItems:'center', gap:4 }}>
               <span style={{ color:'rgba(200,194,187,0.25)' }}>/</span>
@@ -287,7 +379,7 @@ function DriveFolder({ project, clientEmail, clientName }: { project: any; clien
           <div key={file.id} style={{ background:'#1A1F28', border:'0.5px solid rgba(200,194,187,0.09)', borderRadius:7, overflow:'hidden', cursor:'pointer', width: file.videoMediaMetadata && parseInt(file.videoMediaMetadata.height) > parseInt(file.videoMediaMetadata.width) ? 'calc(33% - 10px)' : 'calc(50% - 7px)' }} onClick={() => { if (isFolder(file.mimeType)) openFolder(file); else setPreviewFile(file) }}>
             <div style={{ aspectRatio: file.videoMediaMetadata && parseInt(file.videoMediaMetadata.height) > parseInt(file.videoMediaMetadata.width) ? '9/16' : '16/9', background:'#0E1014', position:'relative', overflow:'hidden', display:'flex', alignItems:'center', justifyContent:'center' }}>
               {isFolder(file.mimeType) ? (
-                <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:36 }}>📁</div>
+                <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center' }}><IconFolder size={32} style={{ color:'rgba(200,194,187,0.5)' }} /></div>
               ) : isVideo(file.mimeType) ? (
                 <div style={{ width:'100%', height:'100%', position:'relative', overflow:'hidden', background:'#0a0c10' }} onClick={e => e.stopPropagation()}>
                   {file.videoMediaMetadata && parseInt(file.videoMediaMetadata.height) > parseInt(file.videoMediaMetadata.width) ? (
@@ -299,7 +391,7 @@ function DriveFolder({ project, clientEmail, clientName }: { project: any; clien
               ) : isImage(file.mimeType) ? (
                 <img src={`https://lh3.googleusercontent.com/d/${file.id}`} alt={file.name} style={{ width:'100%', height:'100%', objectFit:'cover' }} onError={e => { const t=e.target as HTMLImageElement; t.src=`https://drive.google.com/thumbnail?id=${file.id}&sz=w800`; t.onerror=()=>{t.style.display='none'} }} />
               ) : (
-                <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:32 }}>📄</div>
+                <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center' }}><IconDocument size={28} style={{ color:'rgba(200,194,187,0.5)' }} /></div>
               )}
               {!isFolder(file.mimeType) && <span style={{ position:'absolute', top:8, left:8, fontSize:9, letterSpacing:'0.12em', textTransform:'uppercase', background:'rgba(0,0,0,0.6)', color:'#C8C2BB', padding:'3px 8px', borderRadius:2 }}>{isVideo(file.mimeType) ? 'Video' : isImage(file.mimeType) ? 'Photo' : 'File'}</span>}
               {file.videoMediaMetadata && parseInt(file.videoMediaMetadata.height) > parseInt(file.videoMediaMetadata.width) && <span style={{ position:'absolute', top:8, right:8, fontSize:9, letterSpacing:'0.12em', textTransform:'uppercase', background:'rgba(0,0,0,0.6)', color:'rgba(200,194,187,0.7)', padding:'3px 8px', borderRadius:2 }}>Vertical</span>}
@@ -390,7 +482,7 @@ function AttachmentUploader({ attachments, uploading, onUpload, onRemove }: { at
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
           {attachments.map(a => (
             <div key={a.url} style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '8px 12px' }}>
-              <span style={{ fontSize: 13 }}>📎</span>
+              <IconPaperclip size={13} style={{ color: 'rgba(200,194,187,0.4)', flexShrink: 0 }} />
               <a href={a.url} target="_blank" rel="noopener noreferrer" style={{ flex: 1, fontSize: 12, color: '#C8C2BB', textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.name}</a>
               <span style={{ fontSize: 10, color: 'rgba(200,194,187,0.3)', flexShrink: 0 }}>{a.size > 1024 * 1024 ? (a.size / (1024 * 1024)).toFixed(1) + ' MB' : Math.round(a.size / 1024) + ' KB'}</span>
               <button onClick={() => onRemove(a.url)} style={{ fontSize: 13, color: 'rgba(210,90,90,0.6)', background: 'transparent', border: 'none', cursor: 'pointer', flexShrink: 0 }}>✕</button>
@@ -652,19 +744,19 @@ export default function ClientPortal() {
 
   const propertyShootPackages = [
     {
-      name: 'Starter Content Package', price: 800,
-      tag: 'Starter package',
-      description: 'A punchy multi-format bundle — a 20s property ad, a branded carousel, and a short video ad to round out your social presence.',
-      includes: ['20s property ad', 'Branded carousel', '5–10s video ad'],
+      name: 'Content Campaign Package', price: 890,
+      tag: 'Campaign package',
+      description: "Give us direction or just let us do the work creating ads for your property. Campaigns comprise of momentum and this load of content does exactly that.",
+      includes: ['20-30 Second Ad', '8-10 Slide Standard Carousel', '5-8 Second Ad'],
       allIncluded: true,
       deliverables: [
-        { name: 'Property Ad (20s)', price: 0, includes: ['1x social-optimised video', 'Vertical & landscape formats', 'Google Drive delivery'] },
-        { name: 'Carousel', price: 0, includes: ['1x branded property carousel', 'Google Drive delivery'] },
-        { name: 'Video Ad (5–10s)', price: 0, includes: ['1x short-form video ad', 'Vertical & landscape formats', 'Google Drive delivery'] },
+        { name: 'Ad (20-30s)', price: 0, includes: ['1x social-optimised video', 'Vertical & landscape formats', 'Google Drive delivery'] },
+        { name: 'Carousel (8-10 slides)', price: 0, includes: ['1x branded property carousel', 'Google Drive delivery'] },
+        { name: 'Ad (5-8s)', price: 0, includes: ['1x short-form video ad', 'Vertical & landscape formats', 'Google Drive delivery'] },
       ]
     },
     {
-      name: 'Signature', price: 890,
+      name: 'The Walkthrough Package', price: 890,
       tag: 'Our base package',
       description: '60–90s cinematic property tour with a handful of agent lifestyle shots to bring the listing to life.',
       includes: ['60–90s property tour', 'Agent lifestyle shots'],
@@ -674,22 +766,22 @@ export default function ClientPortal() {
       ]
     },
     {
-      name: 'Lifestyle Package', price: 1280,
+      name: 'The lifestyle and living Package', price: 1280,
       tag: 'The lifestyle showcase',
-      description: 'Everything in Signature, plus a full hour of lifestyle filming with talent to elevate the property narrative.',
-      includes: ['60–90s property tour', '1hr lifestyle shoot with talent', 'Agent lifestyle shots'],
+      description: 'Everything in The Walkthrough Package, plus a full hour of lifestyle filming with talent to elevate the property narrative.',
+      includes: ['60–90s property tour', '1hr lifestyle shoot with talent', 'Agent lifestyle shots', 'Vertical formatting'],
       deliverables: [
-        { name: 'Showcase Film (60–90s)', price: 0, includes: ['1x cinematic film', 'Google Drive delivery'] },
-        { name: '3x Reels + Carousel', price: 0, includes: ['3x social reels', '1x carousel', 'Google Drive delivery'] },
+        { name: 'Showcase Film (60–90s)', price: 0, includes: ['1x cinematic film', 'Vertical & landscape formats', 'Google Drive delivery'] },
+        { name: '3x Reels + Carousel', price: 0, includes: ['3x social reels', '1x carousel', 'Vertical & landscape formats', 'Google Drive delivery'] },
       ]
     },
     {
-      name: 'Architectural', price: 2480,
+      name: 'Media Release Package', price: 2480,
       tag: 'Full production',
-      description: 'Our most comprehensive package. Morning, afternoon & twilight shoot with lifestyle elements, talking to camera, and unlimited creative flexibility.',
-      includes: ['Morning, afternoon & twilight shoot', 'Lifestyle shoot + talking to camera', 'Unlimited creative elements', '2 days editing', '1x Market-leading property tour (1–2 min)', '1x Social media reel (15–30s)'],
+      description: 'For the most upmarket and desirable homes. Everything you could need to drill home the perfect marketing campaign, showcased only in the best light.',
+      includes: ['Morning, afternoon & twilight shoot', 'Lifestyle shoot + talking to camera', '90 Second Market Leading Property Showcase', '20-30 Second Ad', 'Creative Carousel', '5-8 Second Ad'],
       deliverables: [
-        { name: 'Full Architectural Package', price: 0, includes: ['1x Property tour (1–2 min)', '1x Social reel (15–30s)', 'Google Drive delivery'] },
+        { name: 'Full Media Release Package', price: 0, includes: ['1x Market-leading property showcase (90s)', '1x Ad (20-30s)', '1x Creative carousel', '1x Ad (5-8s)', 'Google Drive delivery'] },
       ]
     },
   ]
@@ -795,21 +887,26 @@ export default function ClientPortal() {
 
         <nav style={{ padding: '18px 12px', flex: 1 }}>
           {[
-            { id: 'dashboard', label: 'Dashboard' },
-            { id: 'book', label: 'Book a Shoot' },
-            { id: 'upcoming', label: 'Our Shoots' },
-            { id: 'library', label: 'My Library' },
-            { id: 'pitches', label: 'Our Briefs' },
-            { id: 'invoices', label: 'Invoices' },
-          ].map(item => (
-            <button key={item.id} onClick={() => { setMobileMenuOpen(false); setActiveView(item.id); setBookingStep(1); setSelectedCat(''); setSelectedShoot(null); setSelectedDel(null); setSelectedAddons([]); setTcAccepted(false); setPreferredDate(''); setDraftDue(''); setDeliveryDue(''); setBookingNotes(''); setAccessNotes(''); setPropertyAddress(''); setProjectType(''); setProjectTitle(''); setProjectDescription(''); setTargetAudience(''); setKeyMessage(''); setTalentDetails(''); setBriefDeliverables([{ id: '1', name: '', quantity: 1, duration: '', formats: [], notes: '' }]); setDateFlexible(false); setShootDuration(''); setReferenceLinks(''); setBudgetRange(''); setBookingAttachments([]) }} style={{ display: 'flex', alignItems: 'center', width: '100%', padding: '13px 14px', borderRadius: 6, fontSize: 13, letterSpacing: '0.01em', fontWeight: activeView === item.id ? 600 : 500, color: activeView === item.id ? '#fff' : 'rgba(200,194,187,0.5)', background: activeView === item.id ? 'rgba(61,71,86,0.4)' : 'transparent', border: activeView === item.id ? '0.5px solid rgba(200,194,187,0.15)' : '0.5px solid transparent', cursor: 'pointer', marginBottom: 8, textAlign: 'left', fontFamily: 'var(--font-space-grotesk), Inter, sans-serif' }}>
-              {item.label}
-            </button>
-          ))}
+            { id: 'dashboard', label: 'Dashboard', Icon: IconDashboard },
+            { id: 'book', label: 'Book a Shoot', Icon: IconCalendar },
+            { id: 'upcoming', label: 'Our Shoots', Icon: IconClapper },
+            { id: 'library', label: 'My Library', Icon: IconFolder },
+            { id: 'pitches', label: 'Our Briefs', Icon: IconDocument },
+            { id: 'invoices', label: 'Invoices', Icon: IconReceipt },
+          ].map(item => {
+            const active = activeView === item.id
+            return (
+              <button key={item.id} onClick={() => { setMobileMenuOpen(false); setActiveView(item.id); setBookingStep(1); setSelectedCat(''); setSelectedShoot(null); setSelectedDel(null); setSelectedAddons([]); setTcAccepted(false); setPreferredDate(''); setDraftDue(''); setDeliveryDue(''); setBookingNotes(''); setAccessNotes(''); setPropertyAddress(''); setProjectType(''); setProjectTitle(''); setProjectDescription(''); setTargetAudience(''); setKeyMessage(''); setTalentDetails(''); setBriefDeliverables([{ id: '1', name: '', quantity: 1, duration: '', formats: [], notes: '' }]); setDateFlexible(false); setShootDuration(''); setReferenceLinks(''); setBudgetRange(''); setBookingAttachments([]) }} style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 11, width: '100%', padding: '11px 14px 11px 17px', borderRadius: 6, fontSize: 13, letterSpacing: '0.01em', fontWeight: active ? 600 : 500, color: active ? '#fff' : 'rgba(200,194,187,0.5)', background: active ? 'rgba(61,71,86,0.4)' : 'transparent', border: active ? '0.5px solid rgba(200,194,187,0.15)' : '0.5px solid transparent', cursor: 'pointer', marginBottom: 4, textAlign: 'left', fontFamily: 'inherit' }}>
+                {active && <span style={{ position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)', width: 2.5, height: 15, borderRadius: 2, background: '#C8C2BB' }} />}
+                <item.Icon size={17} style={{ flexShrink: 0, opacity: active ? 1 : 0.75 }} />
+                {item.label}
+              </button>
+            )
+          })}
         </nav>
 
         <div style={{ padding: 14, borderTop: '0.5px solid rgba(200,194,187,0.09)' }}>
-          <button onClick={handleSignOut} style={{ width: '100%', padding: '9px 10px', borderRadius: 5, fontSize: 12, color: 'rgba(200,194,187,0.3)', background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}>Sign out</button>
+          <button onClick={handleSignOut} style={{ display: 'flex', alignItems: 'center', gap: 9, width: '100%', padding: '9px 10px', borderRadius: 5, fontSize: 12, color: 'rgba(200,194,187,0.3)', background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}><IconSignOut size={15} style={{ flexShrink: 0 }} />Sign out</button>
         </div>
       </aside>
 
@@ -910,8 +1007,8 @@ export default function ClientPortal() {
                       </div>
                       {awaitingSchedule.length > 0 && awaitingSchedule.map((b: any) => (
                         <div key={b.id} onClick={() => setActiveView('upcoming')} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.06)', cursor: 'pointer' }}>
-                          <div style={{ width: 42, flexShrink: 0, textAlign: 'center', background: 'rgba(210,175,80,0.08)', border: '0.5px solid rgba(210,175,80,0.2)', borderRadius: 5, padding: '5px 3px' }}>
-                            <div style={{ fontSize: 16, opacity: 0.5 }}>⏳</div>
+                          <div style={{ width: 42, flexShrink: 0, textAlign: 'center', background: 'rgba(210,175,80,0.08)', border: '0.5px solid rgba(210,175,80,0.2)', borderRadius: 5, padding: '10px 3px' }}>
+                            <IconClock size={16} style={{ color: 'rgba(210,175,80,0.8)' }} />
                           </div>
                           <div style={{ flex: 1 }}>
                             <div style={{ fontSize: 13, fontWeight: 500, color: '#C8C2BB', marginBottom: 3 }}>{b.address || b.shoot_package || 'Booking request'}</div>
@@ -1740,8 +1837,8 @@ export default function ClientPortal() {
                           return (
                             <div key={b.id} style={{ padding:'14px 18px', borderBottom: isLast ? 'none' : '0.5px solid rgba(200,194,187,0.06)' }}>
                               <div style={{ display:'flex', alignItems:'center', gap:14, marginBottom:12 }}>
-                                <div style={{ width:42, flexShrink:0, textAlign:'center', background:'rgba(100,150,220,0.08)', border:'0.5px solid rgba(100,150,220,0.2)', borderRadius:5, padding:'6px 4px' }}>
-                                  <div style={{ fontSize:16, opacity:0.6 }}>📅</div>
+                                <div style={{ width:42, flexShrink:0, textAlign:'center', background:'rgba(100,150,220,0.08)', border:'0.5px solid rgba(100,150,220,0.2)', borderRadius:5, padding:'10px 4px' }}>
+                                  <IconCalendar size={16} style={{ color: 'rgba(100,150,220,0.85)' }} />
                                 </div>
                                 <div style={{ flex:1 }}>
                                   <div style={{ fontSize:13, fontWeight:500, color:'#C8C2BB', marginBottom:2 }}>{b.address || b.shoot_package || 'Booking request'}</div>
@@ -1769,8 +1866,8 @@ export default function ClientPortal() {
                         if (b.status === 'alt_requested') {
                           return (
                             <div key={b.id} style={{ display:'flex', alignItems:'center', gap:14, padding:'14px 18px', borderBottom: isLast ? 'none' : '0.5px solid rgba(200,194,187,0.06)' }}>
-                              <div style={{ width:42, flexShrink:0, textAlign:'center', background:'rgba(160,100,220,0.08)', border:'0.5px solid rgba(160,100,220,0.2)', borderRadius:5, padding:'6px 4px' }}>
-                                <div style={{ fontSize:16, opacity:0.6 }}>⏳</div>
+                              <div style={{ width:42, flexShrink:0, textAlign:'center', background:'rgba(160,100,220,0.08)', border:'0.5px solid rgba(160,100,220,0.2)', borderRadius:5, padding:'10px 4px' }}>
+                                <IconClock size={16} style={{ color: 'rgba(160,100,220,0.85)' }} />
                               </div>
                               <div style={{ flex:1 }}>
                                 <div style={{ fontSize:13, fontWeight:500, color:'#C8C2BB', marginBottom:2 }}>{b.address || b.shoot_package || 'Booking request'}</div>
@@ -1796,8 +1893,8 @@ export default function ClientPortal() {
                         }
                         return (
                           <div key={b.id} style={{ display:'flex', alignItems:'center', gap:14, padding:'14px 18px', borderBottom: isLast ? 'none' : '0.5px solid rgba(200,194,187,0.06)' }}>
-                            <div style={{ width:42, flexShrink:0, textAlign:'center', background:'rgba(210,175,80,0.08)', border:'0.5px solid rgba(210,175,80,0.2)', borderRadius:5, padding:'6px 4px' }}>
-                              <div style={{ fontSize:16, opacity:0.5 }}>⏳</div>
+                            <div style={{ width:42, flexShrink:0, textAlign:'center', background:'rgba(210,175,80,0.08)', border:'0.5px solid rgba(210,175,80,0.2)', borderRadius:5, padding:'10px 4px' }}>
+                              <IconClock size={16} style={{ color: 'rgba(210,175,80,0.8)' }} />
                             </div>
                             <div style={{ flex:1 }}>
                               <div style={{ fontSize:13, fontWeight:500, color:'#C8C2BB', marginBottom:2 }}>{b.address || b.shoot_package || 'Booking request'}</div>
@@ -1890,7 +1987,7 @@ export default function ClientPortal() {
                     <div className="ec-grid-resp" style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:16 }}>
                       {projectsWithDrive.map((p: any) => (
                         <div key={p.id} onClick={() => setLibraryProject(p)} style={{ background:'#1A1F28', border:'0.5px solid rgba(200,194,187,0.09)', borderRadius:7, padding:'20px 22px', cursor:'pointer', display:'flex', alignItems:'center', gap:16 }} onMouseEnter={e=>(e.currentTarget.style.borderColor='rgba(200,194,187,0.2)')} onMouseLeave={e=>(e.currentTarget.style.borderColor='rgba(200,194,187,0.09)')}>
-                          <div style={{ width:48, height:48, borderRadius:8, background:'rgba(200,194,187,0.06)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:22, flexShrink:0 }}>📁</div>
+                          <div style={{ width:48, height:48, borderRadius:8, background:'rgba(200,194,187,0.06)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}><IconFolder size={20} style={{ color: 'rgba(200,194,187,0.5)' }} /></div>
                           <div style={{ flex:1 }}>
                             <div style={{ fontSize:13, fontWeight:500, color:'#C8C2BB', marginBottom:4 }}>{p.title}</div>
                             <div style={{ fontSize:11, color:'rgba(200,194,187,0.4)' }}>{p.shoot_date ? new Date(p.shoot_date+'T12:00:00').toLocaleDateString('en-NZ',{day:'numeric',month:'short',year:'numeric'}) : ''}{p.address ? ' · '+p.address.split(',')[0] : ''}</div>
@@ -1928,7 +2025,7 @@ export default function ClientPortal() {
                     const sc = statusColors[brief.status] || statusColors.sent
                     return (
                       <div key={brief.id} style={{ display:'flex', alignItems:'center', gap:14, padding:'16px 20px', borderBottom: i < clientBriefs.length-1 ? '0.5px solid rgba(200,194,187,0.06)':'none' }}>
-                        <div style={{ width:36, height:36, borderRadius:5, background:'rgba(61,71,86,0.4)', border:'0.5px solid rgba(200,194,187,0.09)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, fontSize:18 }}>▤</div>
+                        <div style={{ width:36, height:36, borderRadius:5, background:'rgba(61,71,86,0.4)', border:'0.5px solid rgba(200,194,187,0.09)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}><IconDocument size={17} style={{ color: 'rgba(200,194,187,0.5)' }} /></div>
                         <div style={{ flex:1 }}>
                           <div style={{ fontSize:13, fontWeight:500, color:'#C8C2BB', marginBottom:2 }}>{brief.project_name || 'Untitled brief'}</div>
                           <div style={{ fontSize:11, color:'rgba(200,194,187,0.4)' }}>Received {new Date(brief.created_at).toLocaleDateString('en-NZ',{day:'numeric',month:'short',year:'numeric'})}</div>
@@ -2118,7 +2215,7 @@ export default function ClientPortal() {
             </div>
             {clientInvoices.length === 0 ? (
               <div style={{ padding: 28, textAlign: 'center', paddingTop: 80 }}>
-                <div style={{ fontSize: 40, marginBottom: 16, opacity: 0.3 }}>🧾</div>
+                <IconReceipt size={36} style={{ marginBottom: 16, color: 'rgba(200,194,187,0.3)' }} />
                 <div style={{ fontSize: 14, color: 'rgba(200,194,187,0.4)', marginBottom: 8 }}>No invoices yet</div>
                 <div style={{ fontSize: 12, color: 'rgba(200,194,187,0.25)' }}>Invoice and payment history will appear here once we send one.</div>
               </div>
@@ -2128,7 +2225,7 @@ export default function ClientPortal() {
                   const sc = invoice.status === 'paid' ? { color: 'rgba(100,200,130,0.9)', bg: 'rgba(30,70,45,0.4)' } : { color: 'rgba(100,150,220,0.9)', bg: 'rgba(25,45,80,0.4)' }
                   return (
                     <div key={invoice.id} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '16px 20px', background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7 }}>
-                      <div style={{ width: 36, height: 36, borderRadius: 5, background: 'rgba(61,71,86,0.4)', border: '0.5px solid rgba(200,194,187,0.09)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 18 }}>🧾</div>
+                      <div style={{ width: 36, height: 36, borderRadius: 5, background: 'rgba(61,71,86,0.4)', border: '0.5px solid rgba(200,194,187,0.09)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><IconReceipt size={17} style={{ color: 'rgba(200,194,187,0.5)' }} /></div>
                       <div style={{ flex: 1 }}>
                         <div style={{ fontSize: 13, fontWeight: 500, color: '#C8C2BB', marginBottom: 2 }}>Invoice #{invoice.id.slice(0, 8).toUpperCase()}</div>
                         <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>{invoice.sent_at ? new Date(invoice.sent_at).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' }) : ''}</div>
@@ -2230,7 +2327,7 @@ export default function ClientPortal() {
               {selectedProject.drive_url && (
                 <div style={{ marginBottom: 20 }}>
                   <a href={selectedProject.drive_url} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: 'rgba(100,200,130,0.06)', border: '0.5px solid rgba(100,200,130,0.2)', borderRadius: 6, textDecoration: 'none' }}>
-                    <span style={{ fontSize: 20 }}>📁</span>
+                    <IconFolder size={19} style={{ color: 'rgba(100,200,130,0.85)', flexShrink: 0 }} />
                     <div>
                       <div style={{ fontSize: 12, fontWeight: 500, color: 'rgba(100,200,130,0.9)' }}>View project files</div>
                       <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>Opens Google Drive folder</div>
@@ -2289,8 +2386,8 @@ export default function ClientPortal() {
             <div style={{ maxHeight: '60vh', overflowY: 'auto' }}>
               {notifications.map((n: any, i: number) => (
                 <div key={n.id} style={{ padding: '18px 24px', borderBottom: i < notifications.length - 1 ? '0.5px solid rgba(200,194,187,0.06)' : 'none', display: 'flex', gap: 14, alignItems: 'flex-start' }}>
-                  <div style={{ width: 36, height: 36, borderRadius: '50%', background: n.type === 'booking_confirmed' ? 'rgba(100,200,130,0.15)' : 'rgba(210,175,80,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>
-                    {n.type === 'booking_confirmed' ? '✓' : '📅'}
+                  <div style={{ width: 36, height: 36, borderRadius: '50%', background: n.type === 'booking_confirmed' ? 'rgba(100,200,130,0.15)' : 'rgba(210,175,80,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    {n.type === 'booking_confirmed' ? <span style={{ fontSize: 16, color: 'rgba(100,200,130,0.9)' }}>✓</span> : <IconCalendar size={16} style={{ color: 'rgba(210,175,80,0.9)' }} />}
                   </div>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 13, fontWeight: 600, color: n.type === 'booking_confirmed' ? 'rgba(100,200,130,0.9)' : 'rgba(210,175,80,0.9)', marginBottom: 5 }}>{n.title}</div>
