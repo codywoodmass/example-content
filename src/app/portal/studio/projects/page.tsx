@@ -522,10 +522,35 @@ function ProjectsPageInner() {
   async function deleteProject(project: Project) {
     const isFromBooking = project.from_booking
     const msg = isFromBooking
-      ? 'This project was created from a client booking. Deleting it will remove it from your system but will NOT automatically remove any Google Calendar events. Are you sure you want to delete this project?'
+      ? 'This project was created from a client booking. Deleting it will remove it from your system but will NOT automatically remove any Google Calendar events. The client will still see it in their portal, labelled as cancelled. Are you sure you want to delete this project?'
       : 'Are you sure you want to permanently delete this project? This cannot be undone.'
     if (!(await confirmDialog(msg))) return
-    await supabase.from('projects1').delete().eq('id', project.id)
+
+    // A project's originating booking still points at it (bookings1.project_id
+    // references projects1), and the client's own portal reads that booking
+    // row — not the project — to show them anything at all once the project
+    // is gone. Cancel the booking (so they see "Cancelled" instead of the
+    // booking just vanishing) and detach it *before* deleting the project,
+    // so the delete never trips the foreign key.
+    if (isFromBooking) {
+      const { data: booking } = await supabase.from('bookings1').select('id').eq('project_id', project.id).maybeSingle()
+      if (booking) {
+        await supabase.from('bookings1').update({ status: 'cancelled', project_id: null }).eq('id', booking.id)
+        try {
+          await supabase.from('notifications').insert([{
+            user_email: project.email,
+            type: 'booking_cancelled',
+            title: 'Booking cancelled',
+            message: `Your booking for ${project.title || project.address || 'your shoot'} has been cancelled.`,
+            project_id: null,
+            read: false,
+          }])
+        } catch (e) { console.error('Cancellation notification error:', e) }
+      }
+    }
+
+    const { error } = await supabase.from('projects1').delete().eq('id', project.id)
+    if (error) { notify('Delete failed: ' + error.message, 'error'); return }
     setProjects(p => p.filter(proj => proj.id !== project.id))
     setModalProject(null)
   }
