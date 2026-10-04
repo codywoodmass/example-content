@@ -524,6 +524,7 @@ export default function ClientPortal() {
   const [accessNotes, setAccessNotes] = useState("")
   const [clientContactName, setClientContactName] = useState("")
   const [clientEmail2, setClientEmail2] = useState("")
+  const [clientPhone, setClientPhone] = useState("")
   // Pre-fill email from logged in user
   useEffect(() => { if (user?.email && !clientEmail2) setClientEmail2(user.email) }, [user])
   const [draftDue, setDraftDue] = useState("")
@@ -531,7 +532,8 @@ export default function ClientPortal() {
   const [propertyLiveDate, setPropertyLiveDate] = useState("")
   const [suggestedStoryline, setSuggestedStoryline] = useState("")
   const [shotList, setShotList] = useState("• \n• \n• \n• \n• ")
-  const [prePlanning, setPrePlanning] = useState(false)
+  const [twilightDate, setTwilightDate] = useState("")
+  const [twilightTime, setTwilightTime] = useState("")
   const [deliveryDue, setDeliveryDue] = useState("")
   const [bookingAttachments, setBookingAttachments] = useState<{ name: string; url: string; size: number }[]>([])
   const [uploadingAttachment, setUploadingAttachment] = useState(false)
@@ -561,6 +563,11 @@ export default function ClientPortal() {
   const [briefFeedback, setBriefFeedback] = useState('')
   const [feedbackSent, setFeedbackSent] = useState(false)
   const [clientProfile, setClientProfile] = useState<any>(null)
+  // Pre-fill the booking form's contact details from the account's profile so
+  // they don't have to retype them on every booking — still freely editable
+  // per booking, and only fills in while the field is still empty.
+  useEffect(() => { if (clientProfile?.name && !clientContactName) setClientContactName(clientProfile.name) }, [clientProfile])
+  useEffect(() => { if (clientProfile?.phone && !clientPhone) setClientPhone(clientProfile.phone) }, [clientProfile])
   const [selectedProject, setSelectedProject] = useState<any>(null)
   const [notifications, setNotifications] = useState<any[]>([])
   const [respondingBookingId, setRespondingBookingId] = useState<string | null>(null)
@@ -766,7 +773,7 @@ export default function ClientPortal() {
       ]
     },
     {
-      name: 'The lifestyle and living Package', price: 1280,
+      name: 'Lifestyle and Living Package', price: 1280,
       tag: 'The lifestyle showcase',
       description: 'Everything in The Walkthrough Package, plus a full hour of lifestyle filming with talent to elevate the property narrative.',
       includes: ['60–90s property tour', '1hr lifestyle shoot with talent', 'Agent lifestyle shots', 'Vertical formatting'],
@@ -800,12 +807,15 @@ export default function ClientPortal() {
     { name: 'Stills Pack', price: 240, includes: ['20-30 edited stills', 'High-res + web-res', 'Google Drive delivery'] },
   ]
   const propertyAddons = [
-    { name: 'Additional 20s Reel', price: 250, desc: 'One additional 20s showcase reel' },
-    { name: 'Additional 40s Reel', price: 400, desc: 'One additional 40s showcase reel' },
-    { name: 'Carousel', price: 100, desc: 'Branded property carousel for social media' },
+    { name: 'Additional 20s Reel', price: 250, desc: 'An edited reel consisting of footage from the shoot (20s)' },
+    { name: 'Additional 40s Reel', price: 400, desc: 'An edited reel consisting of footage from the shoot (40s)' },
+    { name: 'Carousel', price: 100, desc: 'Visually engaging property showcase carousel' },
     { name: 'Open Home Story', price: 80, desc: 'Short-form story content for open home promotion' },
-    { name: 'Content Library', price: 100, desc: 'Extended content library for ongoing social use' },
     { name: 'Twilight Shoot', price: 350, desc: 'Golden hour & dusk exterior shoot' },
+    { name: 'Travel Flat Rate — Raglan', price: 150, desc: 'Flat travel rate for shoots in Raglan' },
+    { name: 'Travel Flat Rate — Morrinsville, Whatawhata', price: 60, desc: 'Flat travel rate for shoots in Morrinsville or Whatawhata' },
+    { name: 'Property Content Creative Planning', price: 80, desc: 'Dedicated creative planning session for your property content' },
+    { name: 'Pre Shoot Property Site Visit', price: 80, desc: 'In-person site visit ahead of the shoot (within Hamilton/Auckland)' },
   ]
   const commercialAddons = [
     { name: 'Additional Talent', price: 220, desc: 'Extra on-screen talent sourced by Example Content' },
@@ -896,7 +906,7 @@ export default function ClientPortal() {
           ].map(item => {
             const active = activeView === item.id
             return (
-              <button key={item.id} onClick={() => { setMobileMenuOpen(false); setActiveView(item.id); setBookingStep(1); setSelectedCat(''); setSelectedShoot(null); setSelectedDel(null); setSelectedAddons([]); setTcAccepted(false); setPreferredDate(''); setDraftDue(''); setDeliveryDue(''); setBookingNotes(''); setAccessNotes(''); setPropertyAddress(''); setProjectType(''); setProjectTitle(''); setProjectDescription(''); setTargetAudience(''); setKeyMessage(''); setTalentDetails(''); setBriefDeliverables([{ id: '1', name: '', quantity: 1, duration: '', formats: [], notes: '' }]); setDateFlexible(false); setShootDuration(''); setReferenceLinks(''); setBudgetRange(''); setBookingAttachments([]) }} style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 11, width: '100%', padding: '11px 14px 11px 17px', borderRadius: 6, fontSize: 13, letterSpacing: '0.01em', fontWeight: active ? 600 : 500, color: active ? '#fff' : 'rgba(200,194,187,0.5)', background: active ? 'rgba(61,71,86,0.4)' : 'transparent', border: active ? '0.5px solid rgba(200,194,187,0.15)' : '0.5px solid transparent', cursor: 'pointer', marginBottom: 4, textAlign: 'left', fontFamily: 'inherit' }}>
+              <button key={item.id} onClick={() => { setMobileMenuOpen(false); setActiveView(item.id); setBookingStep(1); setSelectedCat(''); setSelectedShoot(null); setSelectedDel(null); setSelectedAddons([]); setTcAccepted(false); setPreferredDate(''); setDraftDue(''); setDeliveryDue(''); setBookingNotes(''); setAccessNotes(''); setPropertyAddress(''); setProjectType(''); setProjectTitle(''); setProjectDescription(''); setTargetAudience(''); setKeyMessage(''); setTalentDetails(''); setBriefDeliverables([{ id: '1', name: '', quantity: 1, duration: '', formats: [], notes: '' }]); setDateFlexible(false); setShootDuration(''); setReferenceLinks(''); setBudgetRange(''); setBookingAttachments([]); setTwilightDate(''); setTwilightTime('') }} style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 11, width: '100%', padding: '11px 14px 11px 17px', borderRadius: 6, fontSize: 13, letterSpacing: '0.01em', fontWeight: active ? 600 : 500, color: active ? '#fff' : 'rgba(200,194,187,0.5)', background: active ? 'rgba(61,71,86,0.4)' : 'transparent', border: active ? '0.5px solid rgba(200,194,187,0.15)' : '0.5px solid transparent', cursor: 'pointer', marginBottom: 4, textAlign: 'left', fontFamily: 'inherit' }}>
                 {active && <span style={{ position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)', width: 2.5, height: 15, borderRadius: 2, background: '#C8C2BB' }} />}
                 <item.Icon size={17} style={{ flexShrink: 0, opacity: active ? 1 : 0.75 }} />
                 {item.label}
@@ -1181,7 +1191,7 @@ export default function ClientPortal() {
               {bookingStep > 1 && <div style={{ display: 'flex', alignItems: 'center', marginBottom: 28, padding: '0 28px' }}>
                 {(selectedCat === 'commercial'
                   ? [{ label: 'Category', value: 1 }, { label: 'Project brief', value: 2 }, { label: 'Confirm', value: 6 }]
-                  : [{ label: 'Category', value: 1 }, { label: 'Packages', value: 2 }, { label: 'Deliverables', value: 3 }, { label: 'Add-ons', value: 4 }, { label: 'Details', value: 5 }, { label: 'Confirm', value: 6 }]
+                  : [{ label: 'Category', value: 1 }, { label: 'Packages', value: 2 }, { label: 'Add-ons', value: 4 }, { label: 'Details', value: 5 }, { label: 'Confirm', value: 6 }]
                 ).map((step, i, arr) => (
                   <div key={step.label} style={{ display: 'flex', alignItems: 'center', flex: i < arr.length - 1 ? 1 : 'none' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -1265,12 +1275,11 @@ export default function ClientPortal() {
                       <div key={pkg.name} onClick={() => {
                         setSelectedShoot(pkg)
                         setSelectedSubDel(null)
-                        if (pkg.allIncluded) {
-                          const bundled = { name: pkg.deliverables.map((d: any) => d.name).join(' + '), price: 0, includes: pkg.deliverables.flatMap((d: any) => d.includes) }
-                          setSelectedDel(bundled)
-                        } else {
-                          setSelectedDel(null)
-                        }
+                        // The package description already lists everything included, so
+                        // there's no separate "choose your deliverable" step any more —
+                        // bundle all of the package's deliverables together automatically.
+                        const bundled = { name: pkg.deliverables.map((d: any) => d.name).join(' + '), price: 0, includes: pkg.deliverables.flatMap((d: any) => d.includes) }
+                        setSelectedDel(bundled)
                       }} style={{ border:`0.5px solid ${selectedShoot?.name === pkg.name ? 'rgba(200,194,187,0.35)' : 'rgba(200,194,187,0.08)'}`, borderRadius:12, padding:'22px 24px', cursor:'pointer', background: selectedShoot?.name === pkg.name ? 'linear-gradient(135deg, rgba(35,42,56,0.95) 0%, rgba(22,27,38,0.98) 100%)' : 'linear-gradient(135deg, rgba(26,31,40,0.9) 0%, rgba(18,22,30,0.95) 100%)', position:'relative', transition:'all 0.2s', boxShadow: selectedShoot?.name === pkg.name ? '0 0 30px rgba(200,194,187,0.04) inset' : 'none', overflow:'hidden' }}>
                         <div style={{ position:'absolute', top:0, left:0, right:0, height:'1px', background: selectedShoot?.name === pkg.name ? 'linear-gradient(90deg, transparent, rgba(200,194,187,0.25), transparent)' : 'linear-gradient(90deg, transparent, rgba(200,194,187,0.06), transparent)' }} />
                         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:14 }}>
@@ -1301,7 +1310,7 @@ export default function ClientPortal() {
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 16, borderTop: '0.5px solid rgba(200,194,187,0.09)' }}>
                     <button onClick={() => setBookingStep(1)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>← Back</button>
-                    <button onClick={() => selectedShoot && setBookingStep(selectedShoot.allIncluded ? 4 : 3)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, background: selectedShoot ? '#C8C2BB' : 'rgba(200,194,187,0.1)', color: selectedShoot ? '#111' : 'rgba(200,194,187,0.2)', border:'none', cursor: selectedShoot ? 'pointer' : 'not-allowed', fontWeight: 500, fontFamily: 'inherit' }}>Continue →</button>
+                    <button onClick={() => selectedShoot && setBookingStep(4)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, background: selectedShoot ? '#C8C2BB' : 'rgba(200,194,187,0.1)', color: selectedShoot ? '#111' : 'rgba(200,194,187,0.2)', border:'none', cursor: selectedShoot ? 'pointer' : 'not-allowed', fontWeight: 500, fontFamily: 'inherit' }}>Continue →</button>
                   </div>
                 </div>
               )}
@@ -1469,38 +1478,8 @@ export default function ClientPortal() {
                 )
               })()}
 
-              {/* STEP 3: DELIVERABLES */}
-              {bookingStep === 3 && (
-                <div>
-                  <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 16 }}>Choose your deliverable</div>
-                  <div style={{ display:'flex', flexDirection:'column', gap:12, marginBottom:22 }}>
-                    {(selectedShoot?.deliverables || deliverables).map((del: any) => (
-                      <div key={del.name} onClick={() => { setSelectedDel(del); setSelectedSubDel(del) }} style={{ border:`0.5px solid ${selectedDel?.name === del.name ? 'rgba(200,194,187,0.35)' : 'rgba(200,194,187,0.08)'}`, borderRadius:12, padding:'22px 24px', cursor:'pointer', background: selectedDel?.name === del.name ? 'linear-gradient(135deg,rgba(35,42,56,0.95),rgba(22,27,38,0.98))' : 'linear-gradient(135deg,rgba(26,31,40,0.9),rgba(18,22,30,0.95))', position:'relative', overflow:'hidden', transition:'all 0.2s', boxShadow: selectedDel?.name === del.name ? '0 0 30px rgba(200,194,187,0.04) inset' : 'none' }}>
-                        <div style={{ position:'absolute', top:0, left:0, right:0, height:'1px', background: selectedDel?.name === del.name ? 'linear-gradient(90deg,transparent,rgba(200,194,187,0.25),transparent)' : 'linear-gradient(90deg,transparent,rgba(200,194,187,0.06),transparent)' }} />
-                        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: del.includes?.length > 0 ? 12 : 0 }}>
-                          <div style={{ fontSize:14, fontWeight:600, color:'#fff' }}>{del.name}</div>
-                          <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-                            {del.price > 0 && <div style={{ fontSize:13, color:'rgba(200,194,187,0.5)' }}>+${del.price} GST</div>}
-                            {selectedDel?.name === del.name && <div style={{ width:22, height:22, borderRadius:'50%', background:'#C8C2BB', display:'flex', alignItems:'center', justifyContent:'center' }}><span style={{ fontSize:11, color:'#111', fontWeight:700 }}>✓</span></div>}
-                          </div>
-                        </div>
-                        {del.includes && del.includes.length > 0 && (
-                          <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
-                            {del.includes.filter((i: string) => !i.includes('Google Drive')).map((item: string) => (
-                              <span key={item} style={{ fontSize:10, color:'rgba(200,194,187,0.4)', background:'rgba(200,194,187,0.05)', padding:'3px 10px', borderRadius:3, border:'0.5px solid rgba(200,194,187,0.08)' }}>{item}</span>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                  <div style={{ display:'flex', justifyContent:'space-between' }}>
-                    <button onClick={() => setBookingStep(2)} style={{ fontSize:11, letterSpacing:'0.09em', textTransform:'uppercase', padding:'8px 16px', borderRadius:3, border:'0.5px solid rgba(200,194,187,0.2)', color:'rgba(200,194,187,0.5)', background:'transparent', cursor:'pointer', fontFamily:'inherit' }}>← Back</button>
-                    <button onClick={() => selectedDel && setBookingStep(4)} style={{ fontSize:11, letterSpacing:'0.09em', textTransform:'uppercase', padding:'8px 16px', borderRadius:3, background: selectedDel ? '#C8C2BB' : 'rgba(200,194,187,0.1)', color: selectedDel ? '#111' : 'rgba(200,194,187,0.2)', border:'none', cursor: selectedDel ? 'pointer' : 'not-allowed', fontWeight:500, fontFamily:'inherit' }}>Continue →</button>
-                  </div>
-                </div>
-              )}
-    {bookingStep === 4 && (
+              {/* STEP 3: ADD-ONS */}
+              {bookingStep === 4 && (
                 <div>
                   <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 6 }}>Add-ons <span style={{ color: 'rgba(200,194,187,0.2)', fontSize: 10, textTransform: 'none', letterSpacing: 0, marginLeft: 8 }}>Optional — select any that apply</span></div>
                   <div className="ec-grid-resp" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 20 }}>
@@ -1534,8 +1513,8 @@ export default function ClientPortal() {
                 <div>
                   <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 16 }}>Your details</div>
 
-                  {/* Contact info — always shown first */}
-                  <div className="ec-grid-resp" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+                  {/* Contact info — always shown first, pre-filled from the account where possible */}
+                  <div className="ec-grid-resp" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, marginBottom: 14 }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                       <label style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)' }}>Listing agent name</label>
                       <input value={clientContactName} onChange={e => setClientContactName(e.target.value)} placeholder="e.g. Jessica Moore" style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }} />
@@ -1543,6 +1522,10 @@ export default function ClientPortal() {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                       <label style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)' }}>Your email</label>
                       <input type="email" value={clientEmail2} onChange={e => setClientEmail2(e.target.value)} placeholder="your@email.com" style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }} />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <label style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)' }}>Phone number</label>
+                      <input type="tel" value={clientPhone} onChange={e => setClientPhone(e.target.value)} placeholder="021 123 4567" style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }} />
                     </div>
                   </div>
 
@@ -1611,12 +1594,25 @@ export default function ClientPortal() {
                       <label style={{ fontSize:10, letterSpacing:'0.12em', textTransform:'uppercase', color:'rgba(200,194,187,0.4)', display:'block', marginBottom:6 }}>Suggested shot list</label>
                       <textarea rows={6} value={shotList} onChange={e => setShotList(e.target.value)} style={{ background:'rgba(200,194,187,0.04)', border:'0.5px solid rgba(200,194,187,0.09)', borderRadius:4, padding:'9px 12px', fontSize:12, color:'#C8C2BB', fontFamily:'inherit', outline:'none', resize:'vertical', lineHeight:1.75, width:'100%' }} />
                     </div>
-                    <div style={{ marginTop:16, display:'flex', alignItems:'center', gap:10, cursor:'pointer' }} onClick={() => setPrePlanning(p => !p)}>
-                      <div style={{ width:18, height:18, borderRadius:4, border:`1px solid ${prePlanning ? '#C8C2BB' : 'rgba(200,194,187,0.2)'}`, background: prePlanning ? 'rgba(200,194,187,0.15)' : 'transparent', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>{prePlanning && <span style={{ fontSize:11, color:'#C8C2BB' }}>✓</span>}</div>
-                      <span style={{ fontSize:12, color:'rgba(200,194,187,0.55)' }}>Does this project involve pre-planning?</span>
+                    <div style={{ marginTop:16 }}>
+                      <label style={{ fontSize:10, letterSpacing:'0.12em', textTransform:'uppercase', color:'rgba(200,194,187,0.4)', display:'block', marginBottom:6 }}>Reference links</label>
+                      <input value={referenceLinks} onChange={e => setReferenceLinks(e.target.value)} placeholder="Paste links to properties you'd like to use as a reference for style or music" style={{ background:'rgba(200,194,187,0.04)', border:'0.5px solid rgba(200,194,187,0.09)', borderRadius:4, padding:'9px 12px', fontSize:12, color:'#C8C2BB', fontFamily:'inherit', outline:'none', width:'100%' }} />
                     </div>
+                    {(selectedShoot?.name === 'Media Release Package' || selectedAddons.some((a: any) => a.name === 'Twilight Shoot')) && (
+                      <div style={{ marginTop:16 }}>
+                        <label style={{ fontSize:10, letterSpacing:'0.12em', textTransform:'uppercase', color:'rgba(200,194,187,0.4)', display:'block', marginBottom:6 }}>Twilight shoot — date & time requested</label>
+                        <div style={{ display:'flex', gap:10 }}>
+                          <input type="date" value={twilightDate} onChange={e => setTwilightDate(e.target.value)} style={{ background:'rgba(200,194,187,0.04)', border:'0.5px solid rgba(200,194,187,0.09)', borderRadius:4, padding:'9px 12px', fontSize:12, color:'#C8C2BB', fontFamily:'inherit', outline:'none', flex:1 }} />
+                          <select value={twilightTime} onChange={e => setTwilightTime(e.target.value)} style={{ background:'rgba(200,194,187,0.04)', border:'0.5px solid rgba(200,194,187,0.09)', borderRadius:4, padding:'9px 12px', fontSize:12, color:'#C8C2BB', fontFamily:'inherit', outline:'none' }}>
+                            <option value=''>Preferred time</option>
+                            {['16:30','17:00','17:30','18:00','18:30','19:00','19:30','20:00'].map(t => <option key={t} value={t}>{formatTime12(t)}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                    )}
                     <div style={{ marginTop:16 }}>
                       <AttachmentUploader attachments={bookingAttachments} uploading={uploadingAttachment} onUpload={uploadBookingAttachments} onRemove={removeBookingAttachment} />
+                      <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.3)', marginTop: 8, lineHeight: 1.5 }}>The more information provided the more we have to execute the best content possible.</div>
                     </div>
                   </div>
 
@@ -1734,7 +1730,9 @@ export default function ClientPortal() {
                             accessNotes ? 'Access: ' + accessNotes : '',
                             suggestedStoryline ? 'Storyline: ' + suggestedStoryline : '',
                             shotList.replace(/[•\s]/g, '') ? 'Shot list:\n' + shotList : '',
-                            prePlanning ? 'Pre-planning required' : '',
+                            referenceLinks ? 'References: ' + referenceLinks : '',
+                            (twilightDate || twilightTime) ? 'Twilight shoot requested: ' + (twilightDate ? new Date(twilightDate + 'T12:00:00').toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' }) : 'date TBC') + (twilightTime ? ' at ' + formatTime12(twilightTime) : '') : '',
+                            clientPhone ? 'Phone: ' + clientPhone : '',
                           ].filter(Boolean).join('\n\n'),
                           total: `$${((selectedShoot?.price || 0) + (selectedDel?.price || 0) + selectedAddons.reduce((s: number, a: any) => s + a.price, 0)).toLocaleString()} + GST`,
                           total_price: (selectedShoot?.price || 0) + (selectedDel?.price || 0) + selectedAddons.reduce((s: number, a: any) => s + a.price, 0),
@@ -1747,6 +1745,7 @@ export default function ClientPortal() {
                         await supabase.from('clients1').upsert([{
                           email: clientEmail2 || user?.email,
                           name: clientContactName || '',
+                          phone: clientPhone || null,
                           category: selectedCat === 'property' ? 'Property' : 'Commercial',
                         }], { onConflict: 'email', ignoreDuplicates: false })
                       } catch (e) { console.error('Client upsert error:', e) }

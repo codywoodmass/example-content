@@ -44,7 +44,7 @@ const STAGES =['Enquiry', 'Pre-Production', 'Shooting', 'Post-Production', 'Revi
 const PROPERTY_PACKAGES = [
   { name: 'Content Campaign Package', price: 890 },
   { name: 'The Walkthrough Package', price: 890 },
-  { name: 'The lifestyle and living Package', price: 1280 },
+  { name: 'Lifestyle and Living Package', price: 1280 },
   { name: 'Media Release Package', price: 2480 },
 ]
 
