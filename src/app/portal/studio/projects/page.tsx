@@ -155,7 +155,25 @@ function ProjectsPageInner() {
         progress: updatedProject.progress, editor_notes: updatedProject.editor_notes,
         amount: updatedProject.amount === '' ? null : updatedProject.amount,
       }).eq('id', updatedProject.id)
-      setProjects(p => p.map(proj => proj.id === updatedProject.id ? { ...proj, ...updatedProject } : proj))
+      // Merge in only the fields this function actually persists above — not
+      // the whole stale updatedProject snapshot. calendar_event_id in
+      // particular is written independently and asynchronously by
+      // createCalendarEventForProject (triggered by the same keystroke via
+      // triggerCalendarSync's own debounce); spreading the full snapshot here
+      // could stomp a calendar_event_id that function had *just* set,
+      // reverting it to null in local state — the next date/time edit would
+      // then see no event to patch and create a duplicate on Google Calendar
+      // instead of updating the original.
+      setProjects(p => p.map(proj => proj.id === updatedProject.id ? {
+        ...proj,
+        title: updatedProject.title, client: updatedProject.client, email: updatedProject.email,
+        category: updatedProject.category, address: updatedProject.address, stage: updatedProject.stage,
+        shoot_date: updatedProject.shoot_date || null, draft_due: updatedProject.draft_due || null,
+        delivery_due: updatedProject.delivery_due || null, drive_url: updatedProject.drive_url,
+        shoot_window_start: updatedProject.shoot_window_start || null, shoot_window_end: updatedProject.shoot_window_end || null,
+        progress: updatedProject.progress, editor_notes: updatedProject.editor_notes,
+        amount: updatedProject.amount === '' ? null : updatedProject.amount,
+      } : proj))
       setModalSaved(true)
       setTimeout(() => setModalSaved(false), 2000)
     }, 1000)
