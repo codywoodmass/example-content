@@ -57,35 +57,40 @@ function StatementSection() {
   }, [])
 
   return (
-    <div ref={ref} style={{ padding: 'clamp(20px, 3.5vw, 30px) clamp(20px, 5vw, 48px)', borderTop: '0.5px solid rgba(200,194,187,0.1)', borderBottom: '0.5px solid rgba(200,194,187,0.1)', background: '#0E1014', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 20 }}>
+    <div ref={ref} style={{ padding: 'clamp(28px, 5vw, 44px) clamp(20px, 5vw, 48px)', borderTop: '0.5px solid rgba(200,194,187,0.1)', borderBottom: '0.5px solid rgba(200,194,187,0.1)', background: '#0E1014' }}>
       <style>{`
         @keyframes statementPulse { 0%, 100% { opacity: 0.5; transform: scale(1); } 50% { opacity: 1; transform: scale(1.3); } }
         .statement-dot { animation: statementPulse 2.2s ease-in-out infinite; }
       `}</style>
-      <h2 style={{ fontSize: 'clamp(16px, 2.4vw, 26px)', fontWeight: 400, color: '#fff', letterSpacing: '0.02em', margin: 0, fontFamily: "'Bebas Neue', sans-serif", textTransform: 'uppercase', opacity: visible ? 1 : 0, transition: 'opacity 0.5s ease' }}>
+      <h2 style={{ fontSize: 'clamp(28px, 4.6vw, 54px)', fontWeight: 400, color: '#fff', lineHeight: 1.05, letterSpacing: '0.02em', margin: 0, fontFamily: "'Bebas Neue', sans-serif", textTransform: 'uppercase', opacity: visible ? 1 : 0, transition: 'opacity 0.5s ease' }}>
         {visible && <ScrambleText text="GOOD CONTENT GETS LIKES. STRATEGIC CONTENT GETS RESULTS." delay={0} />}
       </h2>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0, opacity: visible ? 1 : 0, transition: 'opacity 0.6s ease 300ms' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 18, opacity: visible ? 1 : 0, transition: 'opacity 0.6s ease 300ms' }}>
         <span className="statement-dot" style={{ width: 6, height: 6, borderRadius: '50%', background: '#C8C2BB', flexShrink: 0 }} />
-        <span style={{ fontSize: 12, color: 'rgba(200,194,187,0.45)', letterSpacing: '0.06em', fontFamily: 'Inter, sans-serif', whiteSpace: 'nowrap' }}>Cinematic quality. Commercial strategy.</span>
+        <span style={{ fontSize: 13, color: 'rgba(200,194,187,0.45)', letterSpacing: '0.06em', fontFamily: 'Inter, sans-serif' }}>Cinematic quality. Commercial strategy.</span>
       </div>
     </div>
   )
 }
 
-// The showreel is the hero's actual centerpiece, not just a backdrop — as the
-// visitor scrolls into it, the overlaid text and darkening gradient fade out
-// and the video's own audio fades in (via the Vimeo Player SDK, loaded at
-// runtime rather than as an npm dependency); scrolling on past it fades the
-// audio back out. Starts muted so autoplay is never blocked by the browser —
-// the fade-in is a volume ramp on top of that, plus a manual mute toggle
+// The showreel is the hero's actual centerpiece, not just a backdrop. It
+// pins in place (position: sticky) for a tall scroll range so there's room
+// to choreograph: scrolling in fades the overlay text/nav away and zooms
+// the video in slightly, reaching a clean, full-screen "centre point" with
+// nothing but the video and its audio (ramped in via the Vimeo Player SDK,
+// loaded at runtime rather than as an npm dependency); scrolling on past
+// that fades the video to black and the audio back out, then releases the
+// pin into the next section. Starts muted so autoplay is never blocked —
+// the volume ramp only takes effect once unmuted, plus a manual toggle
 // since some browsers won't honour a programmatic unmute without a prior
 // click, and this is that click.
-function ShowreelHero() {
-  const sectionRef = React.useRef<HTMLDivElement>(null)
+function ShowreelHero({ onNavOpacity }: { onNavOpacity: (v: number) => void }) {
+  const wrapRef = React.useRef<HTMLDivElement>(null)
   const iframeRef = React.useRef<HTMLIFrameElement>(null)
   const playerRef = React.useRef<any>(null)
   const [textOpacity, setTextOpacity] = React.useState(1)
+  const [blackOut, setBlackOut] = React.useState(0)
+  const [zoom, setZoom] = React.useState(1)
   const [muted, setMuted] = React.useState(true)
 
   React.useEffect(() => {
@@ -115,17 +120,22 @@ function ShowreelHero() {
   React.useEffect(() => {
     let raf = 0
     function measure() {
-      const el = sectionRef.current
+      const el = wrapRef.current
       if (!el) return
       const rect = el.getBoundingClientRect()
-      const progress = Math.min(Math.max(-rect.top / rect.height, 0), 1)
+      const scrollRange = rect.height - window.innerHeight
+      const progress = scrollRange > 0 ? Math.min(Math.max(-rect.top / scrollRange, 0), 1) : 0
 
-      setTextOpacity(1 - Math.min(progress / 0.25, 1))
+      const txtOp = 1 - Math.min(progress / 0.3, 1)
+      setTextOpacity(txtOp)
+      onNavOpacity(txtOp)
+      setZoom(1 + progress * 0.15)
+      setBlackOut(Math.min(Math.max((progress - 0.55) / 0.45, 0), 1))
 
       let vol = 0
       if (progress < 0.3) vol = progress / 0.3
-      else if (progress < 0.7) vol = 1
-      else vol = Math.max(0, 1 - (progress - 0.7) / 0.3)
+      else if (progress < 0.55) vol = 1
+      else vol = Math.max(0, 1 - (progress - 0.55) / 0.3)
       if (playerRef.current && !muted) playerRef.current.setVolume(vol).catch(() => {})
     }
     function onScroll() {
@@ -133,9 +143,10 @@ function ShowreelHero() {
       raf = requestAnimationFrame(measure)
     }
     window.addEventListener('scroll', onScroll, { passive: true })
+    window.addEventListener('resize', onScroll, { passive: true })
     measure()
-    return () => { window.removeEventListener('scroll', onScroll); cancelAnimationFrame(raf) }
-  }, [muted])
+    return () => { window.removeEventListener('scroll', onScroll); window.removeEventListener('resize', onScroll); cancelAnimationFrame(raf) }
+  }, [muted, onNavOpacity])
 
   function toggleSound() {
     const player = playerRef.current
@@ -147,38 +158,41 @@ function ShowreelHero() {
   }
 
   return (
-    <div ref={sectionRef} style={{ position: 'relative', height: '100vh', minHeight: 600, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', padding: '0 clamp(20px, 5vw, 48px) clamp(36px, 8vh, 60px)', overflow: 'hidden' }}>
-      <div style={{ position: 'absolute', inset: 0, zIndex: 0, overflow: 'hidden', userSelect: 'none' }}>
-        <iframe
-          ref={iframeRef}
-          src="https://player.vimeo.com/video/1216750682?background=1&autoplay=1&loop=1&muted=1&title=0&byline=0&portrait=0&controls=0&badge=0&autopause=0"
-          style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: 'calc(100vw + 400px)', height: 'calc(100vh + 400px)', minWidth: '200vh', minHeight: '56.25vw', border: 'none', pointerEvents: 'none' }}
-          allow="autoplay; fullscreen"
-          frameBorder="0"
-        />
-      </div>
-      <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(10,12,16,0.92) 0%, rgba(10,12,16,0.2) 40%, rgba(10,12,16,0.5) 100%)', zIndex: 1, opacity: textOpacity, transition: 'opacity 0.15s linear' }} />
-      <button
-        onClick={toggleSound}
-        style={{ position: 'absolute', bottom: 'clamp(28px, 7vh, 52px)', right: 'clamp(20px, 5vw, 48px)', zIndex: 3, width: 44, height: 44, borderRadius: '50%', border: '0.5px solid rgba(200,194,187,0.35)', background: 'rgba(10,12,16,0.5)', color: '#C8C2BB', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, backdropFilter: 'blur(6px)' }}
-        aria-label={muted ? 'Unmute showreel' : 'Mute showreel'}
-      >
-        {muted ? '🔇' : '🔊'}
-      </button>
-      <div style={{ position: 'relative', zIndex: 2, opacity: textOpacity, transition: 'opacity 0.15s linear', pointerEvents: textOpacity < 0.05 ? 'none' : 'auto' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 18 }}>
-          <div style={{ width: 32, height: 1, background: '#C8C2BB', opacity: 0.5, flexShrink: 0 }} />
-          <span style={{ fontSize: 11, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.6)' }}>Property & architectural film specialists</span>
+    <div ref={wrapRef} style={{ position: 'relative', height: '260vh' }}>
+      <div style={{ position: 'sticky', top: 0, height: '100vh', minHeight: 600, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', padding: '0 clamp(20px, 5vw, 48px) clamp(36px, 8vh, 60px)', overflow: 'hidden' }}>
+        <div style={{ position: 'absolute', inset: 0, zIndex: 0, overflow: 'hidden', userSelect: 'none', transform: `scale(${zoom})`, transition: 'transform 0.1s linear' }}>
+          <iframe
+            ref={iframeRef}
+            src="https://player.vimeo.com/video/1216750682?background=1&autoplay=1&loop=1&muted=1&title=0&byline=0&portrait=0&controls=0&badge=0&autopause=0"
+            style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: 'calc(100vw + 400px)', height: 'calc(100vh + 400px)', minWidth: '200vh', minHeight: '56.25vw', border: 'none', pointerEvents: 'none' }}
+            allow="autoplay; fullscreen"
+            frameBorder="0"
+          />
         </div>
-        <h1 style={{ fontSize: 'clamp(40px, 9vw, 80px)', fontWeight: 400, lineHeight: 1.05, letterSpacing: '0.02em', color: '#fff', maxWidth: 800, margin: 0, fontFamily: "'Bebas Neue', sans-serif", textTransform: 'uppercase' }}>
-          We create content that <span style={{ color: '#C8C2BB' }}>moves</span> people.
-        </h1>
-        <p style={{ fontSize: 15, color: 'rgba(200,194,187,0.5)', marginTop: 20, maxWidth: 460, lineHeight: 1.65 }}>
-          High-end video production and photography for property developers, real estate agents and architects across New Zealand.
-        </p>
-        <div style={{ display: 'flex', gap: 20, marginTop: 38, alignItems: 'center', flexWrap: 'wrap' }}>
-          <a href="/work" style={{ background: '#C8C2BB', color: '#111', fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', padding: '14px 28px', borderRadius: 2, textDecoration: 'none', fontWeight: 500 }}>View our work</a>
-          <span style={{ color: 'rgba(200,194,187,0.4)', fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase' }}>Scroll to watch ↓</span>
+        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(10,12,16,0.92) 0%, rgba(10,12,16,0.2) 40%, rgba(10,12,16,0.5) 100%)', zIndex: 1, opacity: textOpacity, transition: 'opacity 0.1s linear' }} />
+        <div style={{ position: 'absolute', inset: 0, background: '#0E1014', zIndex: 1, opacity: blackOut, transition: 'opacity 0.1s linear', pointerEvents: 'none' }} />
+        <button
+          onClick={toggleSound}
+          style={{ position: 'absolute', bottom: 'clamp(28px, 7vh, 52px)', right: 'clamp(20px, 5vw, 48px)', zIndex: 3, width: 44, height: 44, borderRadius: '50%', border: '0.5px solid rgba(200,194,187,0.35)', background: 'rgba(10,12,16,0.5)', color: '#C8C2BB', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, backdropFilter: 'blur(6px)', opacity: 1 - blackOut }}
+          aria-label={muted ? 'Unmute showreel' : 'Mute showreel'}
+        >
+          {muted ? '🔇' : '🔊'}
+        </button>
+        <div style={{ position: 'relative', zIndex: 2, opacity: textOpacity, transition: 'opacity 0.1s linear', pointerEvents: textOpacity < 0.05 ? 'none' : 'auto' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 18 }}>
+            <div style={{ width: 32, height: 1, background: '#C8C2BB', opacity: 0.5, flexShrink: 0 }} />
+            <span style={{ fontSize: 11, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.6)' }}>Property & architectural film specialists</span>
+          </div>
+          <h1 style={{ fontSize: 'clamp(40px, 9vw, 80px)', fontWeight: 400, lineHeight: 1.05, letterSpacing: '0.02em', color: '#fff', maxWidth: 800, margin: 0, fontFamily: "'Bebas Neue', sans-serif", textTransform: 'uppercase' }}>
+            We create content that <span style={{ color: '#C8C2BB' }}>moves</span> people.
+          </h1>
+          <p style={{ fontSize: 15, color: 'rgba(200,194,187,0.5)', marginTop: 20, maxWidth: 460, lineHeight: 1.65 }}>
+            High-end video production and photography for property developers, real estate agents and architects across New Zealand.
+          </p>
+          <div style={{ display: 'flex', gap: 20, marginTop: 38, alignItems: 'center', flexWrap: 'wrap' }}>
+            <a href="/work" style={{ background: '#C8C2BB', color: '#111', fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', padding: '14px 28px', borderRadius: 2, textDecoration: 'none', fontWeight: 500 }}>View our work</a>
+            <span style={{ color: 'rgba(200,194,187,0.4)', fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase' }}>Scroll to watch ↓</span>
+          </div>
         </div>
       </div>
     </div>
@@ -187,6 +201,7 @@ function ShowreelHero() {
 
 export default function Home() {
   const gate = useSiteGate()
+  const [navOpacity, setNavOpacity] = React.useState(1)
   if (gate) return gate
 
   return (
@@ -203,25 +218,24 @@ export default function Home() {
           .ec-row-stack { flex-direction: column; align-items: flex-start !important; gap: 16px; }
         }
       `}</style>
-      <SiteNav />
-      {/* HERO / SHOWREEL */}
-      <ShowreelHero />
-
-      {/* HERO BOTTOM GRADIENT TAPER */}
-      <div style={{ height: 120, marginTop: -120, background: 'linear-gradient(to bottom, transparent, #0E1014)', position: 'relative', zIndex: 3, pointerEvents: 'none' }} />
+      <SiteNav opacity={navOpacity} />
+      {/* HERO / SHOWREEL — fades to black internally before releasing its
+          scroll pin, so it hands off to the next section clean (no taper
+          strip needed). */}
+      <ShowreelHero onNavOpacity={setNavOpacity} />
 
       {/* STATEMENT SECTION */}
       <StatementSection />
 
       {/* WORK SECTION */}
       <div style={{ padding: 'clamp(48px, 10vw, 80px) 0 0', borderTop: '0.5px solid rgba(200,194,187,0.1)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 16, padding: '0 clamp(20px, 5vw, 48px)', paddingBottom: 40, borderBottom: '0.5px solid rgba(200,194,187,0.1)', marginBottom: 48 }}>
+        <a href="/work" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 16, padding: '0 clamp(20px, 5vw, 48px)', paddingBottom: 40, borderBottom: '0.5px solid rgba(200,194,187,0.1)', marginBottom: 48, textDecoration: 'none' }}>
           <div>
             <p style={{ fontSize: 11, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)', marginBottom: 10 }}>Selected work</p>
-            <h2 style={{ fontSize: 'clamp(32px, 6vw, 52px)', fontWeight: 400, color: '#fff', letterSpacing: '0.02em', margin: 0, fontFamily: "'Bebas Neue', sans-serif", textTransform: 'uppercase' }}>Property. Architecture. <span style={{ color: '#C8C2BB' }}>Commercial.</span></h2>
+            <h2 style={{ fontSize: 'clamp(32px, 6vw, 52px)', fontWeight: 400, color: '#fff', letterSpacing: '0.02em', margin: 0, fontFamily: "'Bebas Neue', sans-serif", textTransform: 'uppercase' }}>Our recent work</h2>
           </div>
-
-        </div>
+          <span style={{ fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.55)', whiteSpace: 'nowrap' }}>See more ⟶</span>
+        </a>
 
         {/* MOUSE-DRIVEN CAROUSEL */}
         <style>{`
@@ -296,48 +310,6 @@ export default function Home() {
         </div>
       </div>
 
-      {/* TEAM SECTION */}
-      <div id="about" style={{ padding: 'clamp(56px, 12vw, 100px) clamp(20px, 5vw, 48px)', borderTop: '0.5px solid rgba(200,194,187,0.1)', background: '#0E1014' }}>
-        <div className="ec-grid-2" style={{ gap: 'clamp(40px, 6vw, 80px)', alignItems: 'center', maxWidth: 1200, margin: '0 auto' }}>
-          {/* LEFT — IMAGE */}
-          <div style={{ position: 'relative' }}>
-            <div style={{ position: 'absolute', top: -20, left: -20, width: '100%', height: '100%', border: '0.5px solid rgba(200,194,187,0.1)', borderRadius: 4, zIndex: 0 }} />
-            <img
-              src="/images/Cody.jpg"
-              alt="The Team"
-              style={{ width: '100%', aspectRatio: '3/4', objectFit: 'cover', objectPosition: 'top', borderRadius: 4, position: 'relative', zIndex: 1, filter: 'grayscale(20%)' }}
-            />
-          </div>
-          {/* RIGHT — TEXT */}
-          <div>
-            <p style={{ fontSize: 11, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)', marginBottom: 16, fontFamily: 'Inter, sans-serif', display: 'flex', alignItems: 'center', gap: 12 }}>
-              <span style={{ display: 'inline-block', width: 28, height: 1, background: 'rgba(200,194,187,0.4)' }} />
-              The Team Behind It
-            </p>
-            <h2 style={{ fontSize: 'clamp(36px, 4vw, 56px)', fontWeight: 400, color: '#fff', lineHeight: 1.05, letterSpacing: '0.04em', margin: '0 0 28px', textTransform: 'uppercase', fontFamily: "'Bebas Neue', sans-serif" }}>
-              We don't just show up with a camera. We show up with a plan.
-            </h2>
-            <p style={{ fontSize: 14, color: 'rgba(200,194,187,0.55)', lineHeight: 1.85, margin: '0 0 20px', fontFamily: 'Inter, sans-serif' }}>
-              Example Content is a Hawke's Bay based video production and photography studio. We work with property developers, real estate agents, architects and commercial brands across New Zealand to create content that doesn't just look good — it performs.
-            </p>
-            <p style={{ fontSize: 14, color: 'rgba(200,194,187,0.55)', lineHeight: 1.85, margin: '0 0 40px', fontFamily: 'Inter, sans-serif' }}>
-              Every project starts with a conversation about outcomes. What do you need this content to do? From there, we build the strategy, plan the shoot, and deliver work that earns its place.
-            </p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 20, paddingTop: 32, borderTop: '0.5px solid rgba(200,194,187,0.1)' }}>
-              {[
-                { label: 'Cody Woodmass', role: 'Director / Founder' },
-                { label: 'Fin', role: 'Shooter / Editor' },
-              ].map(({ label, role }) => (
-                <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: 13, fontWeight: 500, color: '#C8C2BB', fontFamily: 'Inter, sans-serif', letterSpacing: '0.04em', textTransform: 'uppercase' }}>{label}</span>
-                  <span style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', fontFamily: 'Inter, sans-serif', letterSpacing: '0.1em', textTransform: 'uppercase' }}>{role}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* TRUSTED BY TICKER */}
       <div style={{ borderTop: '0.5px solid rgba(200,194,187,0.08)', borderBottom: '0.5px solid rgba(200,194,187,0.08)', overflow: 'hidden', padding: '20px 0', background: '#0E1014' }}>
         <style>{`
@@ -355,24 +327,6 @@ export default function Home() {
               <span style={{ color: 'rgba(200,194,187,0.25)', fontSize: 28, fontWeight: 300, lineHeight: 1, padding: '0 4px' }}>—</span>
             </div>
           ))}
-        </div>
-      </div>
-
-      {/* SPECIALTY */}
-      <div style={{ padding: 'clamp(48px, 10vw, 80px) clamp(20px, 5vw, 48px)', borderTop: '0.5px solid rgba(200,194,187,0.1)' }}>
-        <div className="ec-grid-2" style={{ gap: 'clamp(32px, 6vw, 64px)', alignItems: 'center' }}>
-          <div style={{ aspectRatio: '4/3', background: 'linear-gradient(145deg,#1e2d3a,#0d1620)', borderRadius: 4 }} />
-          <div>
-            <p style={{ fontSize: 11, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)', marginBottom: 16 }}>Our specialty</p>
-            <h2 style={{ fontSize: 'clamp(28px, 5vw, 38px)', fontWeight: 500, lineHeight: 1.08, color: '#fff', letterSpacing: '-0.02em', marginBottom: 20 }}>Cinematic property film for <span style={{ color: '#C8C2BB' }}>premium</span> listings.</h2>
-            <p style={{ fontSize: 14, lineHeight: 1.75, color: 'rgba(200,194,187,0.5)', marginBottom: 32 }}>We work closely with real estate agents, developers and architects to produce content that sells — not just shows. 80% of our work is property, so we understand what buyers and investors respond to.</p>
-            {['Luxury residential & lifestyle properties','Multi-unit development pre-sale campaigns','Architectural documentation & portfolio shoots','Aerial cinematography & drone coverage','Interior & lifestyle photography'].map(item => (
-              <div key={item} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 0', borderBottom: '0.5px solid rgba(200,194,187,0.08)', fontSize: 13, color: 'rgba(200,194,187,0.65)' }}>
-                <span style={{ color: '#C8C2BB', opacity: 0.7 }}>—</span>{item}
-              </div>
-            ))}
-            <a href="/property" style={{ display: 'inline-block', marginTop: 32, background: '#C8C2BB', color: '#111', fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', padding: '14px 28px', borderRadius: 2, textDecoration: 'none', fontWeight: 500 }}>See property work</a>
-          </div>
         </div>
       </div>
 

@@ -2,12 +2,12 @@
 import React from 'react'
 import Link from 'next/link'
 
-const NAV_ITEMS: [string, string][] = [['Work', '/work'], ['Property', '/property'], ['Services', '/services'], ['About', '/#about']]
+const NAV_ITEMS: [string, string][] = [['Home', '/'], ['Work', '/work'], ['Property', '/property'], ['Services', '/services'], ['About', '/about']]
 
-export default function SiteNav() {
+export default function SiteNav({ opacity = 1 }: { opacity?: number }) {
   const [navOpen, setNavOpen] = React.useState(false)
   return (
-    <>
+    <div style={{ opacity, pointerEvents: opacity < 0.05 ? 'none' : 'auto', transition: 'opacity 0.1s linear' }}>
       <style>{`
         .nav-link { transition: color 0.2s ease; }
         .nav-link:hover { color: #fff !important; }
@@ -49,6 +49,6 @@ export default function SiteNav() {
         ))}
         <a href="/contact" onClick={() => setNavOpen(false)} style={{ marginTop: 16, textAlign: 'center', fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', border: '0.5px solid rgba(200,194,187,0.4)', color: '#C8C2BB', padding: '12px 22px', borderRadius: 2, textDecoration: 'none' }}>Get in touch</a>
       </div>
-    </>
+    </div>
   )
 }
