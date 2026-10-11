@@ -205,12 +205,20 @@ export default function Home() {
   if (gate) return gate
 
   return (
-    <main style={{ background: '#0E1014', minHeight: '100vh', color: '#C8C2BB', fontFamily: "'Inter', sans-serif", overflowX: 'hidden' }}>
+    <main style={{ background: '#0E1014', minHeight: '100vh', color: '#C8C2BB', fontFamily: "'Inter', sans-serif" }}>
 
       <link rel="preconnect" href="https://fonts.googleapis.com" />
       <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500&display=swap" rel="stylesheet" />
 
       <style>{`
+        /* No overflow-x: hidden anywhere between here and the pinned hero
+           below, not even on html/body — setting overflow-x to anything
+           but visible forces that element's overflow-y to compute as
+           auto (a real CSS rule), turning it into its own scroll
+           container and breaking position: sticky inside it. The hero's
+           full-bleed video is already clipped locally (each oversized
+           layer sits inside its own overflow: hidden wrapper), so nothing
+           here needs a page-level clip. */
         .ec-grid-2 { display: grid; grid-template-columns: 1fr 1fr; }
         .ec-row-stack { display: flex; }
         @media (max-width: 860px) {
