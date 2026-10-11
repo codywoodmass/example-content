@@ -31,7 +31,7 @@ export default function ContactPage() {
   }
 
   return (
-    <main style={{ background: '#0E1014', minHeight: '100vh', color: '#C8C2BB', fontFamily: "'Inter', sans-serif", overflowX: 'hidden' }}>
+    <main style={{ background: '#0E1014', minHeight: '100vh', color: '#C8C2BB', fontFamily: "'Inter', sans-serif" }}>
       <link rel="preconnect" href="https://fonts.googleapis.com" />
       <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500&display=swap" rel="stylesheet" />
       <SiteNav />
@@ -62,7 +62,7 @@ export default function ContactPage() {
               </div>
               <div>
                 <div style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 4 }}>Based in</div>
-                <div style={{ fontSize: 15, color: '#C8C2BB' }}>Hawke's Bay, New Zealand — available nationwide</div>
+                <div style={{ fontSize: 15, color: '#C8C2BB' }}>Auckland, New Zealand — covering Auckland, Waikato & Bay of Plenty, available nationwide</div>
               </div>
             </div>
           </div>

@@ -29,7 +29,7 @@ export default function PropertyPage() {
   const projects = WORK_PROJECTS.filter(p => p.category === 'Architectural' && (p.propertyType || 'Property') === category)
 
   return (
-    <main style={{ background: '#0E1014', minHeight: '100vh', color: '#C8C2BB', fontFamily: "'Inter', sans-serif", overflowX: 'hidden' }}>
+    <main style={{ background: '#0E1014', minHeight: '100vh', color: '#C8C2BB', fontFamily: "'Inter', sans-serif" }}>
       <link rel="preconnect" href="https://fonts.googleapis.com" />
       <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500&display=swap" rel="stylesheet" />
       <SiteNav />
@@ -45,6 +45,7 @@ export default function PropertyPage() {
         .property-features { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0; }
         .property-features-item { border-left: 0.5px solid rgba(200,194,187,0.08); padding-left: 32px; }
         .property-features-item:nth-child(odd) { border-left: none; padding-left: 0; }
+        .property-features-item:nth-child(even) { justify-content: flex-end; text-align: right; }
         .cat-pill { transition: all 0.2s ease; cursor: pointer; }
         .cat-pill:hover { color: #fff !important; border-color: rgba(200,194,187,0.4) !important; }
         @media (max-width: 860px) {
@@ -54,6 +55,7 @@ export default function PropertyPage() {
           .property-grid { grid-template-columns: 1fr; }
           .property-features { grid-template-columns: 1fr !important; }
           .property-features-item { border-left: none !important; padding-left: 0 !important; }
+          .property-features-item:nth-child(even) { justify-content: flex-start !important; text-align: left !important; }
         }
       `}</style>
 
@@ -62,7 +64,7 @@ export default function PropertyPage() {
         <div className="property-hero-grid">
           <div>
             <p style={{ fontSize: 11, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.45)', marginBottom: 16 }}>Architectural & property</p>
-            <h1 style={{ fontSize: 'clamp(40px, 7vw, 72px)', fontWeight: 400, lineHeight: 0.98, letterSpacing: '0.01em', color: '#fff', margin: '0 0 24px', fontFamily: "'Bebas Neue', sans-serif", textTransform: 'uppercase' }}>
+            <h1 style={{ fontSize: 'clamp(46px, 8.2vw, 88px)', fontWeight: 400, lineHeight: 0.98, letterSpacing: '0.01em', color: '#fff', margin: '0 0 24px', fontFamily: "'Bebas Neue', sans-serif", textTransform: 'uppercase' }}>
               <span style={{ textShadow: '0 0 40px rgba(200,194,187,0.25)' }}>10+ years</span> in property & architectural film.
             </h1>
             <p style={{ fontSize: 15, color: 'rgba(200,194,187,0.5)', lineHeight: 1.75, maxWidth: 520 }}>
@@ -73,7 +75,7 @@ export default function PropertyPage() {
           <div>
             {STATS.map((s, i) => (
               <div key={s.label} style={{ padding: '18px 0', borderTop: i === 0 ? 'none' : '0.5px solid rgba(200,194,187,0.1)' }}>
-                <div style={{ fontSize: 'clamp(30px, 4.2vw, 46px)', fontWeight: 400, color: '#fff', fontFamily: "'Bebas Neue', sans-serif", textTransform: 'uppercase', letterSpacing: '0.01em', lineHeight: 1 }}>{s.value}</div>
+                <div style={{ fontSize: 'clamp(22px, 2.8vw, 32px)', fontWeight: 400, color: '#fff', fontFamily: "'Bebas Neue', sans-serif", textTransform: 'uppercase', letterSpacing: '0.01em', lineHeight: 1 }}>{s.value}</div>
                 <div style={{ fontSize: 12, color: 'rgba(200,194,187,0.45)', marginTop: 6 }}>{s.label}</div>
               </div>
             ))}

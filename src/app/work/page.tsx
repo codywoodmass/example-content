@@ -41,6 +41,12 @@ function ReelView({ projects, onSelect }: { projects: WorkProject[]; onSelect: (
   // width, landing on the identical pixel in the second copy.
   const doubled = [...projects, ...projects]
 
+  // scrollLeft rounds to the nearest whole pixel on assignment, so a
+  // sub-1 per-frame speed accumulated directly into it would get
+  // truncated back to the same pixel every frame. Accumulating in a
+  // plain float ref instead keeps the fractional progress alive between
+  // frames; only the (inevitably rounded) result gets written to the DOM.
+  const accum = React.useRef(0)
   React.useEffect(() => {
     let raf: number
     const BASE_SPEED = 0.5
@@ -48,9 +54,11 @@ function ReelView({ projects, onSelect }: { projects: WorkProject[]; onSelect: (
       const track = trackRef.current
       const wrap = wrapRef.current
       if (track && wrap && !dragging.current && !paused.current) {
-        wrap.scrollLeft += BASE_SPEED + extraSpeed.current
+        accum.current += BASE_SPEED + extraSpeed.current
         const half = track.scrollWidth / 2
-        if (wrap.scrollLeft >= half) wrap.scrollLeft -= half
+        if (accum.current >= half) accum.current -= half
+        if (accum.current < 0) accum.current += half
+        wrap.scrollLeft = accum.current
       }
       raf = requestAnimationFrame(tick)
     }
@@ -108,8 +116,8 @@ function ReelView({ projects, onSelect }: { projects: WorkProject[]; onSelect: (
         onMouseLeave={() => { extraSpeed.current = 0; const c = document.getElementById('reel-cursor'); if (c) c.style.opacity = '0' }}
         onPointerDown={e => { dragging.current = true; paused.current = true; dragStartX.current = e.clientX; dragStartScroll.current = wrapRef.current?.scrollLeft || 0 }}
         onPointerMove={e => { if (!dragging.current || !wrapRef.current) return; wrapRef.current.scrollLeft = dragStartScroll.current - (e.clientX - dragStartX.current) }}
-        onPointerUp={() => { dragging.current = false; setTimeout(() => { paused.current = false }, 400) }}
-        onPointerLeave={() => { dragging.current = false }}
+        onPointerUp={() => { dragging.current = false; if (wrapRef.current) accum.current = wrapRef.current.scrollLeft; setTimeout(() => { paused.current = false }, 400) }}
+        onPointerLeave={() => { dragging.current = false; if (wrapRef.current) accum.current = wrapRef.current.scrollLeft }}
       >
         <div ref={trackRef} className="reel-track">
           {doubled.map((p, i) => (
@@ -330,7 +338,7 @@ export default function WorkPage() {
   const filtered = category === 'All' ? WORK_PROJECTS : WORK_PROJECTS.filter(p => p.category === category)
 
   return (
-    <main style={{ background: '#0E1014', minHeight: '100vh', color: '#C8C2BB', fontFamily: "'Inter', sans-serif", overflowX: 'hidden' }}>
+    <main style={{ background: '#0E1014', minHeight: '100vh', color: '#C8C2BB', fontFamily: "'Inter', sans-serif" }}>
       <link rel="preconnect" href="https://fonts.googleapis.com" />
       <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500&display=swap" rel="stylesheet" />
       <SiteNav />

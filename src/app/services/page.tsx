@@ -8,8 +8,11 @@ import { WORK_PROJECTS } from '@/lib/workProjects'
 
 // Reused from the Our Work portfolio as stand-in imagery for the floating
 // tile showcase below — swap in real per-service shots whenever they're
-// ready (see CONTENT_README.md).
-const TILE_POOL = WORK_PROJECTS.map(p => p.thumb)
+// ready (see CONTENT_README.md). Paired with each project's vimeoId too,
+// so a tile that has one quietly loops a muted preview underneath its
+// still, revealed on hover — the still never disappears to a blank frame
+// while the video loads.
+const TILE_POOL = WORK_PROJECTS.map(p => ({ img: p.thumb, vimeoId: p.vimeoId }))
 
 type Service = { num: string; title: string; desc: string; longDesc: string }
 
@@ -64,37 +67,38 @@ const SERVICES: Service[] = [
   },
 ]
 
-// Four distinct arrangements, each with tiles' bounding boxes genuinely
-// overlapping (not just close together) — cycled by service index so no
-// two services in a row look like the same template with different photos.
+// Four distinct arrangements — each built on an implicit grid (consistent
+// column bands, aligned row bands) with just a little jitter per tile, so
+// it reads as "laid out" rather than scattered, while still varying size,
+// overlap and photo choice enough that no two services in a row look like
+// the same template.
 const TILE_LAYOUTS: { top: string; left: string; width: number; z: number }[][] = [
-  [ // cascading diagonal
-    { top: '0%', left: '0%', width: 300, z: 1 },
-    { top: '10%', left: '22%', width: 280, z: 2 },
-    { top: '20%', left: '43%', width: 280, z: 3 },
-    { top: '6%', left: '66%', width: 240, z: 2 },
-    { top: '32%', left: '8%', width: 230, z: 1 },
+  [ // 3-column, 2-row grid
+    { top: '4%', left: '2%', width: 280, z: 1 },
+    { top: '7%', left: '36%', width: 260, z: 2 },
+    { top: '2%', left: '68%', width: 260, z: 1 },
+    { top: '34%', left: '4%', width: 250, z: 2 },
+    { top: '37%', left: '38%', width: 270, z: 1 },
+    { top: '32%', left: '70%', width: 240, z: 2 },
   ],
-  [ // two overlapping clusters
-    { top: '2%', left: '2%', width: 270, z: 1 },
-    { top: '22%', left: '16%', width: 260, z: 2 },
-    { top: '0%', left: '44%', width: 250, z: 1 },
-    { top: '24%', left: '56%', width: 250, z: 2 },
-    { top: '8%', left: '78%', width: 220, z: 1 },
-    { top: '38%', left: '70%', width: 210, z: 3 },
+  [ // 3-column grid, one accent tile lower
+    { top: '2%', left: '4%', width: 270, z: 1 },
+    { top: '6%', left: '40%', width: 290, z: 2 },
+    { top: '0%', left: '74%', width: 230, z: 1 },
+    { top: '36%', left: '20%', width: 260, z: 2 },
+    { top: '32%', left: '56%', width: 250, z: 1 },
   ],
-  [ // vertical masonry, denser overlap
-    { top: '0%', left: '6%', width: 310, z: 1 },
-    { top: '16%', left: '30%', width: 260, z: 2 },
-    { top: '0%', left: '56%', width: 270, z: 1 },
-    { top: '32%', left: '12%', width: 230, z: 3 },
-    { top: '36%', left: '46%', width: 280, z: 2 },
+  [ // 2-column masonry, taller tiles
+    { top: '0%', left: '6%', width: 300, z: 1 },
+    { top: '2%', left: '54%', width: 280, z: 2 },
+    { top: '36%', left: '8%', width: 260, z: 1 },
+    { top: '32%', left: '54%', width: 300, z: 2 },
   ],
-  [ // loose scatter, fewer tiles, more breathing room
-    { top: '4%', left: '4%', width: 320, z: 1 },
-    { top: '14%', left: '38%', width: 290, z: 2 },
-    { top: '0%', left: '68%', width: 240, z: 1 },
-    { top: '36%', left: '22%', width: 260, z: 2 },
+  [ // airy 2x2 grid, more breathing room
+    { top: '4%', left: '6%', width: 300, z: 1 },
+    { top: '8%', left: '56%', width: 290, z: 2 },
+    { top: '40%', left: '10%', width: 260, z: 1 },
+    { top: '36%', left: '58%', width: 270, z: 2 },
   ],
 ]
 
@@ -104,7 +108,7 @@ function ServiceModal({ service, onClose }: { service: Service; onClose: () => v
     const index = SERVICES.findIndex(s => s.num === service.num)
     const layout = TILE_LAYOUTS[index % TILE_LAYOUTS.length]
     const offset = index * 2
-    return layout.map((pos, i) => ({ ...pos, img: TILE_POOL[(offset + i) % TILE_POOL.length] }))
+    return layout.map((pos, i) => ({ ...pos, ...TILE_POOL[(offset + i) % TILE_POOL.length] }))
   }, [service.num])
 
   return (
@@ -112,8 +116,16 @@ function ServiceModal({ service, onClose }: { service: Service; onClose: () => v
       <style>{`
         @keyframes tileFloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
         .service-tile { position: absolute; border-radius: 6px; overflow: hidden; box-shadow: 0 20px 50px rgba(0,0,0,0.45); transition: transform 0.3s ease, opacity 0.3s ease; animation: tileFloat 6s ease-in-out infinite; }
+        .service-tile .tile-img, .service-tile .tile-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border: none; }
+        .service-tile .tile-video { opacity: 0; transition: opacity 0.3s ease; pointer-events: none; }
         .tiles-wrap:hover .service-tile { opacity: 0.45; }
-        .service-tile:hover { opacity: 1 !important; transform: scale(1.12) !important; z-index: 20; }
+        /* !important here is load-bearing: each tile already carries an
+           inline z-index (style={{zIndex: t.z}}), and an inline style
+           always beats a plain class rule for the same property — without
+           !important this hover rule would never actually win, so the
+           hovered tile could still end up tucked behind a higher-z tile. */
+        .service-tile:hover { opacity: 1 !important; transform: scale(1.15) !important; z-index: 999 !important; }
+        .service-tile:hover .tile-video { opacity: 1; }
         .tiles-wrap { cursor: none; }
       `}</style>
       <button
@@ -146,7 +158,15 @@ function ServiceModal({ service, onClose }: { service: Service; onClose: () => v
         >
           {tiles.map((t, i) => (
             <div key={i} className="service-tile" style={{ top: t.top, left: t.left, width: t.width, zIndex: t.z, aspectRatio: '4/3', animationDelay: `${i * 0.4}s` }}>
-              <img src={t.img} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              <img className="tile-img" src={t.img} alt="" />
+              {t.vimeoId && (
+                <iframe
+                  className="tile-video"
+                  src={`https://player.vimeo.com/video/${t.vimeoId}?background=1&autoplay=1&loop=1&muted=1&title=0&byline=0&portrait=0&controls=0&badge=0&autopause=0&dnt=1`}
+                  allow="autoplay; fullscreen"
+                  frameBorder="0"
+                />
+              )}
             </div>
           ))}
         </div>
@@ -164,7 +184,7 @@ export default function ServicesPage() {
   if (gate) return gate
 
   return (
-    <main style={{ background: '#0E1014', minHeight: '100vh', color: '#C8C2BB', fontFamily: "'Inter', sans-serif", overflowX: 'hidden' }}>
+    <main style={{ background: '#0E1014', minHeight: '100vh', color: '#C8C2BB', fontFamily: "'Inter', sans-serif" }}>
       <link rel="preconnect" href="https://fonts.googleapis.com" />
       <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500&display=swap" rel="stylesheet" />
       <SiteNav />

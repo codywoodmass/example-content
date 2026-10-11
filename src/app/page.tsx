@@ -87,6 +87,7 @@ function ShowreelHero({ onNavOpacity }: { onNavOpacity: (v: number) => void }) {
   const [textOpacity, setTextOpacity] = React.useState(1)
   const [zoom, setZoom] = React.useState(1)
   const [muted, setMuted] = React.useState(true)
+  const [indicatorOpacity, setIndicatorOpacity] = React.useState(0)
 
   React.useEffect(() => {
     let cancelled = false
@@ -119,11 +120,17 @@ function ShowreelHero({ onNavOpacity }: { onNavOpacity: (v: number) => void }) {
       if (!el) return
       const rect = el.getBoundingClientRect()
       const scrollRange = rect.height - window.innerHeight
-      const progress = scrollRange > 0 ? Math.min(Math.max(-rect.top / scrollRange, 0), 1) : 0
+      const rawProgress = scrollRange > 0 ? -rect.top / scrollRange : 0
+      const progress = Math.min(Math.max(rawProgress, 0), 1)
 
-      const txtOp = 1 - Math.min(progress / 0.3, 1)
+      // Stretched over a longer range (was /0.3) so the fade reads as a
+      // slow dissolve rather than snapping out almost immediately.
+      const txtOp = 1 - Math.min(progress / 0.45, 1)
       setTextOpacity(txtOp)
-      onNavOpacity(txtOp)
+      // Once scrolled fully past the pinned hero, hand control back to
+      // SiteNav's own scroll-direction show/hide — otherwise rawProgress
+      // stays clamped at 1 forever and the nav would never come back.
+      onNavOpacity(rawProgress >= 1 ? 1 : txtOp)
       // Zooms in toward the centre point, then eases back out — holding
       // the zoomed-in framing all the way to the end made the pin feel
       // like it was stuck.
@@ -135,6 +142,11 @@ function ShowreelHero({ onNavOpacity }: { onNavOpacity: (v: number) => void }) {
       // releases, instead of dipping to a blank screen first.
       const vol = Math.min(progress / 0.3, 1)
       if (playerRef.current && !muted) playerRef.current.setVolume(vol).catch(() => {})
+
+      // A light "scroll down" hint once the text/nav have fully dissolved
+      // — i.e. we've reached the video-only centre point — fading back out
+      // just before the pin releases into the next section.
+      setIndicatorOpacity(txtOp < 0.05 && progress < 0.96 ? 0.4 : 0)
     }
     function onScroll() {
       cancelAnimationFrame(raf)
@@ -172,10 +184,10 @@ function ShowreelHero({ onNavOpacity }: { onNavOpacity: (v: number) => void }) {
             frameBorder="0"
           />
         </div>
-        {/* Light from-the-bottom gradient so the hero text has just enough
-            contrast on landing — slight on purpose (~5-8% at its darkest),
-            and fades out with the same scroll progress as the text itself. */}
-        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(10,12,16,0.08) 0%, rgba(10,12,16,0.04) 50%, rgba(10,12,16,0) 80%)', zIndex: 1, opacity: textOpacity, transition: 'opacity 0.1s linear' }} />
+        {/* From-the-bottom gradient so the hero text sits on enough
+            contrast on landing (~13% at its darkest), fading out with the
+            same scroll progress as the text itself. */}
+        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(10,12,16,0.13) 0%, rgba(10,12,16,0.06) 50%, rgba(10,12,16,0) 80%)', zIndex: 1, opacity: textOpacity, transition: 'opacity 0.35s ease-out' }} />
         <button
           onClick={toggleSound}
           style={{ position: 'absolute', bottom: 'clamp(28px, 7vh, 52px)', right: 'clamp(20px, 5vw, 48px)', zIndex: 3, width: 44, height: 44, borderRadius: '50%', border: '0.5px solid rgba(200,194,187,0.35)', background: 'rgba(10,12,16,0.5)', color: '#C8C2BB', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, backdropFilter: 'blur(6px)' }}
@@ -183,7 +195,19 @@ function ShowreelHero({ onNavOpacity }: { onNavOpacity: (v: number) => void }) {
         >
           {muted ? '🔇' : '🔊'}
         </button>
-        <div style={{ position: 'relative', zIndex: 2, opacity: textOpacity, transition: 'opacity 0.1s linear', pointerEvents: textOpacity < 0.05 ? 'none' : 'auto' }}>
+        {/* Scroll-down hint, only present once we've reached the
+            video-only centre point (text/nav fully dissolved). */}
+        <div
+          style={{
+            position: 'absolute', bottom: 'clamp(20px, 4vh, 32px)', left: '50%', transform: 'translateX(-50%)', zIndex: 3,
+            opacity: indicatorOpacity, transition: 'opacity 0.5s ease', pointerEvents: 'none',
+            color: '#C8C2BB', fontSize: 20, animation: 'heroScrollBounce 2s ease-in-out infinite',
+          }}
+          aria-hidden="true"
+        >
+          ↓
+        </div>
+        <div style={{ position: 'relative', zIndex: 2, opacity: textOpacity, transition: 'opacity 0.35s ease-out', pointerEvents: textOpacity < 0.05 ? 'none' : 'auto' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 18 }}>
             <div style={{ width: 32, height: 1, background: '#C8C2BB', opacity: 0.5, flexShrink: 0 }} />
             <span style={{ fontSize: 11, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.6)' }}>Architectural, Commercial and Event Specialists</span>
@@ -201,6 +225,119 @@ function ShowreelHero({ onNavOpacity }: { onNavOpacity: (v: number) => void }) {
         </div>
       </div>
     </div>
+  )
+}
+
+const RECENT_WORK = [
+  { id: '1216750682', title: 'What We Do', client: 'Example Content · Showreel', type: 'Showreel', thumb: 'https://i.vimeocdn.com/video/2188265524-4fb9e0ca30cc6d8acb3df1a1c4259eee688d7929c486e1f353c4f0858475be60-d_1280x720?region=us' },
+  { id: '1182465760', title: '23 Sullivan Road', client: 'Luxury Residential · Hawkes Bay', type: 'Property Film', thumb: 'https://i.vimeocdn.com/video/2145085364-8d9dea98f801df737866495fc8d2a5478fa035bacadf0b509fe24095202d4f0f-d_1280x720?region=us' },
+  { id: '1182467090', title: 'River Downs', client: 'Premium Listing · Hawkes Bay', type: 'Property Film', thumb: 'https://i.vimeocdn.com/video/2145086135-8b197218926ba3cb5b7473637eec6b840a9145d41cf3fddf64b4692371696b72-d_1280x720?region=us' },
+  { id: '1216751477', title: 'Social Project', client: 'Commercial · Wellington', type: 'Brand Film', thumb: 'https://i.vimeocdn.com/video/2188267258-642a37f197a11b257107e3026f603bd9b101e150481feba60d316c736e8fcedd-d_1280x720?region=us' },
+  { id: '1216751475', title: 'Flex Fitness Taupo', client: 'Commercial · Taupo', type: 'Brand Film', thumb: 'https://i.vimeocdn.com/video/2188266630-2c8ea8c5eb08f67c7c3976794eae813194b3bfb49295bbc45436f3fb79a978a3-d_1280x720?region=us' },
+  { id: '1216751474', title: 'Clyde Street', client: 'Property Film · Hawkes Bay', type: 'Property Film', thumb: 'https://i.vimeocdn.com/video/2188266667-68b9d4ee59946fef552d97ba3dd5b3917302c427d524f800fbb8c2638e9fb654-d_1280x720?region=us' },
+]
+
+// Same ambient-drift + edge-hover-accelerate pattern as the Our Work page's
+// reel, so the two autoscrolling strips feel consistent across the site —
+// just slower here, since this is a teaser, not the main browsing view.
+function RecentWorkCarousel() {
+  const wrapRef = React.useRef<HTMLDivElement>(null)
+  const trackRef = React.useRef<HTMLDivElement>(null)
+  const extraSpeed = React.useRef(0)
+  const cursorRef = React.useRef<HTMLDivElement>(null)
+
+  const doubled = [...RECENT_WORK, ...RECENT_WORK]
+
+  // scrollLeft rounds to the nearest whole pixel on assignment, so
+  // accumulating a sub-1 speed directly into it (e.g. += 0.3) gets
+  // truncated back to the same pixel every frame and never actually
+  // moves. Accumulating in a plain float ref instead, and only writing
+  // the (inevitably rounded) result to the DOM, keeps the fractional
+  // progress alive between frames.
+  const accum = React.useRef(0)
+  React.useEffect(() => {
+    let raf: number
+    const BASE_SPEED = 0.3
+    function tick() {
+      const wrap = wrapRef.current
+      const track = trackRef.current
+      if (wrap && track) {
+        accum.current += BASE_SPEED + extraSpeed.current
+        const half = track.scrollWidth / 2
+        if (accum.current >= half) accum.current -= half
+        if (accum.current < 0) accum.current += half
+        wrap.scrollLeft = accum.current
+      }
+      raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [])
+
+  function onMouseMove(e: React.MouseEvent) {
+    const wrap = wrapRef.current
+    if (!wrap) return
+    const rect = wrap.getBoundingClientRect()
+    const x = e.clientX - rect.left
+    const zone = rect.width * 0.25
+    let speed = 0
+    if (x < zone) speed = -((zone - x) / zone) * 10
+    else if (x > rect.width - zone) speed = ((x - (rect.width - zone)) / zone) * 10
+    extraSpeed.current = speed
+    if (cursorRef.current) {
+      cursorRef.current.style.left = e.clientX + 'px'
+      cursorRef.current.style.top = e.clientY + 'px'
+      cursorRef.current.style.opacity = '1'
+      cursorRef.current.setAttribute('data-dir', x < rect.width / 2 ? '←' : '→')
+    }
+  }
+
+  return (
+    <>
+      <style>{`
+        .carousel-wrap { overflow: hidden; padding-bottom: 48px; cursor: none; position: relative; }
+        .carousel-track { display: flex; gap: 20px; width: max-content; }
+        .carousel-item { flex-shrink: 0; width: min(560px, 82vw); }
+        .carousel-item iframe { pointer-events: none; }
+        .carousel-item:hover iframe { pointer-events: auto; }
+        .carousel-cursor { position: fixed; top: 0; left: 0; pointer-events: none; z-index: 9999; width: 64px; height: 64px; border-radius: 50%; background: rgba(200,194,187,0.15); border: 1px solid rgba(200,194,187,0.4); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; font-size: 16px; opacity: 0; transition: opacity 0.2s ease; transform: translate(-50%, -50%); }
+        .carousel-wrap:hover .carousel-cursor { opacity: 1; }
+        .vid-thumb { position: relative; padding-top: 56.25%; border-radius: 3px; overflow: hidden; margin-bottom: 16px; background: #1a1f28; }
+        .vid-thumb iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none; opacity: 0; transition: opacity 0.4s ease; }
+        .carousel-item:hover .vid-thumb iframe { opacity: 1; }
+        .vid-thumb-img { position: absolute; inset: 0; background: #1a1f28; transition: opacity 0.4s ease; }
+        .carousel-item:hover .vid-thumb-img { opacity: 0; }
+      `}</style>
+
+      <div
+        ref={wrapRef}
+        className="carousel-wrap"
+        onMouseMove={onMouseMove}
+        onMouseLeave={() => {
+          extraSpeed.current = 0
+          if (cursorRef.current) cursorRef.current.style.opacity = '0'
+        }}
+        style={{ overflowX: 'scroll', scrollbarWidth: 'none' as const }}
+      >
+        <div ref={cursorRef} className="carousel-cursor">⟵ ⟶</div>
+        <div ref={trackRef} className="carousel-track" style={{ padding: '0 clamp(20px, 5vw, 48px)' }}>
+          {doubled.map((proj, i) => (
+            <div key={proj.id + '-' + i} className="carousel-item">
+              <div className="vid-thumb">
+                <div className="vid-thumb-img" style={{ backgroundImage: proj.thumb ? `url(${proj.thumb})` : `url(https://vumbnail.com/${proj.id}_large.jpg), url(https://vumbnail.com/${proj.id}.jpg)`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
+                <iframe
+                  src={`https://player.vimeo.com/video/${proj.id}?background=1&autoplay=1&loop=1&muted=1&title=0&byline=0&portrait=0&controls=0&badge=0&autopause=0`}
+                  allow="autoplay; fullscreen"
+                  frameBorder="0"
+                />
+              </div>
+              <p style={{ fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.38)', marginBottom: 5 }}>{proj.client} · {proj.type}</p>
+              <p style={{ fontSize: 18, fontWeight: 500, color: '#fff', margin: 0 }}>{proj.title}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </>
   )
 }
 
@@ -250,77 +387,7 @@ export default function Home() {
           <span style={{ fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.55)', whiteSpace: 'nowrap' }}>See more ⟶</span>
         </a>
 
-        {/* MOUSE-DRIVEN CAROUSEL */}
-        <style>{`
-          .carousel-wrap { overflow: hidden; padding-bottom: 48px; cursor: none; position: relative; }
-          .carousel-track { display: flex; gap: 20px; width: max-content; transition: transform 0.1s linear; }
-          .carousel-item { flex-shrink: 0; width: min(560px, 82vw); }
-          .carousel-item iframe { pointer-events: none; }
-          .carousel-item:hover iframe { pointer-events: auto; }
-          .carousel-cursor { position: fixed; top: 0; left: 0; pointer-events: none; z-index: 9999; width: 64px; height: 64px; border-radius: 50%; background: rgba(200,194,187,0.15); border: 1px solid rgba(200,194,187,0.4); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; font-size: 16px; opacity: 0; transition: opacity 0.2s ease; transform: translate(-50%, -50%); }
-          .carousel-wrap:hover .carousel-cursor { opacity: 1; }
-          .vid-thumb { position: relative; padding-top: 56.25%; border-radius: 3px; overflow: hidden; margin-bottom: 16px; background: #1a1f28; }
-          .vid-thumb iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none; opacity: 0; transition: opacity 0.4s ease; }
-          .carousel-item:hover .vid-thumb iframe { opacity: 1; }
-          .vid-thumb-img { position: absolute; inset: 0; background: #1a1f28; transition: opacity 0.4s ease; }
-          .carousel-item:hover .vid-thumb-img { opacity: 0; }
-        `}</style>
-
-        <div
-          className="carousel-wrap"
-          id="carousel-wrap"
-          onMouseMove={(e) => {
-            const wrap = document.getElementById('carousel-wrap')
-            const cursor = document.getElementById('carousel-cursor')
-            if (!wrap) return
-            const rect = wrap.getBoundingClientRect()
-            const x = e.clientX - rect.left
-            const zone = rect.width * 0.25
-            let speed = 0
-            if (x < zone) speed = -((zone - x) / zone) * 12
-            else if (x > rect.width - zone) speed = ((x - (rect.width - zone)) / zone) * 12
-            if (cursor) {
-              cursor.style.left = e.clientX + 'px'
-              cursor.style.top = e.clientY + 'px'
-              cursor.style.opacity = '1'
-              const dir = x < rect.width / 2 ? '←' : '→'
-              cursor.setAttribute('data-dir', dir)
-            }
-            if (speed !== 0) {
-              wrap.scrollLeft += speed
-            }
-          }}
-          onMouseLeave={() => {
-            const cursor = document.getElementById('carousel-cursor')
-            if (cursor) cursor.style.opacity = '0'
-          }}
-          style={{ overflowX: 'scroll', scrollbarWidth: 'none' as const }}
-        >
-          <div id="carousel-cursor" className="carousel-cursor">⟵ ⟶</div>
-          <div id="carousel-track" className="carousel-track" style={{ padding: '0 clamp(20px, 5vw, 48px)' }}>
-            {[
-              { id: '1216750682', title: 'What We Do', client: 'Example Content · Showreel', type: 'Showreel', thumb: 'https://i.vimeocdn.com/video/2188265524-4fb9e0ca30cc6d8acb3df1a1c4259eee688d7929c486e1f353c4f0858475be60-d_1280x720?region=us' },
-              { id: '1182465760', title: '23 Sullivan Road', client: 'Luxury Residential · Hawkes Bay', type: 'Property Film', thumb: 'https://i.vimeocdn.com/video/2145085364-8d9dea98f801df737866495fc8d2a5478fa035bacadf0b509fe24095202d4f0f-d_1280x720?region=us' },
-              { id: '1182467090', title: 'River Downs', client: 'Premium Listing · Hawkes Bay', type: 'Property Film', thumb: 'https://i.vimeocdn.com/video/2145086135-8b197218926ba3cb5b7473637eec6b840a9145d41cf3fddf64b4692371696b72-d_1280x720?region=us' },
-              { id: '1216751477', title: 'Social Project', client: 'Commercial · Wellington', type: 'Brand Film', thumb: 'https://i.vimeocdn.com/video/2188267258-642a37f197a11b257107e3026f603bd9b101e150481feba60d316c736e8fcedd-d_1280x720?region=us' },
-              { id: '1216751475', title: 'Flex Fitness Taupo', client: 'Commercial · Taupo', type: 'Brand Film', thumb: 'https://i.vimeocdn.com/video/2188266630-2c8ea8c5eb08f67c7c3976794eae813194b3bfb49295bbc45436f3fb79a978a3-d_1280x720?region=us' },
-              { id: '1216751474', title: 'Clyde Street', client: 'Property Film · Hawkes Bay', type: 'Property Film', thumb: 'https://i.vimeocdn.com/video/2188266667-68b9d4ee59946fef552d97ba3dd5b3917302c427d524f800fbb8c2638e9fb654-d_1280x720?region=us' },
-            ].map((proj, i) => (
-              <div key={i} className="carousel-item">
-                <div className="vid-thumb">
-                  <div className="vid-thumb-img" style={{ backgroundImage: proj.thumb ? `url(${proj.thumb})` : `url(https://vumbnail.com/${proj.id}_large.jpg), url(https://vumbnail.com/${proj.id}.jpg)`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
-                  <iframe
-                    src={`https://player.vimeo.com/video/${proj.id}?background=1&autoplay=1&loop=1&muted=1&title=0&byline=0&portrait=0&controls=0&badge=0&autopause=0`}
-                    allow="autoplay; fullscreen"
-                    frameBorder="0"
-                  />
-                </div>
-                <p style={{ fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.38)', marginBottom: 5 }}>{proj.client} · {proj.type}</p>
-                <p style={{ fontSize: 18, fontWeight: 500, color: '#fff', margin: 0 }}>{proj.title}</p>
-              </div>
-            ))}
-          </div>
-        </div>
+        <RecentWorkCarousel />
       </div>
 
       {/* SERVICES */}
@@ -356,7 +423,8 @@ export default function Home() {
       <div style={{ borderTop: '0.5px solid rgba(200,194,187,0.08)', borderBottom: '0.5px solid rgba(200,194,187,0.08)', overflow: 'hidden', padding: '20px 0', background: '#0E1014' }}>
         <style>{`
           @keyframes ticker { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
-          .ticker-track { display: flex; width: max-content; animation: ticker 30s linear infinite; }
+          @keyframes heroScrollBounce { 0%, 100% { transform: translate(-50%, 0); } 50% { transform: translate(-50%, 6px); } }
+          .ticker-track { display: flex; width: max-content; animation: ticker 48s linear infinite; }
 
         `}</style>
         <div style={{ marginBottom: 10, textAlign: 'center' }}>

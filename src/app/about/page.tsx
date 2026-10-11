@@ -9,7 +9,7 @@ export default function AboutPage() {
   if (gate) return gate
 
   return (
-    <main style={{ background: '#0E1014', minHeight: '100vh', color: '#C8C2BB', fontFamily: "'Inter', sans-serif", overflowX: 'hidden' }}>
+    <main style={{ background: '#0E1014', minHeight: '100vh', color: '#C8C2BB', fontFamily: "'Inter', sans-serif" }}>
       <link rel="preconnect" href="https://fonts.googleapis.com" />
       <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500&display=swap" rel="stylesheet" />
       <SiteNav />
@@ -41,7 +41,7 @@ export default function AboutPage() {
               We don't just show up with a camera. We show up with a plan.
             </h1>
             <p style={{ fontSize: 14, color: 'rgba(200,194,187,0.55)', lineHeight: 1.85, margin: '0 0 20px', fontFamily: 'Inter, sans-serif' }}>
-              Example Content is a Hawke's Bay based video production and photography studio. We work with property developers, real estate agents, architects and commercial brands across New Zealand to create content that doesn't just look good — it performs.
+              Example Content is an Auckland based video production and photography studio, covering Auckland, Waikato and the Bay of Plenty as our core patch — and happy to travel anywhere for the right project. We work with property developers, real estate agents, architects and commercial brands across New Zealand to create content that doesn't just look good — it performs.
             </p>
             <p style={{ fontSize: 14, color: 'rgba(200,194,187,0.55)', lineHeight: 1.85, margin: '0 0 40px', fontFamily: 'Inter, sans-serif' }}>
               Every project starts with a conversation about outcomes. What do you need this content to do? From there, we build the strategy, plan the shoot, and deliver work that earns its place.
