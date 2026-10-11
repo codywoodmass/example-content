@@ -1,6 +1,8 @@
 'use client'
 import React from 'react'
-import Link from 'next/link'
+import { useSiteGate } from '@/lib/sitePreview'
+import SiteNav from '@/components/public/SiteNav'
+import SiteFooter from '@/components/public/SiteFooter'
 
 
 const CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789*#@!'
@@ -85,39 +87,9 @@ function StatementSection() {
   )
 }
 
-// Flip to false when the site is ready to go live — this only gates the
-// public marketing homepage, not the portal or auth pages.
-const UNDER_CONSTRUCTION = true
-
-function UnderConstructionScreen() {
-  return (
-    <main style={{ background: '#0E1014', minHeight: '100vh', color: '#C8C2BB', fontFamily: "'Inter', sans-serif", display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '0 24px' }}>
-      <link rel="preconnect" href="https://fonts.googleapis.com" />
-      <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500&display=swap" rel="stylesheet" />
-      <img src="/images/Pale_logo_EX.png" alt="Example Content" style={{ height: 48, objectFit: 'contain', display: 'block', margin: '0 auto 40px' }} />
-      <p style={{ fontSize: 11, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.45)', marginBottom: 18 }}>Something new is coming</p>
-      <h1 style={{ fontSize: 'clamp(32px, 6vw, 56px)', fontWeight: 400, color: '#fff', letterSpacing: '0.02em', margin: '0 0 20px', fontFamily: "'Bebas Neue', sans-serif", textTransform: 'uppercase' }}>
-        We're building our new site.
-      </h1>
-      <p style={{ fontSize: 15, color: 'rgba(200,194,187,0.55)', maxWidth: 440, lineHeight: 1.7, margin: '0 0 36px' }}>
-        Example Content is currently rebuilding our website. In the meantime, get in touch with us directly, or head to your portal below.
-      </p>
-      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center', marginBottom: 44 }}>
-        <a href="mailto:cody@examplecontent.co.nz" style={{ background: '#C8C2BB', color: '#111', fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', padding: '14px 28px', borderRadius: 2, textDecoration: 'none', fontWeight: 500 }}>Email us</a>
-        <a href="/portal/client" style={{ color: 'rgba(200,194,187,0.6)', fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', textDecoration: 'none' }}>Client portal →</a>
-        <a href="/portal/studio" style={{ color: 'rgba(200,194,187,0.6)', fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', textDecoration: 'none' }}>Studio login →</a>
-      </div>
-      <p style={{ fontSize: 11, color: 'rgba(200,194,187,0.28)', letterSpacing: '0.08em' }}>© 2026 Example Content Ltd. Hawke's Bay, New Zealand.</p>
-    </main>
-  )
-}
-
 export default function Home() {
-  const [navOpen, setNavOpen] = React.useState(false)
-
-  if (UNDER_CONSTRUCTION) {
-    return <UnderConstructionScreen />
-  }
+  const gate = useSiteGate()
+  if (gate) return gate
 
   return (
     <main style={{ background: '#0E1014', minHeight: '100vh', color: '#C8C2BB', fontFamily: "'Inter', sans-serif", overflowX: 'hidden' }}>
@@ -125,25 +97,7 @@ export default function Home() {
       <link rel="preconnect" href="https://fonts.googleapis.com" />
       <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500&display=swap" rel="stylesheet" />
 
-      {/* NAV */}
-        <style>{`
-        .nav-link { transition: color 0.2s ease; }
-        .nav-link:hover { color: #fff !important; }
-        .nav-cta { transition: all 0.2s ease; }
-        .nav-cta:hover { background: rgba(200,194,187,0.12) !important; color: #fff !important; }
-        .nav-logo { transition: opacity 0.2s ease; cursor: pointer; }
-        .nav-logo:hover { opacity: 0.75; }
-        .ec-nav { padding: 18px clamp(20px, 5vw, 48px); }
-        .ec-nav-links { display: flex; gap: 36px; }
-        .ec-nav-cta { display: block; }
-        .ec-nav-burger { display: none; }
-        .ec-mobile-menu { display: none; }
-        @media (max-width: 900px) {
-          .ec-nav-links { display: none; }
-          .ec-nav-cta { display: none; }
-          .ec-nav-burger { display: flex !important; }
-          .ec-mobile-menu.open { display: flex !important; }
-        }
+      <style>{`
         .ec-grid-2 { display: grid; grid-template-columns: 1fr 1fr; }
         .ec-row-stack { display: flex; }
         @media (max-width: 860px) {
@@ -151,29 +105,7 @@ export default function Home() {
           .ec-row-stack { flex-direction: column; align-items: flex-start !important; gap: 16px; }
         }
       `}</style>
-      <nav className="ec-nav" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '0.5px solid rgba(200,194,187,0.1)', position: 'fixed', top: 0, left: 0, right: 0, zIndex: 50, background: 'rgba(14,16,20,0.75)', backdropFilter: 'blur(12px)' }}>
-        <Link href="/" className="nav-logo">
-          <img src="/images/Pale_logo_EX.png" alt="Example Content" style={{ height: 40, objectFit: 'contain', display: 'block' }} />
-        </Link>
-        <div className="ec-nav-links">
-          {['Work', 'Property', 'Services', 'About'].map(item => (
-            <a key={item} href={`#${item.toLowerCase()}`} className="nav-link" style={{ fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.6)', textDecoration: 'none' }}>{item}</a>
-          ))}
-        </div>
-        <a href="/contact" className="nav-cta ec-nav-cta" style={{ fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', border: '0.5px solid rgba(200,194,187,0.4)', color: '#C8C2BB', padding: '10px 22px', borderRadius: 2, textDecoration: 'none' }}>Get in touch</a>
-        <button className="ec-nav-burger" onClick={() => setNavOpen(o => !o)} aria-label="Menu" style={{ display: 'none', background: 'transparent', border: 'none', width: 32, height: 24, flexDirection: 'column', justifyContent: 'space-between', cursor: 'pointer', padding: 0 }}>
-          <span style={{ height: 1.5, background: '#C8C2BB', width: '100%', transform: navOpen ? 'translateY(9px) rotate(45deg)' : 'none', transition: 'transform 0.2s' }} />
-          <span style={{ height: 1.5, background: '#C8C2BB', width: '100%', opacity: navOpen ? 0 : 1, transition: 'opacity 0.2s' }} />
-          <span style={{ height: 1.5, background: '#C8C2BB', width: '100%', transform: navOpen ? 'translateY(-9px) rotate(-45deg)' : 'none', transition: 'transform 0.2s' }} />
-        </button>
-      </nav>
-      <div className={`ec-mobile-menu ${navOpen ? 'open' : ''}`} style={{ display: 'none', flexDirection: 'column', position: 'fixed', top: 60, left: 0, right: 0, zIndex: 49, background: '#0E1014', borderBottom: '0.5px solid rgba(200,194,187,0.1)', padding: '20px clamp(20px, 5vw, 48px) 28px' }}>
-        {['Work', 'Property', 'Services', 'About'].map(item => (
-          <a key={item} href={`#${item.toLowerCase()}`} onClick={() => setNavOpen(false)} style={{ fontSize: 14, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.7)', textDecoration: 'none', padding: '12px 0', borderBottom: '0.5px solid rgba(200,194,187,0.06)' }}>{item}</a>
-        ))}
-        <a href="/contact" onClick={() => setNavOpen(false)} style={{ marginTop: 16, textAlign: 'center', fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', border: '0.5px solid rgba(200,194,187,0.4)', color: '#C8C2BB', padding: '12px 22px', borderRadius: 2, textDecoration: 'none' }}>Get in touch</a>
-      </div>
-
+      <SiteNav />
       {/* HERO */}
       <div style={{ position: 'relative', height: '100vh', minHeight: 600, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', padding: '0 clamp(20px, 5vw, 48px) clamp(36px, 8vh, 60px)', overflow: 'hidden' }}>
         <div style={{ position: 'absolute', inset: 0, zIndex: 0, overflow: 'hidden', pointerEvents: 'none', userSelect: 'none' }}>
@@ -293,7 +225,7 @@ export default function Home() {
       </div>
 
       {/* TEAM SECTION */}
-      <div style={{ padding: 'clamp(56px, 12vw, 100px) clamp(20px, 5vw, 48px)', borderTop: '0.5px solid rgba(200,194,187,0.1)', background: '#0E1014' }}>
+      <div id="about" style={{ padding: 'clamp(56px, 12vw, 100px) clamp(20px, 5vw, 48px)', borderTop: '0.5px solid rgba(200,194,187,0.1)', background: '#0E1014' }}>
         <div className="ec-grid-2" style={{ gap: 'clamp(40px, 6vw, 80px)', alignItems: 'center', maxWidth: 1200, margin: '0 auto' }}>
           {/* LEFT — IMAGE */}
           <div style={{ position: 'relative' }}>
@@ -407,28 +339,11 @@ export default function Home() {
         <p style={{ fontSize: 15, color: 'rgba(200,194,187,0.4)', marginBottom: 38 }}>Tell us about your listing or project and we'll be in touch within 24 hours.</p>
         <div style={{ display: 'flex', gap: 16, justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap' }}>
           <a href="/contact" style={{ background: '#C8C2BB', color: '#111', fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', padding: '14px 28px', borderRadius: 2, textDecoration: 'none', fontWeight: 500 }}>Start a project</a>
-          <a href="/portal/client" style={{ color: 'rgba(200,194,187,0.55)', fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', textDecoration: 'none' }}>Client portal →</a>
+          <a href="/work" style={{ color: 'rgba(200,194,187,0.55)', fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', textDecoration: 'none' }}>See our work →</a>
         </div>
       </div>
 
-      {/* PORTAL STRIP */}
-      <div className="ec-row-stack" style={{ background: 'rgba(61,71,86,0.2)', borderTop: '0.5px solid rgba(200,194,187,0.1)', borderBottom: '0.5px solid rgba(200,194,187,0.1)', padding: 'clamp(16px, 4vw, 20px) clamp(20px, 5vw, 48px)', justifyContent: 'space-between', alignItems: 'center' }}>
-        <p style={{ fontSize: 12, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.45)' }}><strong style={{ color: '#C8C2BB' }}>Client Portal</strong> — Access your projects, deliverables & shoot bookings</p>
-        <div style={{ display: 'flex', gap: 10 }}>
-          <a href="/portal/client" style={{ fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', padding: '9px 20px', borderRadius: 2, border: '0.5px solid rgba(200,194,187,0.25)', color: 'rgba(200,194,187,0.55)', textDecoration: 'none' }}>Client login</a>
-          <a href="/portal/studio" style={{ fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', padding: '9px 20px', borderRadius: 2, background: '#C8C2BB', color: '#111', textDecoration: 'none', fontWeight: 500 }}>Studio login</a>
-        </div>
-      </div>
-
-      {/* FOOTER */}
-      <footer className="ec-row-stack" style={{ padding: 'clamp(24px, 6vw, 32px) clamp(20px, 5vw, 48px)', justifyContent: 'space-between', alignItems: 'center' }}>
-        <p style={{ fontSize: 11, color: 'rgba(200,194,187,0.28)', letterSpacing: '0.08em' }}>© 2026 Example Content Ltd. Hawke's Bay, New Zealand.</p>
-        <div style={{ display: 'flex', gap: 28, flexWrap: 'wrap' }}>
-          {['Instagram','Vimeo','LinkedIn','Privacy'].map(link => (
-            <a key={link} href="#" style={{ fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', textDecoration: 'none' }}>{link}</a>
-          ))}
-        </div>
-      </footer>
+      <SiteFooter />
 
     </main>
   )
