@@ -64,19 +64,47 @@ const SERVICES: Service[] = [
   },
 ]
 
+// Four distinct arrangements, each with tiles' bounding boxes genuinely
+// overlapping (not just close together) — cycled by service index so no
+// two services in a row look like the same template with different photos.
+const TILE_LAYOUTS: { top: string; left: string; width: number; z: number }[][] = [
+  [ // cascading diagonal
+    { top: '0%', left: '0%', width: 300, z: 1 },
+    { top: '10%', left: '22%', width: 280, z: 2 },
+    { top: '20%', left: '43%', width: 280, z: 3 },
+    { top: '6%', left: '66%', width: 240, z: 2 },
+    { top: '32%', left: '8%', width: 230, z: 1 },
+  ],
+  [ // two overlapping clusters
+    { top: '2%', left: '2%', width: 270, z: 1 },
+    { top: '22%', left: '16%', width: 260, z: 2 },
+    { top: '0%', left: '44%', width: 250, z: 1 },
+    { top: '24%', left: '56%', width: 250, z: 2 },
+    { top: '8%', left: '78%', width: 220, z: 1 },
+    { top: '38%', left: '70%', width: 210, z: 3 },
+  ],
+  [ // vertical masonry, denser overlap
+    { top: '0%', left: '6%', width: 310, z: 1 },
+    { top: '16%', left: '30%', width: 260, z: 2 },
+    { top: '0%', left: '56%', width: 270, z: 1 },
+    { top: '32%', left: '12%', width: 230, z: 3 },
+    { top: '36%', left: '46%', width: 280, z: 2 },
+  ],
+  [ // loose scatter, fewer tiles, more breathing room
+    { top: '4%', left: '4%', width: 320, z: 1 },
+    { top: '14%', left: '38%', width: 290, z: 2 },
+    { top: '0%', left: '68%', width: 240, z: 1 },
+    { top: '36%', left: '22%', width: 260, z: 2 },
+  ],
+]
+
 function ServiceModal({ service, onClose }: { service: Service; onClose: () => void }) {
   const cursorRef = React.useRef<HTMLDivElement>(null)
   const tiles = React.useMemo(() => {
-    const layouts = [
-      { top: '4%', left: '3%', rotate: -6, width: 220 },
-      { top: '0%', left: '34%', rotate: 4, width: 250 },
-      { top: '6%', left: '67%', rotate: -3, width: 210 },
-      { top: '46%', left: '10%', rotate: 5, width: 230 },
-      { top: '50%', left: '46%', rotate: -5, width: 240 },
-      { top: '44%', left: '76%', rotate: 3, width: 200 },
-    ]
-    const offset = SERVICES.findIndex(s => s.num === service.num) * 2
-    return layouts.map((layout, i) => ({ ...layout, img: TILE_POOL[(offset + i) % TILE_POOL.length] }))
+    const index = SERVICES.findIndex(s => s.num === service.num)
+    const layout = TILE_LAYOUTS[index % TILE_LAYOUTS.length]
+    const offset = index * 2
+    return layout.map((pos, i) => ({ ...pos, img: TILE_POOL[(offset + i) % TILE_POOL.length] }))
   }, [service.num])
 
   return (
@@ -117,7 +145,7 @@ function ServiceModal({ service, onClose }: { service: Service; onClose: () => v
           style={{ position: 'relative', height: 'clamp(380px, 48vw, 480px)', margin: 'clamp(32px, 5vw, 56px) clamp(28px, 6vw, 64px) clamp(48px, 7vw, 72px)' }}
         >
           {tiles.map((t, i) => (
-            <div key={i} className="service-tile" style={{ top: t.top, left: t.left, width: t.width, aspectRatio: '4/3', transform: `rotate(${t.rotate}deg)`, animationDelay: `${i * 0.4}s` }}>
+            <div key={i} className="service-tile" style={{ top: t.top, left: t.left, width: t.width, zIndex: t.z, aspectRatio: '4/3', animationDelay: `${i * 0.4}s` }}>
               <img src={t.img} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             </div>
           ))}

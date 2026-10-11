@@ -5,6 +5,8 @@ import SiteNav from '@/components/public/SiteNav'
 import SiteFooter from '@/components/public/SiteFooter'
 
 
+const TICKER_BRANDS = ['Hartles & Co', 'Life Fitness', 'Lodge Real Estate', 'Tuatahi Fibre', 'ZeGroup', 'Flex Fitness', 'Lugtons Real Estate', 'IBM', 'DaSilva', 'Wake NZ', 'Stark Property', 'Trans-Tasman Business Circle']
+
 const CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789*#@!'
 
 function ScrambleText({ text, delay = 0 }: { text: string; delay?: number }) {
@@ -58,8 +60,9 @@ function StatementSection() {
 
   return (
     <div ref={ref} style={{ padding: 'clamp(36px, 7vw, 60px) clamp(20px, 5vw, 48px)', background: '#0E1014', display: 'flex', justifyContent: 'center', textAlign: 'center' }}>
-      <h2 style={{ fontSize: 'clamp(28px, 4.6vw, 54px)', fontWeight: 400, color: '#fff', lineHeight: 1.05, letterSpacing: '0.02em', margin: 0, maxWidth: 900, fontFamily: "'Bebas Neue', sans-serif", textTransform: 'uppercase', opacity: visible ? 1 : 0, transition: 'opacity 0.5s ease' }}>
-        {visible && <ScrambleText text="GOOD CONTENT GETS LIKES. STRATEGIC CONTENT GETS RESULTS." delay={0} />}
+      <h2 style={{ fontSize: 'clamp(28px, 4.6vw, 54px)', fontWeight: 400, color: '#fff', lineHeight: 1.15, letterSpacing: '0.02em', margin: 0, maxWidth: 900, fontFamily: "'Bebas Neue', sans-serif", textTransform: 'uppercase', opacity: visible ? 1 : 0, transition: 'opacity 0.5s ease' }}>
+        <div>{visible && <ScrambleText text="GOOD CONTENT GETS LIKES." delay={0} />}</div>
+        <div>{visible && <ScrambleText text="STRATEGIC CONTENT GETS RESULTS." delay={150} />}</div>
       </h2>
     </div>
   )
@@ -121,7 +124,11 @@ function ShowreelHero({ onNavOpacity }: { onNavOpacity: (v: number) => void }) {
       const txtOp = 1 - Math.min(progress / 0.3, 1)
       setTextOpacity(txtOp)
       onNavOpacity(txtOp)
-      setZoom(1 + progress * 0.15)
+      // Zooms in toward the centre point, then eases back out — holding
+      // the zoomed-in framing all the way to the end made the pin feel
+      // like it was stuck.
+      const zoomProgress = progress < 0.5 ? progress / 0.5 : (1 - progress) / 0.5
+      setZoom(1 + zoomProgress * 0.15)
 
       // Holds at full volume once ramped up rather than fading back out —
       // the video stays fully visible and audible right up until the pin
@@ -154,13 +161,21 @@ function ShowreelHero({ onNavOpacity }: { onNavOpacity: (v: number) => void }) {
         <div style={{ position: 'absolute', inset: 0, zIndex: 0, overflow: 'hidden', userSelect: 'none', transform: `scale(${zoom})`, transition: 'transform 0.1s linear' }}>
           <iframe
             ref={iframeRef}
-            src="https://player.vimeo.com/video/1216750682?background=1&autoplay=1&loop=1&muted=1&title=0&byline=0&portrait=0&controls=0&badge=0&autopause=0"
+            // No background=1 — Vimeo's background mode strips audio
+            // entirely (by design, for silent decorative loops), which is
+            // why the mute toggle never actually produced sound. Every
+            // other param here reproduces the same chrome-free look
+            // without that restriction.
+            src="https://player.vimeo.com/video/1216750682?autoplay=1&loop=1&muted=1&title=0&byline=0&portrait=0&controls=0&badge=0&autopause=0&dnt=1"
             style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: 'calc(100vw + 400px)', height: 'calc(100vh + 400px)', minWidth: '200vh', minHeight: '56.25vw', border: 'none', pointerEvents: 'none' }}
             allow="autoplay; fullscreen"
             frameBorder="0"
           />
         </div>
-        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(10,12,16,0.92) 0%, rgba(10,12,16,0.2) 40%, rgba(10,12,16,0.5) 100%)', zIndex: 1, opacity: textOpacity, transition: 'opacity 0.1s linear' }} />
+        {/* Light from-the-bottom gradient so the hero text has just enough
+            contrast on landing — slight on purpose (~5-8% at its darkest),
+            and fades out with the same scroll progress as the text itself. */}
+        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(10,12,16,0.08) 0%, rgba(10,12,16,0.04) 50%, rgba(10,12,16,0) 80%)', zIndex: 1, opacity: textOpacity, transition: 'opacity 0.1s linear' }} />
         <button
           onClick={toggleSound}
           style={{ position: 'absolute', bottom: 'clamp(28px, 7vh, 52px)', right: 'clamp(20px, 5vw, 48px)', zIndex: 3, width: 44, height: 44, borderRadius: '50%', border: '0.5px solid rgba(200,194,187,0.35)', background: 'rgba(10,12,16,0.5)', color: '#C8C2BB', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, backdropFilter: 'blur(6px)' }}
@@ -171,13 +186,13 @@ function ShowreelHero({ onNavOpacity }: { onNavOpacity: (v: number) => void }) {
         <div style={{ position: 'relative', zIndex: 2, opacity: textOpacity, transition: 'opacity 0.1s linear', pointerEvents: textOpacity < 0.05 ? 'none' : 'auto' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 18 }}>
             <div style={{ width: 32, height: 1, background: '#C8C2BB', opacity: 0.5, flexShrink: 0 }} />
-            <span style={{ fontSize: 11, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.6)' }}>Property & architectural film specialists</span>
+            <span style={{ fontSize: 11, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.6)' }}>Architectural, Commercial and Event Specialists</span>
           </div>
           <h1 style={{ fontSize: 'clamp(40px, 9vw, 80px)', fontWeight: 400, lineHeight: 1.05, letterSpacing: '0.02em', color: '#fff', maxWidth: 800, margin: 0, fontFamily: "'Bebas Neue', sans-serif", textTransform: 'uppercase' }}>
-            We create content that <span style={{ color: '#C8C2BB' }}>moves</span> people.
+            We create photo and video content that <span style={{ color: '#C8C2BB' }}>moves</span> people.
           </h1>
           <p style={{ fontSize: 15, color: 'rgba(200,194,187,0.5)', marginTop: 20, maxWidth: 460, lineHeight: 1.65 }}>
-            High-end video production and photography for property developers, real estate agents and architects across New Zealand.
+            From planning and strategy to execution and delivery — Example Content offers real estate agents, builders, developers, businesses and event managers high-end photo and video production.
           </p>
           <div style={{ display: 'flex', gap: 20, marginTop: 38, alignItems: 'center', flexWrap: 'wrap' }}>
             <a href="/work" style={{ background: '#C8C2BB', color: '#111', fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', padding: '14px 28px', borderRadius: 2, textDecoration: 'none', fontWeight: 500 }}>View our work</a>
@@ -308,26 +323,6 @@ export default function Home() {
         </div>
       </div>
 
-      {/* TRUSTED BY TICKER */}
-      <div style={{ borderTop: '0.5px solid rgba(200,194,187,0.08)', borderBottom: '0.5px solid rgba(200,194,187,0.08)', overflow: 'hidden', padding: '20px 0', background: '#0E1014' }}>
-        <style>{`
-          @keyframes ticker { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
-          .ticker-track { display: flex; width: max-content; animation: ticker 30s linear infinite; }
-
-        `}</style>
-        <div style={{ marginBottom: 10, textAlign: 'center' }}>
-          <span style={{ fontSize: 10, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.3)', fontFamily: 'Inter, sans-serif' }}>Trusted by</span>
-        </div>
-        <div className="ticker-track">
-          {['Hartles & Co', 'Life Fitness', 'Lodge Real Estate', 'Tuatahi Fibre', 'ZeGroup', 'Flex Fitness', 'Hartles & Co', 'Life Fitness', 'Lodge Real Estate', 'Tuatahi Fibre', 'ZeGroup', 'Flex Fitness'].map((brand, i) => (
-            <div key={i} style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-              <span style={{ fontSize: 42, fontWeight: 700, color: 'rgba(200,194,187,0.45)', letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: "'Bebas Neue', sans-serif", padding: '0 48px', whiteSpace: 'nowrap' }}>{brand}</span>
-              <span style={{ color: 'rgba(200,194,187,0.25)', fontSize: 28, fontWeight: 300, lineHeight: 1, padding: '0 4px' }}>—</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
       {/* SERVICES */}
       <style>{`
         .ec-services-item { border-left: 0.5px solid rgba(200,194,187,0.08) !important; padding-left: 40px !important; }
@@ -345,13 +340,33 @@ export default function Home() {
           <a href="/services" style={{ background: '#C8C2BB', color: '#111', fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', padding: '14px 28px', borderRadius: 2, textDecoration: 'none', fontWeight: 500, whiteSpace: 'nowrap' }}>All services</a>
         </div>
         <div className="ec-grid-2" style={{ gap: 0 }}>
-          {[['01','Property & Real Estate Film'],['02','Architectural Photography'],['03','Development Campaigns'],['04','Brand & Commercial Film'],['05','Aerial & Drone Cinematography'],['06','Event Coverage']].map(([num, title]) => (
+          {[['01','Property & Real Estate Film'],['02','Architectural Photography'],['03','Brand & Commercial Film'],['04','Social Media Content & Ads'],['05','Pre-Production & Strategy'],['06','Event Coverage']].map(([num, title]) => (
             <div key={num} className="ec-services-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '24px 24px 24px 0', borderBottom: '0.5px solid rgba(200,194,187,0.08)', cursor: 'pointer' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                 <span style={{ fontSize: 11, color: 'rgba(200,194,187,0.25)', letterSpacing: '0.1em' }}>{num}</span>
                 <span style={{ fontSize: 18, fontWeight: 500, color: 'rgba(255,255,255,0.8)' }}>{title}</span>
               </div>
               <span style={{ color: 'rgba(200,194,187,0.2)', fontSize: 16 }}>→</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* TRUSTED BY TICKER */}
+      <div style={{ borderTop: '0.5px solid rgba(200,194,187,0.08)', borderBottom: '0.5px solid rgba(200,194,187,0.08)', overflow: 'hidden', padding: '20px 0', background: '#0E1014' }}>
+        <style>{`
+          @keyframes ticker { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+          .ticker-track { display: flex; width: max-content; animation: ticker 30s linear infinite; }
+
+        `}</style>
+        <div style={{ marginBottom: 10, textAlign: 'center' }}>
+          <span style={{ fontSize: 10, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.3)', fontFamily: 'Inter, sans-serif' }}>Trusted by</span>
+        </div>
+        <div className="ticker-track">
+          {[...TICKER_BRANDS, ...TICKER_BRANDS].map((brand, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+              <span style={{ fontSize: 42, fontWeight: 700, color: 'rgba(200,194,187,0.45)', letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: "'Bebas Neue', sans-serif", padding: '0 48px', whiteSpace: 'nowrap' }}>{brand}</span>
+              <span style={{ color: 'rgba(200,194,187,0.25)', fontSize: 28, fontWeight: 300, lineHeight: 1, padding: '0 4px' }}>—</span>
             </div>
           ))}
         </div>

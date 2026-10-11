@@ -41,42 +41,55 @@ export default function PropertyPage() {
         .work-thumb-img { position: absolute; inset: 0; transition: opacity 0.4s ease; }
         .property-card:hover .work-thumb-img { opacity: 0; }
         .property-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 28px clamp(20px, 4vw, 40px); }
-        .property-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+        .property-hero-grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: clamp(32px, 6vw, 72px); align-items: end; }
+        .property-features { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0; }
+        .property-features-item { border-left: 0.5px solid rgba(200,194,187,0.08); padding-left: 32px; }
+        .property-features-item:nth-child(odd) { border-left: none; padding-left: 0; }
         .cat-pill { transition: all 0.2s ease; cursor: pointer; }
         .cat-pill:hover { color: #fff !important; border-color: rgba(200,194,187,0.4) !important; }
-        @media (max-width: 760px) { .property-grid, .property-stats { grid-template-columns: 1fr; } }
+        @media (max-width: 860px) {
+          .property-hero-grid { grid-template-columns: 1fr !important; }
+        }
+        @media (max-width: 760px) {
+          .property-grid { grid-template-columns: 1fr; }
+          .property-features { grid-template-columns: 1fr !important; }
+          .property-features-item { border-left: none !important; padding-left: 0 !important; }
+        }
       `}</style>
 
       {/* HERO */}
-      <div style={{ padding: 'clamp(120px, 20vh, 170px) clamp(20px, 5vw, 48px) clamp(40px, 6vw, 56px)' }}>
-        <p style={{ fontSize: 11, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.45)', marginBottom: 16 }}>Architectural & property</p>
-        <h1 style={{ fontSize: 'clamp(40px, 8vw, 80px)', fontWeight: 400, lineHeight: 0.98, letterSpacing: '0.01em', color: '#fff', margin: '0 0 24px', fontFamily: "'Bebas Neue', sans-serif", textTransform: 'uppercase', maxWidth: 900 }}>
-          <span style={{ textShadow: '0 0 40px rgba(200,194,187,0.25)' }}>10+ years</span> in property & architectural film.
-        </h1>
-        <p style={{ fontSize: 15, color: 'rgba(200,194,187,0.5)', lineHeight: 1.75, maxWidth: 600 }}>
-          We've photographed and filmed thousands of properties — from bare grass sections, through every stage of construction, to completed projects captured from sunrise to sunset.
-        </p>
-      </div>
-
-      {/* STATS */}
-      <div style={{ padding: '0 clamp(20px, 5vw, 48px) clamp(40px, 7vw, 60px)' }}>
-        <div className="property-stats">
-          {STATS.map(s => (
-            <div key={s.label} style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 6, padding: 'clamp(20px, 3vw, 28px)' }}>
-              <div style={{ fontSize: 'clamp(22px, 3vw, 32px)', fontWeight: 400, color: '#fff', fontFamily: "'Bebas Neue', sans-serif", textTransform: 'uppercase', letterSpacing: '0.01em', marginBottom: 8 }}>{s.value}</div>
-              <div style={{ fontSize: 12, color: 'rgba(200,194,187,0.5)', lineHeight: 1.5 }}>{s.label}</div>
-            </div>
-          ))}
+      <div style={{ padding: 'clamp(120px, 20vh, 170px) clamp(20px, 5vw, 48px) clamp(48px, 8vw, 72px)' }}>
+        <div className="property-hero-grid">
+          <div>
+            <p style={{ fontSize: 11, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.45)', marginBottom: 16 }}>Architectural & property</p>
+            <h1 style={{ fontSize: 'clamp(40px, 7vw, 72px)', fontWeight: 400, lineHeight: 0.98, letterSpacing: '0.01em', color: '#fff', margin: '0 0 24px', fontFamily: "'Bebas Neue', sans-serif", textTransform: 'uppercase' }}>
+              <span style={{ textShadow: '0 0 40px rgba(200,194,187,0.25)' }}>10+ years</span> in property & architectural film.
+            </h1>
+            <p style={{ fontSize: 15, color: 'rgba(200,194,187,0.5)', lineHeight: 1.75, maxWidth: 520 }}>
+              We've photographed and filmed thousands of properties — from bare grass sections, through every stage of construction, to completed projects captured from sunrise to sunset.
+            </p>
+          </div>
+          {/* Editorial stat column — numbers do the talking, no card chrome */}
+          <div>
+            {STATS.map((s, i) => (
+              <div key={s.label} style={{ padding: '18px 0', borderTop: i === 0 ? 'none' : '0.5px solid rgba(200,194,187,0.1)' }}>
+                <div style={{ fontSize: 'clamp(30px, 4.2vw, 46px)', fontWeight: 400, color: '#fff', fontFamily: "'Bebas Neue', sans-serif", textTransform: 'uppercase', letterSpacing: '0.01em', lineHeight: 1 }}>{s.value}</div>
+                <div style={{ fontSize: 12, color: 'rgba(200,194,187,0.45)', marginTop: 6 }}>{s.label}</div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
       {/* FEATURES */}
       <div style={{ padding: '0 clamp(20px, 5vw, 48px) clamp(48px, 8vw, 72px)', borderTop: '0.5px solid rgba(200,194,187,0.1)', paddingTop: 40 }}>
-        {FEATURES.map(item => (
-          <div key={item} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '16px 0', borderBottom: '0.5px solid rgba(200,194,187,0.08)', fontSize: 14, color: 'rgba(200,194,187,0.65)' }}>
-            <span style={{ color: '#C8C2BB', opacity: 0.7 }}>—</span>{item}
-          </div>
-        ))}
+        <div className="property-features">
+          {FEATURES.map(item => (
+            <div key={item} className="property-features-item" style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '16px 24px 16px 0', borderBottom: '0.5px solid rgba(200,194,187,0.08)', fontSize: 14, color: 'rgba(200,194,187,0.65)' }}>
+              <span style={{ color: '#C8C2BB', opacity: 0.7 }}>—</span>{item}
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* WORK */}
