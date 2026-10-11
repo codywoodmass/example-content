@@ -3,21 +3,30 @@ import React from 'react'
 import { useSiteGate } from '@/lib/sitePreview'
 import SiteNav from '@/components/public/SiteNav'
 import SiteFooter from '@/components/public/SiteFooter'
-import { WORK_PROJECTS } from '@/lib/workProjects'
+import { WORK_PROJECTS, PropertyType } from '@/lib/workProjects'
+
+const STATS = [
+  { value: '10+', label: 'Years in property & architectural film' },
+  { value: '1,000s', label: 'Properties photographed & filmed' },
+  { value: 'Bare land → completed', label: 'Every stage, sunrise to sunset' },
+]
 
 const FEATURES = [
-  'Luxury residential & lifestyle properties',
-  'Multi-unit development pre-sale campaigns',
-  'Architectural documentation & portfolio shoots',
-  'Aerial cinematography & drone coverage',
-  'Interior & lifestyle photography',
+  'Bare land & site documentation',
+  'Construction progress coverage, stage by stage',
+  'Completed property film & photography',
+  'Flexible scheduling — sunrise through to sunset',
+  'Architectural detail & interior lifestyle shots',
 ]
+
+const CATEGORIES: PropertyType[] = ['Property', 'Construction']
 
 export default function PropertyPage() {
   const gate = useSiteGate()
+  const [category, setCategory] = React.useState<PropertyType>('Property')
   if (gate) return gate
 
-  const projects = WORK_PROJECTS.filter(p => p.category === 'Architectural')
+  const projects = WORK_PROJECTS.filter(p => p.category === 'Architectural' && (p.propertyType || 'Property') === category)
 
   return (
     <main style={{ background: '#0E1014', minHeight: '100vh', color: '#C8C2BB', fontFamily: "'Inter', sans-serif", overflowX: 'hidden' }}>
@@ -32,18 +41,33 @@ export default function PropertyPage() {
         .work-thumb-img { position: absolute; inset: 0; transition: opacity 0.4s ease; }
         .property-card:hover .work-thumb-img { opacity: 0; }
         .property-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 28px clamp(20px, 4vw, 40px); }
-        @media (max-width: 760px) { .property-grid { grid-template-columns: 1fr; } }
+        .property-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+        .cat-pill { transition: all 0.2s ease; cursor: pointer; }
+        .cat-pill:hover { color: #fff !important; border-color: rgba(200,194,187,0.4) !important; }
+        @media (max-width: 760px) { .property-grid, .property-stats { grid-template-columns: 1fr; } }
       `}</style>
 
       {/* HERO */}
       <div style={{ padding: 'clamp(120px, 20vh, 170px) clamp(20px, 5vw, 48px) clamp(40px, 6vw, 56px)' }}>
         <p style={{ fontSize: 11, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.45)', marginBottom: 16 }}>Architectural & property</p>
         <h1 style={{ fontSize: 'clamp(40px, 8vw, 80px)', fontWeight: 400, lineHeight: 0.98, letterSpacing: '0.01em', color: '#fff', margin: '0 0 24px', fontFamily: "'Bebas Neue', sans-serif", textTransform: 'uppercase', maxWidth: 900 }}>
-          Cinematic film for <span style={{ textShadow: '0 0 40px rgba(200,194,187,0.25)' }}>premium</span> listings.
+          <span style={{ textShadow: '0 0 40px rgba(200,194,187,0.25)' }}>10+ years</span> in property & architectural film.
         </h1>
-        <p style={{ fontSize: 15, color: 'rgba(200,194,187,0.5)', lineHeight: 1.75, maxWidth: 560 }}>
-          We work closely with real estate agents, developers and architects to produce content that sells — not just shows. 80% of our work is property, so we understand what buyers and investors respond to.
+        <p style={{ fontSize: 15, color: 'rgba(200,194,187,0.5)', lineHeight: 1.75, maxWidth: 600 }}>
+          We've photographed and filmed thousands of properties — from bare grass sections, through every stage of construction, to completed projects captured from sunrise to sunset.
         </p>
+      </div>
+
+      {/* STATS */}
+      <div style={{ padding: '0 clamp(20px, 5vw, 48px) clamp(40px, 7vw, 60px)' }}>
+        <div className="property-stats">
+          {STATS.map(s => (
+            <div key={s.label} style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 6, padding: 'clamp(20px, 3vw, 28px)' }}>
+              <div style={{ fontSize: 'clamp(22px, 3vw, 32px)', fontWeight: 400, color: '#fff', fontFamily: "'Bebas Neue', sans-serif", textTransform: 'uppercase', letterSpacing: '0.01em', marginBottom: 8 }}>{s.value}</div>
+              <div style={{ fontSize: 12, color: 'rgba(200,194,187,0.5)', lineHeight: 1.5 }}>{s.label}</div>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* FEATURES */}
@@ -57,9 +81,27 @@ export default function PropertyPage() {
 
       {/* WORK */}
       <div style={{ padding: '0 clamp(20px, 5vw, 48px) clamp(56px, 10vw, 90px)' }}>
-        <h2 style={{ fontSize: 'clamp(24px, 4vw, 34px)', fontWeight: 400, color: '#fff', margin: '0 0 32px', fontFamily: "'Bebas Neue', sans-serif", textTransform: 'uppercase' }}>Recent property work</h2>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16, marginBottom: 32 }}>
+          <h2 style={{ fontSize: 'clamp(24px, 4vw, 34px)', fontWeight: 400, color: '#fff', margin: 0, fontFamily: "'Bebas Neue', sans-serif", textTransform: 'uppercase' }}>Recent property work</h2>
+          <div style={{ display: 'flex', gap: 10 }}>
+            {CATEGORIES.map(cat => (
+              <button
+                key={cat}
+                className="cat-pill"
+                onClick={() => setCategory(cat)}
+                style={{
+                  fontSize: 12, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '9px 18px', borderRadius: 2,
+                  border: `0.5px solid ${category === cat ? 'rgba(200,194,187,0.5)' : 'rgba(200,194,187,0.15)'}`,
+                  background: category === cat ? '#C8C2BB' : 'transparent',
+                  color: category === cat ? '#111' : 'rgba(200,194,187,0.55)',
+                  fontWeight: category === cat ? 500 : 400,
+                }}
+              >{cat}</button>
+            ))}
+          </div>
+        </div>
         {projects.length === 0 ? (
-          <div style={{ color: 'rgba(200,194,187,0.35)', fontSize: 14 }}>Coming soon.</div>
+          <div style={{ color: 'rgba(200,194,187,0.35)', fontSize: 14 }}>More {category.toLowerCase()} work coming soon.</div>
         ) : (
           <div className="property-grid">
             {projects.map(p => (
