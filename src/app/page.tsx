@@ -70,9 +70,10 @@ function StatementSection() {
 // to choreograph: scrolling in fades the overlay text/nav away and zooms
 // the video in slightly, reaching a clean, full-screen "centre point" with
 // nothing but the video and its audio (ramped in via the Vimeo Player SDK,
-// loaded at runtime rather than as an npm dependency); scrolling on past
-// that fades the video to black and the audio back out, then releases the
-// pin into the next section. Starts muted so autoplay is never blocked —
+// loaded at runtime rather than as an npm dependency, and held once it's
+// up rather than fading back out); the video stays fully visible right up
+// until the pin releases into the next section. Starts muted so autoplay
+// is never blocked —
 // the volume ramp only takes effect once unmuted, plus a manual toggle
 // since some browsers won't honour a programmatic unmute without a prior
 // click, and this is that click.
@@ -81,7 +82,6 @@ function ShowreelHero({ onNavOpacity }: { onNavOpacity: (v: number) => void }) {
   const iframeRef = React.useRef<HTMLIFrameElement>(null)
   const playerRef = React.useRef<any>(null)
   const [textOpacity, setTextOpacity] = React.useState(1)
-  const [blackOut, setBlackOut] = React.useState(0)
   const [zoom, setZoom] = React.useState(1)
   const [muted, setMuted] = React.useState(true)
 
@@ -122,12 +122,11 @@ function ShowreelHero({ onNavOpacity }: { onNavOpacity: (v: number) => void }) {
       setTextOpacity(txtOp)
       onNavOpacity(txtOp)
       setZoom(1 + progress * 0.15)
-      setBlackOut(Math.min(Math.max((progress - 0.55) / 0.45, 0), 1))
 
-      let vol = 0
-      if (progress < 0.3) vol = progress / 0.3
-      else if (progress < 0.55) vol = 1
-      else vol = Math.max(0, 1 - (progress - 0.55) / 0.3)
+      // Holds at full volume once ramped up rather than fading back out —
+      // the video stays fully visible and audible right up until the pin
+      // releases, instead of dipping to a blank screen first.
+      const vol = Math.min(progress / 0.3, 1)
       if (playerRef.current && !muted) playerRef.current.setVolume(vol).catch(() => {})
     }
     function onScroll() {
@@ -162,10 +161,9 @@ function ShowreelHero({ onNavOpacity }: { onNavOpacity: (v: number) => void }) {
           />
         </div>
         <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(10,12,16,0.92) 0%, rgba(10,12,16,0.2) 40%, rgba(10,12,16,0.5) 100%)', zIndex: 1, opacity: textOpacity, transition: 'opacity 0.1s linear' }} />
-        <div style={{ position: 'absolute', inset: 0, background: '#0E1014', zIndex: 1, opacity: blackOut, transition: 'opacity 0.1s linear', pointerEvents: 'none' }} />
         <button
           onClick={toggleSound}
-          style={{ position: 'absolute', bottom: 'clamp(28px, 7vh, 52px)', right: 'clamp(20px, 5vw, 48px)', zIndex: 3, width: 44, height: 44, borderRadius: '50%', border: '0.5px solid rgba(200,194,187,0.35)', background: 'rgba(10,12,16,0.5)', color: '#C8C2BB', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, backdropFilter: 'blur(6px)', opacity: 1 - blackOut }}
+          style={{ position: 'absolute', bottom: 'clamp(28px, 7vh, 52px)', right: 'clamp(20px, 5vw, 48px)', zIndex: 3, width: 44, height: 44, borderRadius: '50%', border: '0.5px solid rgba(200,194,187,0.35)', background: 'rgba(10,12,16,0.5)', color: '#C8C2BB', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, backdropFilter: 'blur(6px)' }}
           aria-label={muted ? 'Unmute showreel' : 'Mute showreel'}
         >
           {muted ? '🔇' : '🔊'}
