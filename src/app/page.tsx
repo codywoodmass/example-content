@@ -56,31 +56,129 @@ function StatementSection() {
     return () => observer.disconnect()
   }, [])
 
-  const lineStyle = (delay: number): React.CSSProperties => ({
-    fontSize: 'clamp(40px, 6vw, 88px)',
-    fontWeight: 400,
-    color: '#fff',
-    lineHeight: 1.0,
-    letterSpacing: '0.04em',
-    margin: 0,
-    textTransform: 'uppercase' as const,
-    fontFamily: "'Bebas Neue', sans-serif",
-    opacity: visible ? 1 : 0,
-    transition: `opacity 0.3s ease ${delay}ms`,
-  })
+  return (
+    <div ref={ref} style={{ padding: 'clamp(20px, 3.5vw, 30px) clamp(20px, 5vw, 48px)', borderTop: '0.5px solid rgba(200,194,187,0.1)', borderBottom: '0.5px solid rgba(200,194,187,0.1)', background: '#0E1014', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 20 }}>
+      <style>{`
+        @keyframes statementPulse { 0%, 100% { opacity: 0.5; transform: scale(1); } 50% { opacity: 1; transform: scale(1.3); } }
+        .statement-dot { animation: statementPulse 2.2s ease-in-out infinite; }
+      `}</style>
+      <h2 style={{ fontSize: 'clamp(16px, 2.4vw, 26px)', fontWeight: 400, color: '#fff', letterSpacing: '0.02em', margin: 0, fontFamily: "'Bebas Neue', sans-serif", textTransform: 'uppercase', opacity: visible ? 1 : 0, transition: 'opacity 0.5s ease' }}>
+        {visible && <ScrambleText text="GOOD CONTENT GETS LIKES. STRATEGIC CONTENT GETS RESULTS." delay={0} />}
+      </h2>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0, opacity: visible ? 1 : 0, transition: 'opacity 0.6s ease 300ms' }}>
+        <span className="statement-dot" style={{ width: 6, height: 6, borderRadius: '50%', background: '#C8C2BB', flexShrink: 0 }} />
+        <span style={{ fontSize: 12, color: 'rgba(200,194,187,0.45)', letterSpacing: '0.06em', fontFamily: 'Inter, sans-serif', whiteSpace: 'nowrap' }}>Cinematic quality. Commercial strategy.</span>
+      </div>
+    </div>
+  )
+}
+
+// The showreel is the hero's actual centerpiece, not just a backdrop — as the
+// visitor scrolls into it, the overlaid text and darkening gradient fade out
+// and the video's own audio fades in (via the Vimeo Player SDK, loaded at
+// runtime rather than as an npm dependency); scrolling on past it fades the
+// audio back out. Starts muted so autoplay is never blocked by the browser —
+// the fade-in is a volume ramp on top of that, plus a manual mute toggle
+// since some browsers won't honour a programmatic unmute without a prior
+// click, and this is that click.
+function ShowreelHero() {
+  const sectionRef = React.useRef<HTMLDivElement>(null)
+  const iframeRef = React.useRef<HTMLIFrameElement>(null)
+  const playerRef = React.useRef<any>(null)
+  const [textOpacity, setTextOpacity] = React.useState(1)
+  const [muted, setMuted] = React.useState(true)
+
+  React.useEffect(() => {
+    let cancelled = false
+    function init() {
+      if (cancelled || !iframeRef.current || !(window as any).Vimeo) return
+      const player = new (window as any).Vimeo.Player(iframeRef.current)
+      player.setVolume(0).catch(() => {})
+      playerRef.current = player
+    }
+    if ((window as any).Vimeo) {
+      init()
+    } else {
+      const existing = document.querySelector('script[src="https://player.vimeo.com/api/player.js"]')
+      if (existing) {
+        existing.addEventListener('load', init)
+      } else {
+        const script = document.createElement('script')
+        script.src = 'https://player.vimeo.com/api/player.js'
+        script.onload = init
+        document.body.appendChild(script)
+      }
+    }
+    return () => { cancelled = true }
+  }, [])
+
+  React.useEffect(() => {
+    let raf = 0
+    function measure() {
+      const el = sectionRef.current
+      if (!el) return
+      const rect = el.getBoundingClientRect()
+      const progress = Math.min(Math.max(-rect.top / rect.height, 0), 1)
+
+      setTextOpacity(1 - Math.min(progress / 0.25, 1))
+
+      let vol = 0
+      if (progress < 0.3) vol = progress / 0.3
+      else if (progress < 0.7) vol = 1
+      else vol = Math.max(0, 1 - (progress - 0.7) / 0.3)
+      if (playerRef.current && !muted) playerRef.current.setVolume(vol).catch(() => {})
+    }
+    function onScroll() {
+      cancelAnimationFrame(raf)
+      raf = requestAnimationFrame(measure)
+    }
+    window.addEventListener('scroll', onScroll, { passive: true })
+    measure()
+    return () => { window.removeEventListener('scroll', onScroll); cancelAnimationFrame(raf) }
+  }, [muted])
+
+  function toggleSound() {
+    const player = playerRef.current
+    if (!player) return
+    const next = !muted
+    player.setMuted(!next)
+    if (next) player.setVolume(0.6)
+    setMuted(!next)
+  }
 
   return (
-    <div ref={ref} style={{ padding: 'clamp(44px, 10vw, 72px) clamp(20px, 5vw, 48px)', borderTop: '0.5px solid rgba(200,194,187,0.1)', background: '#0E1014' }}>
-      <div style={{ maxWidth: 1100 }}>
-        <h2 style={lineStyle(0)}>
-          {visible && <ScrambleText text="CONTENT THAT LOOKS GOOD GETS LIKES." delay={0} />}
-        </h2>
-        <h2 style={{ ...lineStyle(200), marginTop: 4 }}>
-          {visible && <ScrambleText text="CONTENT BUILT WITH STRATEGY GETS RESULTS." delay={200} />}
-        </h2>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginTop: 40, opacity: visible ? 1 : 0, transition: 'opacity 0.6s ease 800ms' }}>
-          <div style={{ width: 40, height: 1, background: 'rgba(200,194,187,0.3)' }} />
-          <span style={{ fontSize: 13, color: 'rgba(200,194,187,0.45)', letterSpacing: '0.06em', fontFamily: 'Inter, sans-serif' }}>We build content with purpose — cinematic quality, commercial strategy.</span>
+    <div ref={sectionRef} style={{ position: 'relative', height: '100vh', minHeight: 600, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', padding: '0 clamp(20px, 5vw, 48px) clamp(36px, 8vh, 60px)', overflow: 'hidden' }}>
+      <div style={{ position: 'absolute', inset: 0, zIndex: 0, overflow: 'hidden', userSelect: 'none' }}>
+        <iframe
+          ref={iframeRef}
+          src="https://player.vimeo.com/video/1216750682?background=1&autoplay=1&loop=1&muted=1&title=0&byline=0&portrait=0&controls=0&badge=0&autopause=0"
+          style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: 'calc(100vw + 400px)', height: 'calc(100vh + 400px)', minWidth: '200vh', minHeight: '56.25vw', border: 'none', pointerEvents: 'none' }}
+          allow="autoplay; fullscreen"
+          frameBorder="0"
+        />
+      </div>
+      <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(10,12,16,0.92) 0%, rgba(10,12,16,0.2) 40%, rgba(10,12,16,0.5) 100%)', zIndex: 1, opacity: textOpacity, transition: 'opacity 0.15s linear' }} />
+      <button
+        onClick={toggleSound}
+        style={{ position: 'absolute', bottom: 'clamp(28px, 7vh, 52px)', right: 'clamp(20px, 5vw, 48px)', zIndex: 3, width: 44, height: 44, borderRadius: '50%', border: '0.5px solid rgba(200,194,187,0.35)', background: 'rgba(10,12,16,0.5)', color: '#C8C2BB', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, backdropFilter: 'blur(6px)' }}
+        aria-label={muted ? 'Unmute showreel' : 'Mute showreel'}
+      >
+        {muted ? '🔇' : '🔊'}
+      </button>
+      <div style={{ position: 'relative', zIndex: 2, opacity: textOpacity, transition: 'opacity 0.15s linear', pointerEvents: textOpacity < 0.05 ? 'none' : 'auto' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 18 }}>
+          <div style={{ width: 32, height: 1, background: '#C8C2BB', opacity: 0.5, flexShrink: 0 }} />
+          <span style={{ fontSize: 11, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.6)' }}>Property & architectural film specialists</span>
+        </div>
+        <h1 style={{ fontSize: 'clamp(40px, 9vw, 80px)', fontWeight: 400, lineHeight: 1.05, letterSpacing: '0.02em', color: '#fff', maxWidth: 800, margin: 0, fontFamily: "'Bebas Neue', sans-serif", textTransform: 'uppercase' }}>
+          We create content that <span style={{ color: '#C8C2BB' }}>moves</span> people.
+        </h1>
+        <p style={{ fontSize: 15, color: 'rgba(200,194,187,0.5)', marginTop: 20, maxWidth: 460, lineHeight: 1.65 }}>
+          High-end video production and photography for property developers, real estate agents and architects across New Zealand.
+        </p>
+        <div style={{ display: 'flex', gap: 20, marginTop: 38, alignItems: 'center', flexWrap: 'wrap' }}>
+          <a href="/work" style={{ background: '#C8C2BB', color: '#111', fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', padding: '14px 28px', borderRadius: 2, textDecoration: 'none', fontWeight: 500 }}>View our work</a>
+          <span style={{ color: 'rgba(200,194,187,0.4)', fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase' }}>Scroll to watch ↓</span>
         </div>
       </div>
     </div>
@@ -106,34 +204,8 @@ export default function Home() {
         }
       `}</style>
       <SiteNav />
-      {/* HERO */}
-      <div style={{ position: 'relative', height: '100vh', minHeight: 600, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', padding: '0 clamp(20px, 5vw, 48px) clamp(36px, 8vh, 60px)', overflow: 'hidden' }}>
-        <div style={{ position: 'absolute', inset: 0, zIndex: 0, overflow: 'hidden', pointerEvents: 'none', userSelect: 'none' }}>
-          <iframe
-            src="https://player.vimeo.com/video/1216748448?background=1&autoplay=1&loop=1&muted=1&title=0&byline=0&portrait=0&controls=0&badge=0&autopause=0"
-            style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: 'calc(100vw + 400px)', height: 'calc(100vh + 400px)', minWidth: '200vh', minHeight: '56.25vw', border: 'none' }}
-            allow="autoplay; fullscreen"
-            frameBorder="0"
-          />
-        </div>
-        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(10,12,16,0.92) 0%, rgba(10,12,16,0.2) 40%, rgba(10,12,16,0.5) 100%)', zIndex: 1 }} />
-        <div style={{ position: 'relative', zIndex: 2 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 18 }}>
-            <div style={{ width: 32, height: 1, background: '#C8C2BB', opacity: 0.5, flexShrink: 0 }} />
-            <span style={{ fontSize: 11, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.6)' }}>Property & architectural film specialists</span>
-          </div>
-          <h1 style={{ fontSize: 'clamp(40px, 9vw, 80px)', fontWeight: 400, lineHeight: 1.05, letterSpacing: '0.02em', color: '#fff', maxWidth: 800, margin: 0, fontFamily: "'Bebas Neue', sans-serif", textTransform: 'uppercase' }}>
-            We create content that <span style={{ color: '#C8C2BB' }}>moves</span> people.
-          </h1>
-          <p style={{ fontSize: 15, color: 'rgba(200,194,187,0.5)', marginTop: 20, maxWidth: 460, lineHeight: 1.65 }}>
-            High-end video production and photography for property developers, real estate agents and architects across New Zealand.
-          </p>
-          <div style={{ display: 'flex', gap: 20, marginTop: 38, alignItems: 'center', flexWrap: 'wrap' }}>
-            <a href="/work" style={{ background: '#C8C2BB', color: '#111', fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', padding: '14px 28px', borderRadius: 2, textDecoration: 'none', fontWeight: 500 }}>View our work</a>
-            <a href="#reel" style={{ color: 'rgba(200,194,187,0.65)', fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', textDecoration: 'none' }}>Watch showreel →</a>
-          </div>
-        </div>
-      </div>
+      {/* HERO / SHOWREEL */}
+      <ShowreelHero />
 
       {/* HERO BOTTOM GRADIENT TAPER */}
       <div style={{ height: 120, marginTop: -120, background: 'linear-gradient(to bottom, transparent, #0E1014)', position: 'relative', zIndex: 3, pointerEvents: 'none' }} />

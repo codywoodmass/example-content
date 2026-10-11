@@ -3,6 +3,7 @@ import React from 'react'
 import { useSiteGate } from '@/lib/sitePreview'
 import SiteNav from '@/components/public/SiteNav'
 import SiteFooter from '@/components/public/SiteFooter'
+import InstagramFeed from '@/components/public/InstagramFeed'
 
 const SERVICES = [
   { num: '01', title: 'Property & Real Estate Film', desc: 'Cinematic walkthroughs and lifestyle edits built to sell a listing, not just show it.' },
@@ -55,6 +56,8 @@ export default function ServicesPage() {
         <h2 style={{ fontSize: 'clamp(28px, 6vw, 44px)', fontWeight: 500, color: '#fff', letterSpacing: '-0.02em', marginBottom: 24 }}>Not sure which fits <span style={{ color: '#C8C2BB' }}>your project?</span></h2>
         <a href="/contact" style={{ background: '#C8C2BB', color: '#111', fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', padding: '14px 28px', borderRadius: 2, textDecoration: 'none', fontWeight: 500 }}>Let's talk</a>
       </div>
+
+      <InstagramFeed />
 
       <SiteFooter />
     </main>
