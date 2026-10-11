@@ -25,13 +25,17 @@ Open `src/lib/workProjects.ts` and add an entry to the `WORK_PROJECTS` array:
   category: 'Architectural' | 'Commercial' | 'Events',
   type: 'Property Film' | 'Brand Film' | whatever fits,
   vimeoId: '1234567890',          // for a video project
-  thumb: '/images/work/....jpg',  // the still shown before hover/click
-  description: 'Optional longer description shown in the project detail view.',
+  thumb: '/images/work/....jpg',  // the still shown before hover/click, and the click-to-play poster
+  description: 'Longer write-up shown in the project detail view — a couple of sentences is plenty.',
+  images: ['/images/work/project-slug/1.jpg', '/images/work/project-slug/2.jpg'], // optional extra photos, shown in a "More from this project" gallery
 }
 ```
 
-Photo-only projects can omit `vimeoId` — the modal will just show the `thumb`
-image full-size.
+Photo-only projects can omit `vimeoId` — the detail view will just show the
+`thumb` image full-size. The `images` array is optional too — if you leave it
+out, the detail view simply skips the gallery section rather than showing
+anything empty, so there's no rush to have extra photos ready for every
+project.
 
 If you'd rather just hand me the files and details, I can add them directly —
 either way works.

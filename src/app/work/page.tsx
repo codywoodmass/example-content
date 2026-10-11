@@ -143,31 +143,179 @@ function GridView({ projects, onSelect }: { projects: WorkProject[]; onSelect: (
   )
 }
 
-function ProjectModal({ project, onClose }: { project: WorkProject; onClose: () => void }) {
+// Fully custom video chrome instead of Vimeo's own control bar — no Vimeo
+// logo/share/fullscreen row, just our own play and mute buttons, so the
+// detail view never reads as "an embedded third-party player." The iframe
+// isn't even mounted until the poster is clicked, which also means no
+// request to Vimeo happens at all until someone actually wants to watch.
+function CustomVimeoPlayer({ vimeoId, poster, title }: { vimeoId: string; poster?: string; title: string }) {
+  const [started, setStarted] = React.useState(false)
+  const iframeRef = React.useRef<HTMLIFrameElement>(null)
+  const playerRef = React.useRef<any>(null)
+  const [playing, setPlaying] = React.useState(true)
+  const [muted, setMuted] = React.useState(false)
+  const [hovering, setHovering] = React.useState(false)
+
+  React.useEffect(() => {
+    if (!started) return
+    let cancelled = false
+    function init() {
+      if (cancelled || !iframeRef.current || !(window as any).Vimeo) return
+      const player = new (window as any).Vimeo.Player(iframeRef.current)
+      player.on('play', () => setPlaying(true))
+      player.on('pause', () => setPlaying(false))
+      player.on('ended', () => setPlaying(false))
+      playerRef.current = player
+    }
+    if ((window as any).Vimeo) {
+      init()
+    } else {
+      const existing = document.querySelector('script[src="https://player.vimeo.com/api/player.js"]')
+      if (existing) existing.addEventListener('load', init)
+      else {
+        const script = document.createElement('script')
+        script.src = 'https://player.vimeo.com/api/player.js'
+        script.onload = init
+        document.body.appendChild(script)
+      }
+    }
+    return () => { cancelled = true }
+  }, [started])
+
+  function togglePlay() {
+    const player = playerRef.current
+    if (!player) return
+    if (playing) player.pause()
+    else player.play()
+  }
+
+  function toggleMute(e: React.MouseEvent) {
+    e.stopPropagation()
+    const player = playerRef.current
+    if (!player) return
+    const next = !muted
+    player.setMuted(next)
+    setMuted(next)
+  }
+
+  if (!started) {
+    return (
+      <div
+        onClick={() => setStarted(true)}
+        style={{ position: 'absolute', inset: 0, cursor: 'pointer', backgroundImage: poster ? `url(${poster})` : undefined, backgroundSize: 'cover', backgroundPosition: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+      >
+        <div style={{ position: 'absolute', inset: 0, background: 'rgba(8,9,11,0.3)' }} />
+        <div style={{ position: 'relative', width: 76, height: 76, borderRadius: '50%', background: 'rgba(10,12,16,0.55)', border: '0.5px solid rgba(200,194,187,0.4)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 24 }} aria-label={`Play ${title}`}>
+          ▶
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(8,9,11,0.92)', backdropFilter: 'blur(6px)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-      <button onClick={onClose} style={{ position: 'fixed', top: 24, right: 28, fontSize: 28, color: 'rgba(200,194,187,0.6)', background: 'transparent', border: 'none', cursor: 'pointer', lineHeight: 1 }} aria-label="Close">×</button>
-      <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxWidth: 1000 }}>
+    <div
+      style={{ position: 'absolute', inset: 0 }}
+      onMouseEnter={() => setHovering(true)}
+      onMouseLeave={() => setHovering(false)}
+    >
+      <iframe
+        ref={iframeRef}
+        src={`https://player.vimeo.com/video/${vimeoId}?autoplay=1&muted=0&title=0&byline=0&portrait=0&controls=0&badge=0&dnt=1`}
+        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none' }}
+        allow="autoplay; fullscreen"
+      />
+      <div onClick={togglePlay} style={{ position: 'absolute', inset: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        {(!playing || hovering) && (
+          <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'rgba(10,12,16,0.5)', border: '0.5px solid rgba(200,194,187,0.35)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 20, opacity: playing ? 0.75 : 1, transition: 'opacity 0.2s ease' }}>
+            {playing ? '❙❙' : '▶'}
+          </div>
+        )}
+      </div>
+      <button
+        onClick={toggleMute}
+        style={{ position: 'absolute', bottom: 16, right: 16, zIndex: 3, width: 40, height: 40, borderRadius: '50%', border: '0.5px solid rgba(200,194,187,0.35)', background: 'rgba(10,12,16,0.55)', color: '#C8C2BB', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, backdropFilter: 'blur(6px)' }}
+        aria-label={muted ? 'Unmute video' : 'Mute video'}
+      >
+        {muted ? '🔇' : '🔊'}
+      </button>
+    </div>
+  )
+}
+
+function Spec({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={{ padding: '18px 0' }}>
+      <p style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)', margin: '0 0 6px' }}>{label}</p>
+      <p style={{ fontSize: 15, color: '#fff', margin: 0 }}>{value}</p>
+    </div>
+  )
+}
+
+// A full takeover rather than a small centred box — scrolls like its own
+// page (nav/footer included) so it reads as part of the site, not a popup
+// to somewhere else.
+function ProjectModal({ project, onClose }: { project: WorkProject; onClose: () => void }) {
+  React.useEffect(() => {
+    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: '#0E1014', zIndex: 200, overflowY: 'auto' }}>
+      <style>{`
+        .project-specs { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 0.5px solid rgba(200,194,187,0.1); border-bottom: 0.5px solid rgba(200,194,187,0.1); }
+        .project-gallery-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
+        @media (max-width: 760px) {
+          .project-specs { grid-template-columns: 1fr; }
+          .project-gallery-grid { grid-template-columns: 1fr; }
+        }
+      `}</style>
+      <button onClick={onClose} style={{ position: 'fixed', top: 22, right: 'clamp(20px, 5vw, 40px)', zIndex: 10, fontSize: 28, color: 'rgba(200,194,187,0.6)', background: 'rgba(14,16,20,0.6)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: '50%', width: 44, height: 44, cursor: 'pointer', lineHeight: 1 }} aria-label="Close">×</button>
+      <button onClick={onClose} style={{ position: 'fixed', top: 30, left: 'clamp(20px, 5vw, 48px)', zIndex: 10, fontSize: 12, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.6)', background: 'transparent', border: 'none', cursor: 'pointer' }}>← Back to work</button>
+
+      <div style={{ maxWidth: 1100, margin: '0 auto', padding: 'clamp(90px, 14vh, 120px) clamp(20px, 5vw, 48px) 0' }}>
         <div style={{ position: 'relative', paddingTop: '56.25%', background: '#000', borderRadius: 4, overflow: 'hidden', boxShadow: '0 30px 80px rgba(0,0,0,0.6)' }}>
           {project.vimeoId ? (
-            <iframe
-              src={`https://player.vimeo.com/video/${project.vimeoId}?autoplay=1&title=0&byline=0&portrait=0`}
-              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none' }}
-              allow="autoplay; fullscreen"
-            />
+            <CustomVimeoPlayer vimeoId={project.vimeoId} poster={project.thumb} title={project.title} />
           ) : (
             <img src={project.thumb} alt={project.title} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
           )}
         </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginTop: 24, flexWrap: 'wrap', gap: 16 }}>
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginTop: 32, flexWrap: 'wrap', gap: 16 }}>
           <div>
             <p style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)', margin: '0 0 8px' }}>{project.client} · {project.type}</p>
-            <h2 style={{ fontSize: 'clamp(24px, 4vw, 34px)', fontWeight: 400, color: '#fff', margin: 0, fontFamily: "'Bebas Neue', sans-serif", textTransform: 'uppercase', letterSpacing: '0.02em' }}>{project.title}</h2>
-            {project.description && <p style={{ fontSize: 14, color: 'rgba(200,194,187,0.55)', lineHeight: 1.7, maxWidth: 560, marginTop: 14 }}>{project.description}</p>}
+            <h1 style={{ fontSize: 'clamp(28px, 5vw, 46px)', fontWeight: 400, color: '#fff', margin: 0, fontFamily: "'Bebas Neue', sans-serif", textTransform: 'uppercase', letterSpacing: '0.02em' }}>{project.title}</h1>
           </div>
           <span style={{ fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.7)', border: '0.5px solid rgba(200,194,187,0.25)', padding: '7px 14px', borderRadius: 2, whiteSpace: 'nowrap' }}>{project.category}</span>
         </div>
+
+        {project.description && (
+          <p style={{ fontSize: 15, color: 'rgba(200,194,187,0.6)', lineHeight: 1.8, maxWidth: 680, marginTop: 20 }}>{project.description}</p>
+        )}
+
+        <div className="project-specs" style={{ marginTop: 40 }}>
+          <Spec label="Client" value={project.client} />
+          <Spec label="Category" value={project.category} />
+          <Spec label="Type" value={project.type} />
+        </div>
+
+        {project.images && project.images.length > 0 && (
+          <div style={{ marginTop: 56 }}>
+            <p style={{ fontSize: 11, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)', marginBottom: 20 }}>More from this project</p>
+            <div className="project-gallery-grid">
+              {project.images.map(src => (
+                <img key={src} src={src} alt={project.title} style={{ width: '100%', borderRadius: 3, display: 'block' }} />
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div style={{ height: 'clamp(56px, 10vw, 90px)' }} />
       </div>
+
+      <SiteFooter />
     </div>
   )
 }
