@@ -57,18 +57,10 @@ function StatementSection() {
   }, [])
 
   return (
-    <div ref={ref} style={{ padding: 'clamp(28px, 5vw, 44px) clamp(20px, 5vw, 48px)', borderTop: '0.5px solid rgba(200,194,187,0.1)', borderBottom: '0.5px solid rgba(200,194,187,0.1)', background: '#0E1014' }}>
-      <style>{`
-        @keyframes statementPulse { 0%, 100% { opacity: 0.5; transform: scale(1); } 50% { opacity: 1; transform: scale(1.3); } }
-        .statement-dot { animation: statementPulse 2.2s ease-in-out infinite; }
-      `}</style>
-      <h2 style={{ fontSize: 'clamp(28px, 4.6vw, 54px)', fontWeight: 400, color: '#fff', lineHeight: 1.05, letterSpacing: '0.02em', margin: 0, fontFamily: "'Bebas Neue', sans-serif", textTransform: 'uppercase', opacity: visible ? 1 : 0, transition: 'opacity 0.5s ease' }}>
+    <div ref={ref} style={{ padding: 'clamp(36px, 7vw, 60px) clamp(20px, 5vw, 48px)', background: '#0E1014', display: 'flex', justifyContent: 'center', textAlign: 'center' }}>
+      <h2 style={{ fontSize: 'clamp(28px, 4.6vw, 54px)', fontWeight: 400, color: '#fff', lineHeight: 1.05, letterSpacing: '0.02em', margin: 0, maxWidth: 900, fontFamily: "'Bebas Neue', sans-serif", textTransform: 'uppercase', opacity: visible ? 1 : 0, transition: 'opacity 0.5s ease' }}>
         {visible && <ScrambleText text="GOOD CONTENT GETS LIKES. STRATEGIC CONTENT GETS RESULTS." delay={0} />}
       </h2>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 18, opacity: visible ? 1 : 0, transition: 'opacity 0.6s ease 300ms' }}>
-        <span className="statement-dot" style={{ width: 6, height: 6, borderRadius: '50%', background: '#C8C2BB', flexShrink: 0 }} />
-        <span style={{ fontSize: 13, color: 'rgba(200,194,187,0.45)', letterSpacing: '0.06em', fontFamily: 'Inter, sans-serif' }}>Cinematic quality. Commercial strategy.</span>
-      </div>
     </div>
   )
 }
