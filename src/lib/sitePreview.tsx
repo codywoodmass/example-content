@@ -3,7 +3,7 @@ import React from 'react'
 
 // Flip to false when the whole site is ready to go fully public — gates
 // every public marketing page (not the portal or auth pages).
-export const UNDER_CONSTRUCTION = true
+export const UNDER_CONSTRUCTION = false
 
 // Soft bypass so the real build can be previewed (on any URL, including the
 // live production domain) while it's still gated for everyone else — visit
