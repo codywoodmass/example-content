@@ -104,64 +104,58 @@ const SERVICES: Service[] = [
   },
 ]
 
-// Four distinct arrangements — each on an implicit grid with just enough
-// overlap between neighbours to feel assembled rather than gridded, but
-// spaced apart enough that each photo still reads clearly on its own.
-// (An earlier pass had these overlapping 50%+, which just turned into an
-// illegible blur where tiles met — these keep the overlap in the 10-20%
-// range at most.)
-const TILE_LAYOUTS: { top: string; left: string; width: number; z: number }[][] = [
-  [ // 3-column, 2-row grid
-    { top: '2%', left: '0%', width: 300, z: 1 },
-    { top: '4%', left: '36%', width: 280, z: 2 },
-    { top: '0%', left: '70%', width: 280, z: 1 },
-    { top: '54%', left: '4%', width: 280, z: 2 },
-    { top: '56%', left: '38%', width: 300, z: 1 },
-    { top: '52%', left: '72%', width: 260, z: 2 },
-  ],
-  [ // 3-column grid, three-tile accent row below
-    { top: '2%', left: '2%', width: 290, z: 1 },
-    { top: '5%', left: '38%', width: 300, z: 2 },
-    { top: '0%', left: '74%', width: 250, z: 1 },
-    { top: '54%', left: '4%', width: 260, z: 2 },
-    { top: '56%', left: '38%', width: 280, z: 1 },
-    { top: '52%', left: '72%', width: 260, z: 2 },
-  ],
-  [ // 3-column masonry, slight vertical stagger per column
-    { top: '2%', left: '0%', width: 290, z: 1 },
-    { top: '10%', left: '34%', width: 270, z: 2 },
-    { top: '0%', left: '68%', width: 290, z: 1 },
-    { top: '54%', left: '4%', width: 280, z: 2 },
-    { top: '60%', left: '38%', width: 300, z: 1 },
-    { top: '50%', left: '72%', width: 260, z: 2 },
-  ],
-  [ // airy 2x3 grid, still the most breathing room per tile
-    { top: '2%', left: '2%', width: 260, z: 1 },
-    { top: '8%', left: '38%', width: 250, z: 2 },
-    { top: '0%', left: '72%', width: 250, z: 1 },
-    { top: '56%', left: '6%', width: 250, z: 1 },
-    { top: '60%', left: '40%', width: 260, z: 2 },
-    { top: '54%', left: '74%', width: 250, z: 1 },
-  ],
-]
+// Deterministic pseudo-random in [0, 1) from a string seed — used to give
+// each tile a stagger/z-index that's consistent for a given service+slot
+// (so the gallery doesn't visibly jiggle into a new arrangement if it
+// re-renders) while still differing from tile to tile and service to
+// service, without hand-maintaining a layout array per service.
+function seededRand(seed: string): number {
+  let h = 0
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0
+  return (h % 10000) / 10000
+}
+
+const TILE_COUNT = 6
 
 function ServiceModal({ service, onClose }: { service: Service; onClose: () => void }) {
   const cursorRef = React.useRef<HTMLDivElement>(null)
   const tiles = React.useMemo(() => {
-    const index = SERVICES.findIndex(s => s.num === service.num)
-    const layout = TILE_LAYOUTS[index % TILE_LAYOUTS.length]
     const pool = shuffled(tilePoolFor(service.num))
-    return layout.map((pos, i) => ({ ...pos, ...pool[i % pool.length] }))
+    return Array.from({ length: TILE_COUNT }, (_, i) => {
+      const seed = `${service.num}-${i}`
+      return {
+        ...pool[i % pool.length],
+        // -16..16px vertical stagger and alternating z — a flex-wrap row
+        // of overlapping tiles that still reads as "assembled" rather
+        // than a flat grid, and reflows naturally at any screen width
+        // instead of needing a separate mobile layout.
+        translateY: Math.round((seededRand(seed) - 0.5) * 32),
+        z: i % 2 === 0 ? 1 : 2,
+      }
+    })
   }, [service.num])
 
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(5,6,8,0.85)', backdropFilter: 'blur(8px)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 'clamp(16px, 3vw, 40px)' }}>
       <style>{`
-        @keyframes tileFloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+        @keyframes tileFloat { 0%, 100% { transform: translateY(var(--ty, 0)); } 50% { transform: translateY(calc(var(--ty, 0) - 8px)); } }
+        /* flex-wrap instead of absolute positioning — reflows naturally
+           at any screen width (this used to need a whole separate
+           mobile-only layout to avoid overflowing/overlapping a
+           phone-width modal). The negative right/bottom margins on each
+           tile are what create the overlap; the per-tile --ty variable
+           (set inline, varies per tile/service) staggers them vertically
+           so it reads as "assembled" rather than a flat grid. */
+        .tiles-wrap { display: flex; flex-wrap: wrap; align-items: flex-start; }
+        .service-tile {
+          position: relative; width: clamp(130px, 22vw, 260px); flex: 0 0 auto;
+          margin: 0 -16px 20px 0; border-radius: 6px; overflow: hidden;
+          transition: transform 0.3s ease, opacity 0.3s ease;
+          animation: tileFloat 6s ease-in-out infinite;
+        }
         /* No box-shadow — against the modal's own near-black background
            a dark drop shadow just reads as an unwanted ring/border around
            every tile rather than a lift. */
-        .service-tile { position: absolute; border-radius: 6px; overflow: hidden; transition: transform 0.3s ease, opacity 0.3s ease; animation: tileFloat 6s ease-in-out infinite; }
         /* object-fit: cover alone wasn't enough — several of the source
            thumbnails have a thin letterbox/matte baked into the image
            itself, which read as an unwanted "border" around the tile.
@@ -175,9 +169,15 @@ function ServiceModal({ service, onClose }: { service: Service; onClose: () => v
            always beats a plain class rule for the same property — without
            !important this hover rule would never actually win, so the
            hovered tile could still end up tucked behind a higher-z tile. */
-        .service-tile:hover { opacity: 1 !important; transform: scale(1.15) !important; z-index: 999 !important; }
+        .service-tile:hover { opacity: 1 !important; transform: translateY(var(--ty, 0)) scale(1.15) !important; z-index: 999 !important; }
         .service-tile:hover .tile-video { opacity: 1; }
         .tiles-wrap { cursor: none; }
+        @media (max-width: 700px) {
+          /* No cursor to move on a touch device — the floating logo
+             cursor-follow effect is desktop-only by nature. */
+          .tiles-wrap { cursor: auto; }
+          .tiles-wrap-cursor { display: none !important; }
+        }
       `}</style>
       <button
         onClick={onClose}
@@ -205,10 +205,14 @@ function ServiceModal({ service, onClose }: { service: Service; onClose: () => v
             }
           }}
           onMouseLeave={() => { if (cursorRef.current) cursorRef.current.style.opacity = '0' }}
-          style={{ position: 'relative', height: 'clamp(440px, 54vw, 560px)', margin: 'clamp(32px, 5vw, 56px) clamp(28px, 6vw, 64px) clamp(48px, 7vw, 72px)' }}
+          style={{ margin: 'clamp(32px, 5vw, 56px) clamp(28px, 6vw, 64px) clamp(48px, 7vw, 72px)' }}
         >
           {tiles.map((t, i) => (
-            <div key={i} className="service-tile" style={{ top: t.top, left: t.left, width: t.width, zIndex: t.z, aspectRatio: '4/3', animationDelay: `${i * 0.4}s` }}>
+            <div
+              key={i}
+              className="service-tile"
+              style={{ ['--ty' as string]: `${t.translateY}px`, transform: `translateY(${t.translateY}px)`, zIndex: t.z, aspectRatio: '4/3', animationDelay: `${i * 0.4}s` }}
+            >
               <img className="tile-img" src={t.img} alt="" />
               {t.vimeoId && (
                 <iframe
@@ -222,7 +226,7 @@ function ServiceModal({ service, onClose }: { service: Service; onClose: () => v
           ))}
         </div>
       </div>
-      <div ref={cursorRef} style={{ position: 'fixed', top: 0, left: 0, width: 46, height: 46, marginLeft: -23, marginTop: -23, pointerEvents: 'none', zIndex: 400, opacity: 0, transition: 'opacity 0.15s ease' }}>
+      <div ref={cursorRef} className="tiles-wrap-cursor" style={{ position: 'fixed', top: 0, left: 0, width: 46, height: 46, marginLeft: -23, marginTop: -23, pointerEvents: 'none', zIndex: 400, opacity: 0, transition: 'opacity 0.15s ease' }}>
         <img src="/images/EX Logo EMBLEMPALE.png" alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', filter: 'drop-shadow(0 4px 10px rgba(0,0,0,0.5))' }} />
       </div>
     </div>
@@ -246,6 +250,8 @@ export default function ServicesPage() {
         .service-card { background: #0E1014; padding: clamp(28px, 4vw, 40px); cursor: pointer; transition: background 0.2s ease; }
         .service-card:hover { background: rgba(200,194,187,0.03); }
         .service-card:hover h3 { color: #C8C2BB; }
+        .service-card:hover .service-card-arrow { color: #C8C2BB; transform: translateX(3px); }
+        .service-card-arrow { display: inline-block; transition: color 0.2s ease, transform 0.2s ease; }
         @media (max-width: 760px) { .services-grid { grid-template-columns: 1fr; } }
         /* nowrap keeps the headline a single clean line on desktop, but at
            narrow widths it can't shrink far enough to fit and was instead
@@ -269,7 +275,10 @@ export default function ServicesPage() {
         <div className="services-grid">
           {SERVICES.map(s => (
             <div key={s.num} className="service-card" onClick={() => setSelected(s)}>
-              <span style={{ fontSize: 11, color: 'rgba(200,194,187,0.3)', letterSpacing: '0.1em' }}>{s.num}</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: 11, color: 'rgba(200,194,187,0.3)', letterSpacing: '0.1em' }}>{s.num}</span>
+                <span className="service-card-arrow" style={{ color: 'rgba(200,194,187,0.2)', fontSize: 16 }}>→</span>
+              </div>
               <h3 style={{ fontSize: 22, fontWeight: 500, color: '#fff', margin: '14px 0 10px', transition: 'color 0.2s ease' }}>{s.title}</h3>
               <p style={{ fontSize: 13, color: 'rgba(200,194,187,0.5)', lineHeight: 1.7, margin: 0 }}>{s.desc}</p>
             </div>

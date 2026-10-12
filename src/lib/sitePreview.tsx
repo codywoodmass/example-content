@@ -43,7 +43,7 @@ export function UnderConstructionScreen() {
         <a href="/portal/client" style={{ color: 'rgba(200,194,187,0.6)', fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', textDecoration: 'none' }}>Client portal →</a>
         <a href="/portal/studio" style={{ color: 'rgba(200,194,187,0.6)', fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', textDecoration: 'none' }}>Studio login →</a>
       </div>
-      <p style={{ fontSize: 11, color: 'rgba(200,194,187,0.28)', letterSpacing: '0.08em' }}>© 2026 Example Content Ltd. Hawke's Bay, New Zealand.</p>
+      <p style={{ fontSize: 11, color: 'rgba(200,194,187,0.28)', letterSpacing: '0.08em' }}>© 2026 Example Content Ltd. Auckland, New Zealand.</p>
     </main>
   )
 }

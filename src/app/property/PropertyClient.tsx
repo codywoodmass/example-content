@@ -27,15 +27,20 @@ const CATEGORIES: PropertyType[] = ['Property', 'Construction']
 
 // Lazy-mounted hover-preview, same reasoning as the Our Work page's
 // cards — don't open a Vimeo stream for every tile until it's actually
-// hovered.
+// hovered. Unlike that page, this one plays with sound while hovered, so
+// the iframe is tied directly to the hover state (mounted on enter,
+// unmounted on leave) rather than staying mounted forever once first
+// hovered — otherwise audio would keep playing after the mouse moved on.
+// No background=1 here — that mode strips audio entirely by design, same
+// root cause as the old hero mute-button bug.
 function PropertyCard({ project: p }: { project: WorkProject }) {
   const [hovered, setHovered] = React.useState(false)
   return (
-    <div className="property-card" onMouseEnter={() => setHovered(true)}>
+    <div className="property-card" onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
       <div className="work-thumb">
         <div className="work-thumb-img" style={{ backgroundImage: `url(${p.thumb})`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
         {hovered && p.vimeoId && (
-          <iframe src={`https://player.vimeo.com/video/${p.vimeoId}?background=1&autoplay=1&loop=1&muted=1&title=0&byline=0&portrait=0&controls=0&badge=0&autopause=0`} allow="autoplay; fullscreen" frameBorder="0" />
+          <iframe src={`https://player.vimeo.com/video/${p.vimeoId}?autoplay=1&muted=0&loop=1&title=0&byline=0&portrait=0&controls=0&badge=0&autopause=0`} allow="autoplay; fullscreen" frameBorder="0" />
         )}
       </div>
       <p style={{ fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.38)', margin: '14px 0 5px' }}>{p.client}</p>

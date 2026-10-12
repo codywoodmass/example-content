@@ -273,11 +273,11 @@ const RECENT_WORK = [
   { id: '1234892305', title: 'Graeme Road', client: 'Residential Listing', type: 'Property Film', thumb: 'https://vumbnail.com/1234892305_large.jpg' },
   { id: 'life-fitness-atmos', title: 'Life Fitness ATMOS', client: 'Life Fitness · Brand Shoot', type: 'Brand Photography', thumb: '/images/work/life-fitness-atmos/1.jpg', noVideo: true },
   { id: '1216750682', title: 'What We Do', client: 'Example Content · Showreel', type: 'Showreel', thumb: 'https://i.vimeocdn.com/video/2188265524-4fb9e0ca30cc6d8acb3df1a1c4259eee688d7929c486e1f353c4f0858475be60-d_1280x720?region=us' },
-  { id: '1182465760', title: '23 Sullivan Road', client: 'Luxury Residential · Hawkes Bay', type: 'Property Film', thumb: 'https://i.vimeocdn.com/video/2145085364-8d9dea98f801df737866495fc8d2a5478fa035bacadf0b509fe24095202d4f0f-d_1280x720?region=us' },
-  { id: '1182467090', title: 'River Downs', client: 'Premium Listing · Hawkes Bay', type: 'Property Film', thumb: 'https://i.vimeocdn.com/video/2145086135-8b197218926ba3cb5b7473637eec6b840a9145d41cf3fddf64b4692371696b72-d_1280x720?region=us' },
+  { id: '1182465760', title: '23 Sullivan Road', client: 'Luxury Residential', type: 'Property Film', thumb: 'https://i.vimeocdn.com/video/2145085364-8d9dea98f801df737866495fc8d2a5478fa035bacadf0b509fe24095202d4f0f-d_1280x720?region=us' },
+  { id: '1182467090', title: 'River Downs', client: 'Premium Listing', type: 'Property Film', thumb: 'https://i.vimeocdn.com/video/2145086135-8b197218926ba3cb5b7473637eec6b840a9145d41cf3fddf64b4692371696b72-d_1280x720?region=us' },
   { id: '1216751477', title: 'Social Project', client: 'Commercial · Wellington', type: 'Brand Film', thumb: 'https://i.vimeocdn.com/video/2188267258-642a37f197a11b257107e3026f603bd9b101e150481feba60d316c736e8fcedd-d_1280x720?region=us' },
   { id: '1216751475', title: 'Flex Fitness Taupo', client: 'Commercial · Taupo', type: 'Brand Film', thumb: 'https://i.vimeocdn.com/video/2188266630-2c8ea8c5eb08f67c7c3976794eae813194b3bfb49295bbc45436f3fb79a978a3-d_1280x720?region=us' },
-  { id: '1216751474', title: 'Clyde Street', client: 'Property Film · Hawkes Bay', type: 'Property Film', thumb: 'https://i.vimeocdn.com/video/2188266667-68b9d4ee59946fef552d97ba3dd5b3917302c427d524f800fbb8c2638e9fb654-d_1280x720?region=us' },
+  { id: '1216751474', title: 'Clyde Street', client: 'Residential Listing', type: 'Property Film', thumb: 'https://i.vimeocdn.com/video/2188266667-68b9d4ee59946fef552d97ba3dd5b3917302c427d524f800fbb8c2638e9fb654-d_1280x720?region=us' },
 ]
 
 // Lazy-mounted hover-preview — the iframe only loads once actually
