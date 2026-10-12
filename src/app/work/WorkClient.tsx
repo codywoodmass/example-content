@@ -8,7 +8,7 @@ import { WORK_PROJECTS, WorkCategory, WorkProject } from '@/lib/workProjects'
 
 const CATEGORIES: ('All' | WorkCategory)[] = ['All', 'Architectural', 'Commercial', 'Events']
 
-function ProjectCard({ project, onSelect, style }: { project: WorkProject; onSelect: () => void; style?: React.CSSProperties }) {
+function ProjectCard({ project, onSelect, style, onPlayingChange }: { project: WorkProject; onSelect: () => void; style?: React.CSSProperties; onPlayingChange?: (playing: boolean) => void }) {
   // The video iframe is only mounted once the play button is actually
   // clicked — with 20+ projects (and the reel rendering the list twice
   // for its seamless loop), mounting every card's video unconditionally
@@ -16,6 +16,17 @@ function ProjectCard({ project, onSelect, style }: { project: WorkProject; onSel
   // static thumbnail. The thumbnail <img> itself is eager/high-priority
   // so it's never waiting behind anything else on the page.
   const [playing, setPlaying] = React.useState(false)
+  // Lets ReelView know a card is playing so it can pause the ambient
+  // autoscroll — without this, a video you've just hit play on keeps
+  // drifting off-screen with everything else. Tracked in a ref (not
+  // read in a render-driving effect) so this fires exactly once per
+  // transition instead of double-counting on re-render.
+  const playingRef = React.useRef(false)
+  React.useEffect(() => { playingRef.current = playing })
+  React.useEffect(() => {
+    return () => { if (playingRef.current) onPlayingChange?.(false) }
+  }, [])
+
   return (
     <div className="work-card" onClick={() => { if (!playing) onSelect() }} style={{ cursor: 'pointer', ...style }}>
       <div className="work-thumb">
@@ -32,7 +43,7 @@ function ProjectCard({ project, onSelect, style }: { project: WorkProject; onSel
         {!playing && project.vimeoId && (
           <button
             className="work-play-btn"
-            onClick={e => { e.stopPropagation(); setPlaying(true) }}
+            onClick={e => { e.stopPropagation(); setPlaying(true); onPlayingChange?.(true) }}
             aria-label={`Play ${project.title}`}
           >▶</button>
         )}
@@ -58,6 +69,15 @@ function ReelView({ projects, onSelect }: { projects: WorkProject[]; onSelect: (
   const dragStartX = React.useRef(0)
   const dragStartScroll = React.useRef(0)
   const paused = React.useRef(false)
+  // Separate from `paused` — that ref gets reset by hover/drag handlers
+  // (e.g. onMouseEnter unconditionally sets it false), which would
+  // override an in-progress video the moment the mouse moved back over
+  // the strip. This counts how many cards currently have a video
+  // playing, independent of hover state.
+  const playingCount = React.useRef(0)
+  function handleCardPlayingChange(isPlaying: boolean) {
+    playingCount.current = Math.max(0, playingCount.current + (isPlaying ? 1 : -1))
+  }
 
   // Rendered twice back-to-back so the wrap point is invisible — once the
   // real scroll position passes the first copy, we silently subtract its
@@ -76,7 +96,7 @@ function ReelView({ projects, onSelect }: { projects: WorkProject[]; onSelect: (
     function tick() {
       const track = trackRef.current
       const wrap = wrapRef.current
-      if (track && wrap && !dragging.current && !paused.current) {
+      if (track && wrap && !dragging.current && !paused.current && playingCount.current === 0) {
         accum.current += BASE_SPEED + extraSpeed.current
         const half = track.scrollWidth / 2
         if (accum.current >= half) accum.current -= half
@@ -146,7 +166,7 @@ function ReelView({ projects, onSelect }: { projects: WorkProject[]; onSelect: (
       >
         <div ref={trackRef} className="reel-track">
           {doubled.map((p, i) => (
-            <ProjectCard key={p.id + '-' + i} project={p} onSelect={() => onSelect(p)} />
+            <ProjectCard key={p.id + '-' + i} project={p} onSelect={() => onSelect(p)} onPlayingChange={handleCardPlayingChange} />
           ))}
         </div>
       </div>
@@ -442,15 +462,22 @@ export default function WorkPage() {
       </div>
 
       {/* VIEWER */}
-      {filtered.length === 0 ? (
-        <div style={{ padding: '60px clamp(20px, 5vw, 48px) 100px', textAlign: 'center', color: 'rgba(200,194,187,0.35)', fontSize: 14 }}>
-          More {category} work coming soon.
-        </div>
-      ) : view === 'reel' ? (
-        <ReelView projects={filtered} onSelect={setSelected} />
-      ) : (
-        <GridView projects={filtered} onSelect={setSelected} />
-      )}
+      {/* overflowAnchor: 'none' — swapping Reel (short, fixed height) for
+          Grid (tall, many rows) or back is a drastic content-height change
+          right in the middle of the page. Without this, the browser's
+          default scroll anchoring can try to "compensate" for that change
+          and visibly jump the scroll position instead of leaving it alone. */}
+      <div style={{ overflowAnchor: 'none' }}>
+        {filtered.length === 0 ? (
+          <div style={{ padding: '60px clamp(20px, 5vw, 48px) 100px', textAlign: 'center', color: 'rgba(200,194,187,0.35)', fontSize: 14 }}>
+            More {category} work coming soon.
+          </div>
+        ) : view === 'reel' ? (
+          <ReelView projects={filtered} onSelect={setSelected} />
+        ) : (
+          <GridView projects={filtered} onSelect={setSelected} />
+        )}
+      </div>
 
       {selected && <ProjectModal project={selected} onClose={() => setSelected(null)} />}
 
