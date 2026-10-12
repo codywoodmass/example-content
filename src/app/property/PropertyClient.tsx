@@ -36,7 +36,7 @@ function PropertyCard({ project: p }: { project: WorkProject }) {
   const [hovered, setHovered] = React.useState(false)
   return (
     <div className="property-card" onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
-      <div className="work-thumb">
+      <div className={`work-thumb${p.vimeoId ? ' has-video' : ''}`}>
         <div className="work-thumb-img" style={{ backgroundImage: `url(${p.thumb})`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
         {hovered && p.vimeoId && (
           <iframe src={`https://player.vimeo.com/video/${p.vimeoId}?autoplay=1&muted=0&loop=1&title=0&byline=0&portrait=0&controls=0&badge=0&autopause=0`} allow="autoplay; fullscreen" frameBorder="0" />
@@ -65,7 +65,11 @@ export default function PropertyPage() {
         .work-thumb iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none; opacity: 0; transition: opacity 0.4s ease; pointer-events: none; }
         .property-card:hover .work-thumb iframe { opacity: 1; }
         .work-thumb-img { position: absolute; inset: 0; transition: opacity 0.4s ease; }
-        .property-card:hover .work-thumb-img { opacity: 0; }
+        /* Only fade the photo out on hover when there's actually a video
+           underneath to reveal — scoped to .has-video so a photo-only
+           project's thumbnail doesn't just vanish into the empty
+           background on hover with nothing to replace it. */
+        .property-card:hover .work-thumb.has-video .work-thumb-img { opacity: 0; }
         .property-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 28px clamp(20px, 4vw, 40px); }
         .property-hero-grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: clamp(32px, 6vw, 72px); align-items: end; }
         .property-features { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0; }
