@@ -24,11 +24,31 @@ const SERVICE_TILE_FILTER: Record<string, (p: WorkProject) => boolean> = {
   '08': p => p.category === 'Architectural' && p.propertyType === 'Construction', // Development Campaigns
 }
 
+// Flattens each matching project into one tile per photo it has (not just
+// a single tile per project) — most projects now ship several images
+// rather than just a cover shot, and more real photos in the mix reads
+// far better than cycling the same handful of thumbnails.
 function tilePoolFor(serviceNum: string) {
   const filter = SERVICE_TILE_FILTER[serviceNum] ?? (() => true)
   const matches = WORK_PROJECTS.filter(filter)
   const pool = matches.length > 0 ? matches : WORK_PROJECTS
-  return pool.map(p => ({ img: p.thumb, vimeoId: p.vimeoId }))
+  const tiles: { img: string; vimeoId?: string }[] = []
+  for (const p of pool) {
+    if (p.thumb) tiles.push({ img: p.thumb, vimeoId: p.vimeoId })
+    for (const img of p.images ?? []) {
+      if (img !== p.thumb) tiles.push({ img })
+    }
+  }
+  return tiles.length > 0 ? tiles : [{ img: pool[0]?.thumb || '' }]
+}
+
+function shuffled<T>(arr: T[]): T[] {
+  const a = [...arr]
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[a[i], a[j]] = [a[j], a[i]]
+  }
+  return a
 }
 
 type Service = { num: string; title: string; desc: string; longDesc: string }
@@ -36,21 +56,21 @@ type Service = { num: string; title: string; desc: string; longDesc: string }
 const SERVICES: Service[] = [
   {
     num: '01',
-    title: 'Property & Real Estate Film',
-    desc: 'Cinematic walkthroughs and lifestyle edits built to sell a listing, not just show it.',
-    longDesc: 'Cinematic walkthroughs and lifestyle edits built to sell a listing, not just show it. We shoot for the buyer\'s imagination — pacing, light and movement all working together so the property feels lived-in, not staged.',
+    title: 'Property Photography & Film',
+    desc: 'Photography and film that bring properties to life, from architectural details to lifestyle-driven films.',
+    longDesc: 'Photography and film that bring properties to life. From architectural details to lifestyle-driven films, we create considered visual content that captures the feel of a space and makes people want more.',
   },
   {
     num: '02',
-    title: 'Architectural Photography',
-    desc: 'Considered, detail-led stills for architects, builders and developers.',
-    longDesc: 'Considered, detail-led stills for architects, builders and developers — composition and light treated the way the building itself was designed: deliberately. Great for portfolios, publications and pitch decks.',
+    title: 'Architectural Photography & Film',
+    desc: 'A visual showcase to the highest detail, for flawless properties with distinguished features.',
+    longDesc: 'A visual showcase to the highest detail — for flawless properties with distinguished features, captured in the best light.',
   },
   {
     num: '03',
     title: 'Brand & Commercial Film',
-    desc: 'Brand films, campaign content and social-first video for businesses.',
-    longDesc: 'Brand films, campaign content and social-first video for businesses that want content with a point of view, not just footage. We help shape the story before we ever pick up a camera.',
+    desc: 'Brand films, campaign content and social-first video for businesses that want a point of view, not just footage.',
+    longDesc: 'Brand films, campaign content and social-first video for businesses that want content with a point of view, not just footage. We work with you to understand the goals for your content and strategise to execute the perfect project.',
   },
   {
     num: '04',
@@ -67,8 +87,8 @@ const SERVICES: Service[] = [
   {
     num: '06',
     title: 'Event Coverage',
-    desc: 'Full-day event photography and video, from launches to live activations.',
-    longDesc: 'Full-day event photography and video, from launches to live activations — coverage that captures the energy of the room as well as the key moments you\'ll want to use afterward.',
+    desc: 'Full photo and video event coverage, from concerts and live activations to round tables and everything in between.',
+    longDesc: 'Full photo and video event coverage — from concerts to live activations, sporting events, round tables and everything in between. We capture the energy of the space as well as the key moments.',
   },
   {
     num: '07',
@@ -79,8 +99,8 @@ const SERVICES: Service[] = [
   {
     num: '08',
     title: 'Development Campaigns',
-    desc: 'Full pre-sale content campaigns across video, photography and social cut-downs.',
-    longDesc: 'Full pre-sale content campaigns across video, photography and social cut-downs for multi-unit developments — one shoot, a full suite of deliverables built for the whole sales campaign.',
+    desc: 'We work with developers to showcase their projects from start to finish.',
+    longDesc: 'We work with developers to showcase their projects from start to finish — think pre-sale content with AI renders, site construction updates, and location and lifestyle showcases through to the completed project.',
   },
 ]
 
@@ -99,24 +119,29 @@ const TILE_LAYOUTS: { top: string; left: string; width: number; z: number }[][] 
     { top: '56%', left: '38%', width: 300, z: 1 },
     { top: '52%', left: '72%', width: 260, z: 2 },
   ],
-  [ // 3-column grid, two-tile accent row below
+  [ // 3-column grid, three-tile accent row below
     { top: '2%', left: '2%', width: 290, z: 1 },
     { top: '5%', left: '38%', width: 300, z: 2 },
     { top: '0%', left: '74%', width: 250, z: 1 },
-    { top: '54%', left: '16%', width: 290, z: 2 },
-    { top: '56%', left: '52%', width: 280, z: 1 },
+    { top: '54%', left: '4%', width: 260, z: 2 },
+    { top: '56%', left: '38%', width: 280, z: 1 },
+    { top: '52%', left: '72%', width: 260, z: 2 },
   ],
-  [ // 2-column masonry, taller tiles
-    { top: '2%', left: '2%', width: 300, z: 1 },
-    { top: '6%', left: '54%', width: 290, z: 2 },
-    { top: '54%', left: '4%', width: 280, z: 1 },
-    { top: '50%', left: '56%', width: 300, z: 2 },
+  [ // 3-column masonry, slight vertical stagger per column
+    { top: '2%', left: '0%', width: 290, z: 1 },
+    { top: '10%', left: '34%', width: 270, z: 2 },
+    { top: '0%', left: '68%', width: 290, z: 1 },
+    { top: '54%', left: '4%', width: 280, z: 2 },
+    { top: '60%', left: '38%', width: 300, z: 1 },
+    { top: '50%', left: '72%', width: 260, z: 2 },
   ],
-  [ // airy 2x2 grid, the most breathing room
-    { top: '2%', left: '4%', width: 290, z: 1 },
-    { top: '6%', left: '56%', width: 280, z: 2 },
-    { top: '54%', left: '8%', width: 270, z: 1 },
-    { top: '52%', left: '58%', width: 290, z: 2 },
+  [ // airy 2x3 grid, still the most breathing room per tile
+    { top: '2%', left: '2%', width: 260, z: 1 },
+    { top: '8%', left: '38%', width: 250, z: 2 },
+    { top: '0%', left: '72%', width: 250, z: 1 },
+    { top: '56%', left: '6%', width: 250, z: 1 },
+    { top: '60%', left: '40%', width: 260, z: 2 },
+    { top: '54%', left: '74%', width: 250, z: 1 },
   ],
 ]
 
@@ -125,7 +150,7 @@ function ServiceModal({ service, onClose }: { service: Service; onClose: () => v
   const tiles = React.useMemo(() => {
     const index = SERVICES.findIndex(s => s.num === service.num)
     const layout = TILE_LAYOUTS[index % TILE_LAYOUTS.length]
-    const pool = tilePoolFor(service.num)
+    const pool = shuffled(tilePoolFor(service.num))
     return layout.map((pos, i) => ({ ...pos, ...pool[i % pool.length] }))
   }, [service.num])
 
