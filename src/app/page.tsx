@@ -155,10 +155,15 @@ function ShowreelHero({ onNavOpacity }: { onNavOpacity: (v: number) => void }) {
       const zoomProgress = progress < 0.5 ? progress / 0.5 : (1 - progress) / 0.5
       setZoom(1 + zoomProgress * 0.15)
 
-      // Holds at full volume once ramped up rather than fading back out —
-      // the video stays fully visible and audible right up until the pin
-      // releases, instead of dipping to a blank screen first.
-      const vol = Math.min(progress / 0.3, 1)
+      // Ramps up to full volume, holds, then fades back out as the pin
+      // nears release — so scrolling off the video fades the audio out
+      // with it rather than cutting it dead or holding it blaring right
+      // up to (and past) the point the video itself is no longer the
+      // focus.
+      let vol: number
+      if (progress < 0.3) vol = progress / 0.3
+      else if (progress < 0.75) vol = 1
+      else vol = Math.max(0, 1 - (progress - 0.75) / 0.25)
       if (playerRef.current && !muted) playerRef.current.setVolume(vol).catch(() => {})
 
       // A light "scroll down" hint once the text/nav have fully dissolved
@@ -216,10 +221,16 @@ function ShowreelHero({ onNavOpacity }: { onNavOpacity: (v: number) => void }) {
         <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(10,12,16,0.13) 0%, rgba(10,12,16,0.06) 50%, rgba(10,12,16,0) 80%)', zIndex: 1, opacity: textOpacity, transition: 'opacity 0.35s ease-out' }} />
         <button
           onClick={toggleSound}
-          style={{ position: 'absolute', bottom: 'clamp(28px, 7vh, 52px)', right: 'clamp(20px, 5vw, 48px)', zIndex: 3, width: 44, height: 44, borderRadius: '50%', border: '0.5px solid rgba(200,194,187,0.35)', background: 'rgba(10,12,16,0.5)', color: '#C8C2BB', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, backdropFilter: 'blur(6px)' }}
+          style={{ position: 'absolute', bottom: 'clamp(28px, 7vh, 52px)', right: 'clamp(20px, 5vw, 48px)', zIndex: 3, width: 44, height: 44, borderRadius: '50%', border: '0.5px solid rgba(200,194,187,0.18)', background: 'rgba(10,12,16,0.2)', color: '#C8C2BB', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(6px)' }}
           aria-label={muted ? 'Unmute showreel' : 'Mute showreel'}
         >
-          {muted ? '🔇' : '🔊'}
+          {/* A plain speaker outline — the only difference between muted
+              and unmuted is whether the strike-through line is drawn,
+              rather than swapping in a whole separate icon. */}
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M4 9v6h4l5 5V4L8 9H4z" />
+            {muted && <line x1="19" y1="6" x2="4" y2="20" />}
+          </svg>
         </button>
         {/* Scroll-down hint, only present once we've reached the
             video-only centre point (text/nav fully dissolved). */}
@@ -254,7 +265,13 @@ function ShowreelHero({ onNavOpacity }: { onNavOpacity: (v: number) => void }) {
   )
 }
 
+// id is a Vimeo id for video items; photo-only items (Orakei Sunset, Life
+// Fitness ATMOS) omit it and rely on `thumb` alone — CarouselItem only
+// mounts the hover-preview iframe when an id is actually present.
 const RECENT_WORK = [
+  { id: 'orakei-sunset', title: 'Orakei Sunset', client: 'Residential Listing · Orakei', type: 'Property Photography', thumb: '/images/work/orakei-sunset/1.jpg', noVideo: true },
+  { id: '1234892305', title: 'Graeme Road', client: 'Residential Listing', type: 'Property Film', thumb: 'https://vumbnail.com/1234892305_large.jpg' },
+  { id: 'life-fitness-atmos', title: 'Life Fitness ATMOS', client: 'Life Fitness · Brand Shoot', type: 'Brand Photography', thumb: '/images/work/life-fitness-atmos/1.jpg', noVideo: true },
   { id: '1216750682', title: 'What We Do', client: 'Example Content · Showreel', type: 'Showreel', thumb: 'https://i.vimeocdn.com/video/2188265524-4fb9e0ca30cc6d8acb3df1a1c4259eee688d7929c486e1f353c4f0858475be60-d_1280x720?region=us' },
   { id: '1182465760', title: '23 Sullivan Road', client: 'Luxury Residential · Hawkes Bay', type: 'Property Film', thumb: 'https://i.vimeocdn.com/video/2145085364-8d9dea98f801df737866495fc8d2a5478fa035bacadf0b509fe24095202d4f0f-d_1280x720?region=us' },
   { id: '1182467090', title: 'River Downs', client: 'Premium Listing · Hawkes Bay', type: 'Property Film', thumb: 'https://i.vimeocdn.com/video/2145086135-8b197218926ba3cb5b7473637eec6b840a9145d41cf3fddf64b4692371696b72-d_1280x720?region=us' },
@@ -272,7 +289,7 @@ function CarouselItem({ proj }: { proj: typeof RECENT_WORK[number] }) {
     <div className="carousel-item" onMouseEnter={() => setHovered(true)}>
       <div className="vid-thumb">
         <div className="vid-thumb-img" style={{ backgroundImage: proj.thumb ? `url(${proj.thumb})` : `url(https://vumbnail.com/${proj.id}_large.jpg), url(https://vumbnail.com/${proj.id}.jpg)`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
-        {hovered && (
+        {hovered && !('noVideo' in proj && proj.noVideo) && (
           <iframe
             src={`https://player.vimeo.com/video/${proj.id}?background=1&autoplay=1&loop=1&muted=1&title=0&byline=0&portrait=0&controls=0&badge=0&autopause=0`}
             allow="autoplay; fullscreen"
