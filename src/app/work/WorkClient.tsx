@@ -44,14 +44,25 @@ function ProjectCard({ project, onSelect, style, onPlayingChange }: { project: W
             className="work-play-btn"
             onClick={e => { e.stopPropagation(); setPlaying(true); onPlayingChange?.(true) }}
             aria-label={`Play ${project.title}`}
-          >▶</button>
+          >
+            {/* An actual SVG rather than a text glyph (▶) — mobile OSes
+                render some unicode symbol characters using their own
+                emoji font, which looked completely different (and
+                worse) from the plain triangle every desktop browser
+                shows. A vector path renders identically everywhere. */}
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
+          </button>
         )}
         {playing && (
           <button
             className="work-expand-btn"
             onClick={e => { e.stopPropagation(); onSelect() }}
             aria-label={`Open ${project.title}`}
-          >⤢</button>
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="15 3 21 3 21 9" /><polyline points="9 21 3 21 3 15" /><line x1="21" y1="3" x2="14" y2="10" /><line x1="3" y1="21" x2="10" y2="14" />
+            </svg>
+          </button>
         )}
       </div>
       <p style={{ fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.38)', margin: '14px 0 5px' }}>{project.client} · {project.type}</p>
@@ -415,17 +426,30 @@ export default function WorkPage() {
         .cat-pill { transition: all 0.2s ease; cursor: pointer; }
         .cat-pill:hover { color: #fff !important; border-color: rgba(200,194,187,0.4) !important; }
         .view-toggle-btn { transition: all 0.2s ease; cursor: pointer; }
+        @media (max-width: 640px) {
+          /* The big clamp(120px,20vh,170px) top padding was built for a
+             desktop hero and eats most of a phone screen before any real
+             content shows. Tightened just for mobile, along with the
+             filter row — which used to rely on a flex-wrap + flex:1
+             spacer to push the view toggle to the right, landing it in
+             a slightly arbitrary spot once the pills wrapped. Stacking
+             it on its own line below reads cleaner. */
+          .work-hero { padding-top: 110px !important; padding-bottom: 28px !important; }
+          .work-filter-row { margin-top: 24px !important; gap: 8px !important; }
+          .work-filter-spacer { display: none !important; }
+          .work-view-toggle { flex-basis: 100%; margin-top: 4px; }
+        }
       `}</style>
 
       {/* HERO */}
-      <div style={{ padding: 'clamp(120px, 20vh, 170px) clamp(20px, 5vw, 48px) clamp(40px, 6vw, 56px)' }}>
+      <div className="work-hero" style={{ padding: 'clamp(120px, 20vh, 170px) clamp(20px, 5vw, 48px) clamp(40px, 6vw, 56px)' }}>
         <p style={{ fontSize: 11, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.45)', marginBottom: 16 }}>Selected work</p>
         <h1 style={{ fontSize: 'clamp(44px, 10vw, 100px)', fontWeight: 400, lineHeight: 0.95, letterSpacing: '0.01em', color: '#fff', margin: 0, fontFamily: "'Bebas Neue', sans-serif", textTransform: 'uppercase', textShadow: '0 0 60px rgba(200,194,187,0.18)' }}>
           Our Work
         </h1>
 
         {/* CATEGORY FILTER */}
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 40 }}>
+        <div className="work-filter-row" style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 40 }}>
           {CATEGORIES.map(cat => (
             <button
               key={cat}
@@ -440,8 +464,8 @@ export default function WorkPage() {
               }}
             >{cat}</button>
           ))}
-          <div style={{ flex: 1 }} />
-          <div style={{ display: 'flex', gap: 4, border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 2, padding: 3 }}>
+          <div className="work-filter-spacer" style={{ flex: 1 }} />
+          <div className="work-view-toggle" style={{ display: 'flex', gap: 4, border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 2, padding: 3 }}>
             {(['reel', 'grid'] as const).map(v => (
               <button
                 key={v}
