@@ -1,6 +1,5 @@
 'use client'
 import React from 'react'
-import { useSiteGate } from '@/lib/sitePreview'
 import SiteNav from '@/components/public/SiteNav'
 import LogoWatermark from '@/components/public/LogoWatermark'
 import SiteFooter from '@/components/public/SiteFooter'
@@ -50,9 +49,7 @@ function PropertyCard({ project: p }: { project: WorkProject }) {
 }
 
 export default function PropertyPage() {
-  const gate = useSiteGate()
   const [category, setCategory] = React.useState<PropertyType>('Property')
-  if (gate) return gate
 
   const projects = WORK_PROJECTS.filter(p => p.category === 'Architectural' && (p.propertyType || 'Property') === category)
 

@@ -5,6 +5,7 @@ import { supabase, ensureClientProfile } from '@/lib/supabase'
 import { formatTime12, localDateKey, addBusinessDays } from '@/lib/time'
 import { stageLabel } from '@/lib/stages'
 import { useRouter } from 'next/navigation'
+import LoadingScreen from '@/components/public/LoadingScreen'
 
 const VIDEO_FORMATS = ['1920×1080', '1080×1080', '9×16 Vertical', '4×5', '4K 3840×2160']
 const PHOTO_FORMATS = ['High-res JPEG', 'RAW Files', 'Web-res JPEG']
@@ -946,11 +947,7 @@ export default function ClientPortal() {
   function removeBriefDel(id: string) { setBriefDeliverables(p => p.filter(d => d.id !== id)) }
   function toggleBriefFmt(id: string, fmt: string) { setBriefDeliverables(p => p.map(d => d.id === id ? { ...d, formats: d.formats.includes(fmt) ? d.formats.filter(f => f !== fmt) : [...d.formats, fmt] } : d)) }
 
-  if (loading) return (
-    <main style={{ background: '#0E1014', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ color: 'rgba(200,194,187,0.4)', fontSize: 13 }}>Loading...</div>
-    </main>
-  )
+  if (loading) return <LoadingScreen />
 
   return (
     <main style={{ background: '#0E1014', minHeight: '100vh', fontFamily: 'Inter, sans-serif', color: '#C8C2BB', display: 'flex' }}>

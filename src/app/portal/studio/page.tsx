@@ -8,6 +8,7 @@ import { stageLabel } from '@/lib/stages'
 import { xeroAuthedFetch } from '@/lib/xeroClient'
 import { notify, confirmDialog, ToastHost, ConfirmHost } from '@/lib/notify'
 import { useRouter } from 'next/navigation'
+import LoadingScreen from '@/components/public/LoadingScreen'
 
 function StudioDriveFolder({ driveUrl }: { driveUrl: string }) {
   const [files, setFiles] = React.useState<any[]>([])
@@ -911,11 +912,7 @@ export default function StudioPortal() {
     <span style={{ fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase' as const, padding: '3px 9px', borderRadius: 2, background: bg, color, border: `0.5px solid ${color}33`, whiteSpace: 'nowrap' as const }}>{label}</span>
   )
 
-  if (loading) return (
-    <main style={{ background: '#0E1014', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ color: 'rgba(200,194,187,0.4)', fontSize: 13 }}>Loading...</div>
-    </main>
-  )
+  if (loading) return <LoadingScreen />
 
   const navGroups = [
     { label: 'Overview', items: [{ id: 'dashboard', label: 'Dashboard' }] },

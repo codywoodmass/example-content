@@ -1,13 +1,10 @@
 'use client'
 import React from 'react'
-import { useSiteGate } from '@/lib/sitePreview'
 import SiteNav from '@/components/public/SiteNav'
 import LogoWatermark from '@/components/public/LogoWatermark'
 import SiteFooter from '@/components/public/SiteFooter'
 
 export default function AboutPage() {
-  const gate = useSiteGate()
-  if (gate) return gate
 
   return (
     <main style={{ background: '#0E1014', minHeight: '100vh', color: '#C8C2BB', fontFamily: "'Inter', sans-serif", position: 'relative' }}>

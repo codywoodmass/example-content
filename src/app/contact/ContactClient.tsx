@@ -1,6 +1,5 @@
 'use client'
 import React from 'react'
-import { useSiteGate } from '@/lib/sitePreview'
 import SiteNav from '@/components/public/SiteNav'
 import SiteFooter from '@/components/public/SiteFooter'
 import LogoWatermark from '@/components/public/LogoWatermark'
@@ -9,12 +8,10 @@ const inputStyle: React.CSSProperties = { width: '100%', background: 'rgba(200,1
 const labelStyle: React.CSSProperties = { fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.45)', marginBottom: 8, display: 'block' }
 
 export default function ContactPage() {
-  const gate = useSiteGate()
   const [form, setForm] = React.useState({ name: '', email: '', phone: '', projectType: '', message: '' })
   const [sending, setSending] = React.useState(false)
   const [sent, setSent] = React.useState(false)
   const [error, setError] = React.useState('')
-  if (gate) return gate
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()

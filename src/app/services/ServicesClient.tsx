@@ -1,6 +1,5 @@
 'use client'
 import React from 'react'
-import { useSiteGate } from '@/lib/sitePreview'
 import SiteNav from '@/components/public/SiteNav'
 import LogoWatermark from '@/components/public/LogoWatermark'
 import SiteFooter from '@/components/public/SiteFooter'
@@ -234,9 +233,7 @@ function ServiceModal({ service, onClose }: { service: Service; onClose: () => v
 }
 
 export default function ServicesPage() {
-  const gate = useSiteGate()
   const [selected, setSelected] = React.useState<Service | null>(null)
-  if (gate) return gate
 
   return (
     <main style={{ background: '#0E1014', minHeight: '100vh', color: '#C8C2BB', fontFamily: "'Inter', sans-serif", position: 'relative' }}>

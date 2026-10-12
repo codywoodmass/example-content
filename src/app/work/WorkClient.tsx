@@ -1,6 +1,5 @@
 'use client'
 import React from 'react'
-import { useSiteGate } from '@/lib/sitePreview'
 import SiteNav from '@/components/public/SiteNav'
 import LogoWatermark from '@/components/public/LogoWatermark'
 import SiteFooter from '@/components/public/SiteFooter'
@@ -399,11 +398,9 @@ function ProjectModal({ project, onClose }: { project: WorkProject; onClose: () 
 }
 
 export default function WorkPage() {
-  const gate = useSiteGate()
   const [category, setCategory] = React.useState<'All' | WorkCategory>('All')
   const [view, setView] = React.useState<'reel' | 'grid'>('reel')
   const [selected, setSelected] = React.useState<WorkProject | null>(null)
-  if (gate) return gate
 
   const filtered = category === 'All' ? WORK_PROJECTS : WORK_PROJECTS.filter(p => p.category === category)
 
