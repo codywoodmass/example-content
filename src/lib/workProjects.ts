@@ -13,7 +13,7 @@ export type PropertyType = 'Construction' | 'Property'
 // (a vertical reel, a 4:3 edit).
 export type AspectRatio = string
 
-export type ExtraVideo = { label: string; vimeoId: string; aspect?: AspectRatio }
+export type ExtraVideo = { label: string; vimeoId: string; aspect?: AspectRatio; thumb?: string }
 
 export type WorkProject = {
   id: string
@@ -64,10 +64,10 @@ export const WORK_PROJECTS: WorkProject[] = [
     type: 'Property Film',
     propertyType: 'Property',
     vimeoId: '1234892305',
-    thumb: 'https://vumbnail.com/1234892305_large.jpg',
+    thumb: 'https://i.vimeocdn.com/video/2210997927-bb8afd5fc1d5eca3493e8f7b54b7e31292c8f335b75760015eaae14d16ff5208-d_1280x720?region=us',
     extraVideos: [
-      { label: 'Coming Soon', vimeoId: '1234892266', aspect: '9/16' },
-      { label: 'Sold', vimeoId: '1234892348', aspect: '9/16' },
+      { label: 'Coming Soon', vimeoId: '1234892266', aspect: '9/16', thumb: 'https://i.vimeocdn.com/video/2210997789-cf314c31c2228264f2dad8920748ed8808b5148448cfaa9bf78b4a61e5f4860f-d_1280x720?region=us' },
+      { label: 'Sold', vimeoId: '1234892348', aspect: '9/16', thumb: 'https://i.vimeocdn.com/video/2210997865-3b889ed3d4702b4fd0c01c1103227e4424c285093b62e2775c3ed5bd5923288e-d_1280x720?region=us' },
     ],
   },
   {
@@ -182,9 +182,9 @@ export const WORK_PROJECTS: WorkProject[] = [
     type: 'Property Film',
     propertyType: 'Property',
     vimeoId: '1234892074',
-    thumb: 'https://vumbnail.com/1234892074_large.jpg',
+    thumb: 'https://i.vimeocdn.com/video/2210997956-3fbb143cb629f50689d5d4e4f9b6037e278ee6670e1755f0354ebd12af3b37ab-d_1280x720?region=us',
     extraVideos: [
-      { label: 'Sold', vimeoId: '1234892523', aspect: '9/16' },
+      { label: 'Sold', vimeoId: '1234892523', aspect: '9/16', thumb: 'https://i.vimeocdn.com/video/2210998073-1bdc5ccaebe22c9d0b312e4913db3ed55093fc572a52bdd442295c5dcca427ab-d_1280x720?region=us' },
     ],
   },
   {
@@ -195,7 +195,7 @@ export const WORK_PROJECTS: WorkProject[] = [
     type: 'Property Film',
     propertyType: 'Property',
     vimeoId: '1234892070',
-    thumb: 'https://vumbnail.com/1234892070_large.jpg',
+    thumb: 'https://i.vimeocdn.com/video/2210997667-fabd66032272dba2ad69f4ec5d3d32c043335e5a3da648143467638d97325740-d_1280x720?region=us',
   },
   {
     id: '138a-great-south-road',
@@ -206,9 +206,9 @@ export const WORK_PROJECTS: WorkProject[] = [
     propertyType: 'Property',
     vimeoId: '1234896600',
     aspect: '4/3',
-    thumb: 'https://vumbnail.com/1234896600_large.jpg',
+    thumb: 'https://i.vimeocdn.com/video/2211003495-1589cce2ccbeb9b8f524cf9d97ee3ab77384cbc9480c72049792d202ac5a7e03-d_1280x720?region=us',
     extraVideos: [
-      { label: 'Reel', vimeoId: '1234896599', aspect: '9/16' },
+      { label: 'Reel', vimeoId: '1234896599', aspect: '9/16', thumb: 'https://i.vimeocdn.com/video/2211003272-b5ae908836fc5559018cbaf5cfc55e49c5ac530d1bf8ef390b55e99f7e84bd4b-d_1280x720?region=us' },
     ],
   },
   {
@@ -219,7 +219,7 @@ export const WORK_PROJECTS: WorkProject[] = [
     type: 'Construction Update',
     propertyType: 'Construction',
     vimeoId: '1234891997',
-    thumb: 'https://vumbnail.com/1234891997_large.jpg',
+    thumb: 'https://i.vimeocdn.com/video/2210997728-7bd7db48e5419199cc0fce94c9033c740afa8da404eeeeb7f96fb3d6f3da3744-d_1280x720?region=us',
     images: [
       '/images/work/stark-hills-construction/1.jpg',
       '/images/work/stark-hills-construction/2.jpg',
@@ -238,7 +238,7 @@ export const WORK_PROJECTS: WorkProject[] = [
     type: 'Construction Update',
     propertyType: 'Construction',
     vimeoId: '1234891407',
-    thumb: 'https://vumbnail.com/1234891407_large.jpg',
+    thumb: 'https://i.vimeocdn.com/video/2210996929-4b8483b6bfb30525cdfb575e6f63a44c23d89ff505c2cc53ed89580bdecbce3c-d_1280x720?region=us',
     images: [
       '/images/work/zebuild-epsom/1.jpg',
       '/images/work/zebuild-epsom/2.jpg',
@@ -260,7 +260,7 @@ export const WORK_PROJECTS: WorkProject[] = [
     type: 'Construction Update',
     propertyType: 'Construction',
     vimeoId: '1234896618',
-    thumb: 'https://vumbnail.com/1234896618_large.jpg',
+    thumb: 'https://i.vimeocdn.com/video/2211003353-8e7e0a935abf86461647a08505223ea22bceb2f654ecd9ed1317f4f8f1e88003-d_1280x720?region=us',
   },
   {
     id: 'the-avenue-site-update',
@@ -270,7 +270,7 @@ export const WORK_PROJECTS: WorkProject[] = [
     type: 'Construction Update',
     propertyType: 'Construction',
     vimeoId: '1234896601',
-    thumb: 'https://vumbnail.com/1234896601_large.jpg',
+    thumb: 'https://i.vimeocdn.com/video/2211003382-a50624e1ab60873294f8d032c4173ea6b1492ef6258fe84a3534d846bb9b6e6f-d_1280x720?region=us',
   },
   {
     id: '13-monyash',
@@ -281,7 +281,7 @@ export const WORK_PROJECTS: WorkProject[] = [
     propertyType: 'Construction',
     vimeoId: '1234891408',
     aspect: '9/16',
-    thumb: 'https://vumbnail.com/1234891408_large.jpg',
+    thumb: 'https://i.vimeocdn.com/video/2210996800-fcb66854c47b496d905dbe1bbb257610f1b30b1ddd42528ed653c216a99663e7-d_1280x720?region=us',
   },
   {
     id: 'hartles-and-co-brand',
@@ -290,7 +290,7 @@ export const WORK_PROJECTS: WorkProject[] = [
     category: 'Commercial',
     type: 'Brand Film',
     vimeoId: '1234892245',
-    thumb: 'https://vumbnail.com/1234892245_large.jpg',
+    thumb: 'https://i.vimeocdn.com/video/2210997813-e84c913bb3fa6b91277678ba4cc84de26c910e2bddc5eb6adca63d6a6e7a8bdd-d_1280x720?region=us',
   },
   {
     id: 'lugtons-educational-series',
@@ -300,7 +300,7 @@ export const WORK_PROJECTS: WorkProject[] = [
     type: 'Brand Film',
     vimeoId: '1234891429',
     aspect: '9/16',
-    thumb: 'https://vumbnail.com/1234891429_large.jpg',
+    thumb: 'https://i.vimeocdn.com/video/2210997053-0bc3d1ce93d6069f12a786b091687c3ae576af75e579fd0dde3975bb63a7418b-d_1280x720?region=us',
   },
   {
     id: 'hcc-nature-in-the-city',
@@ -310,7 +310,7 @@ export const WORK_PROJECTS: WorkProject[] = [
     type: 'Brand Film',
     vimeoId: '1234898560',
     aspect: '4/3',
-    thumb: 'https://vumbnail.com/1234898560_large.jpg',
+    thumb: 'https://i.vimeocdn.com/video/2211006108-d6bc91c62c212749f2b6bfa8331de12b916416e7aac1685d78b55c74b250abc4-d_1280x720?region=us',
   },
   {
     id: 'uniworlds',
@@ -319,7 +319,7 @@ export const WORK_PROJECTS: WorkProject[] = [
     category: 'Events',
     type: 'Event Film',
     vimeoId: '1234897904',
-    thumb: 'https://vumbnail.com/1234897904_large.jpg',
+    thumb: 'https://i.vimeocdn.com/video/2211005266-d1fe0ed80ac1a9aa0b8d0a7a67c68c3e1aa0eb73c8d8874c214412ef11aab1c9-d_1280x720?region=us',
   },
   {
     id: 'sheer-negotiations-event-recap',
@@ -328,7 +328,7 @@ export const WORK_PROJECTS: WorkProject[] = [
     category: 'Events',
     type: 'Event Film',
     vimeoId: '1234897903',
-    thumb: 'https://vumbnail.com/1234897903_large.jpg',
+    thumb: 'https://i.vimeocdn.com/video/2211005305-48d935c1b59bad3c5638b66caf876f5d38bdf0e76e7d98ba6da051c17030e930-d_1280x720?region=us',
     images: [
       '/images/work/sheer-negotiations-event-recap/1.jpg',
       '/images/work/sheer-negotiations-event-recap/2.jpg',
@@ -344,7 +344,7 @@ export const WORK_PROJECTS: WorkProject[] = [
     category: 'Events',
     type: 'Event Film',
     vimeoId: '1234897901',
-    thumb: 'https://vumbnail.com/1234897901_large.jpg',
+    thumb: 'https://i.vimeocdn.com/video/2211005189-915b8840c7735427455b7531a2eb615ad48fb0636db51ce075035a090b2007bc-d_1280x720?region=us',
     images: [
       '/images/work/cycle-challenge-ad/1.jpg',
       '/images/work/cycle-challenge-ad/2.jpg',

@@ -350,7 +350,7 @@ function ProjectModal({ project, onClose }: { project: WorkProject; onClose: () 
               {project.extraVideos.map(v => (
                 <div key={v.vimeoId}>
                   <div style={{ position: 'relative', paddingTop: aspectToPaddingTop(v.aspect), background: '#000', borderRadius: 3, overflow: 'hidden' }}>
-                    <CustomVimeoPlayer vimeoId={v.vimeoId} poster={`https://vumbnail.com/${v.vimeoId}.jpg`} title={`${project.title} — ${v.label}`} />
+                    <CustomVimeoPlayer vimeoId={v.vimeoId} poster={v.thumb} title={`${project.title} — ${v.label}`} />
                   </div>
                   <p style={{ fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.45)', marginTop: 10 }}>{v.label}</p>
                 </div>
