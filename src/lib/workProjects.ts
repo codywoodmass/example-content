@@ -64,7 +64,13 @@ export const WORK_PROJECTS: WorkProject[] = [
     type: 'Property Film',
     propertyType: 'Property',
     vimeoId: '1234892305',
-    thumb: 'https://i.vimeocdn.com/video/2210997927-bb8afd5fc1d5eca3493e8f7b54b7e31292c8f335b75760015eaae14d16ff5208-d_1280x720?region=us',
+    // Self-hosted rather than pulled from Vimeo's CDN at request time —
+    // this was the one thumbnail reported as intermittently failing to
+    // load (and leaving the page looking stuck while it kept trying).
+    // Graeme Road shows up on more pages than almost anything else
+    // (homepage carousel, Property, Our Work, several Services tiles),
+    // so it's the one most exposed to any CDN hiccup.
+    thumb: '/images/work/graeme-road/thumb.jpg',
     extraVideos: [
       { label: 'Coming Soon', vimeoId: '1234892266', aspect: '9/16', thumb: 'https://i.vimeocdn.com/video/2210997789-cf314c31c2228264f2dad8920748ed8808b5148448cfaa9bf78b4a61e5f4860f-d_1280x720?region=us' },
       { label: 'Sold', vimeoId: '1234892348', aspect: '9/16', thumb: 'https://i.vimeocdn.com/video/2210997865-3b889ed3d4702b4fd0c01c1103227e4424c285093b62e2775c3ed5bd5923288e-d_1280x720?region=us' },

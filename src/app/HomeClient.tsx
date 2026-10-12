@@ -269,7 +269,7 @@ function ShowreelHero({ onNavOpacity }: { onNavOpacity: (v: number) => void }) {
 // mounts the hover-preview iframe when an id is actually present.
 const RECENT_WORK = [
   { id: 'orakei-sunset', title: 'Orakei Sunset', client: 'Residential Listing · Orakei', type: 'Property Photography', thumb: '/images/work/orakei-sunset/1.jpg', noVideo: true },
-  { id: '1234892305', title: 'Graeme Road', client: 'Residential Listing', type: 'Property Film', thumb: 'https://vumbnail.com/1234892305_large.jpg' },
+  { id: '1234892305', title: 'Graeme Road', client: 'Residential Listing', type: 'Property Film', thumb: '/images/work/graeme-road/thumb.jpg' },
   { id: 'life-fitness-atmos', title: 'Life Fitness ATMOS', client: 'Life Fitness · Brand Shoot', type: 'Brand Photography', thumb: '/images/work/life-fitness-atmos/1.jpg', noVideo: true },
   { id: '1216750682', title: 'What We Do', client: 'Example Content · Showreel', type: 'Showreel', thumb: 'https://i.vimeocdn.com/video/2188265524-4fb9e0ca30cc6d8acb3df1a1c4259eee688d7929c486e1f353c4f0858475be60-d_1280x720?region=us' },
   { id: '1182465760', title: '23 Sullivan Road', client: 'Luxury Residential', type: 'Property Film', thumb: 'https://i.vimeocdn.com/video/2145085364-8d9dea98f801df737866495fc8d2a5478fa035bacadf0b509fe24095202d4f0f-d_1280x720?region=us' },
