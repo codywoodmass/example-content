@@ -25,17 +25,21 @@ Open `src/lib/workProjects.ts` and add an entry to the `WORK_PROJECTS` array:
   category: 'Architectural' | 'Commercial' | 'Events',
   type: 'Property Film' | 'Brand Film' | whatever fits,
   vimeoId: '1234567890',          // for a video project
+  aspect: '16/9',                 // optional — only needed if the main video isn't 16:9, e.g. '9/16' for a vertical reel, '4/3'
   thumb: '/images/work/....jpg',  // the still shown before hover/click, and the click-to-play poster
   description: 'Longer write-up shown in the project detail view — a couple of sentences is plenty.',
-  images: ['/images/work/project-slug/1.jpg', '/images/work/project-slug/2.jpg'], // optional extra photos, shown in a "More from this project" gallery
+  images: ['/images/work/project-slug/1.jpg', '/images/work/project-slug/2.jpg'], // optional extra photos, shown in a "Photos" gallery
+  extraVideos: [                  // optional secondary clips for the same project — a "sold" sting, a vertical reel cut, etc.
+    { label: 'Sold', vimeoId: '1234567891', aspect: '9/16' },
+  ],
 }
 ```
 
 Photo-only projects can omit `vimeoId` — the detail view will just show the
-`thumb` image full-size. The `images` array is optional too — if you leave it
-out, the detail view simply skips the gallery section rather than showing
-anything empty, so there's no rush to have extra photos ready for every
-project.
+`thumb` image full-size. `images` and `extraVideos` are both optional — if
+you leave either out, the detail view simply skips that section rather than
+showing anything empty, so there's no rush to have extra photos or clips
+ready for every project.
 
 If you'd rather just hand me the files and details, I can add them directly —
 either way works.

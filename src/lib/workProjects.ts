@@ -8,6 +8,13 @@ export type WorkCategory = 'Architectural' | 'Commercial' | 'Events'
 // its showcase between still-building sites and finished properties.
 export type PropertyType = 'Construction' | 'Property'
 
+// CSS aspect-ratio value for the main video, e.g. '16/9', '9/16', '4/3'.
+// Defaults to 16/9 when omitted — only needs setting for anything else
+// (a vertical reel, a 4:3 edit).
+export type AspectRatio = string
+
+export type ExtraVideo = { label: string; vimeoId: string; aspect?: AspectRatio }
+
 export type WorkProject = {
   id: string
   title: string
@@ -16,8 +23,14 @@ export type WorkProject = {
   type: string
   propertyType?: PropertyType
   vimeoId?: string
+  aspect?: AspectRatio
   thumb?: string
   images?: string[]
+  // Secondary clips for the same project — a "sold" or "coming soon"
+  // sting, a vertical reel cut, etc. Shown in the detail view under the
+  // main video, each sized to its own aspect ratio rather than forced
+  // into 16:9.
+  extraVideos?: ExtraVideo[]
   description?: string
 }
 
@@ -84,5 +97,163 @@ export const WORK_PROJECTS: WorkProject[] = [
     vimeoId: '1216750682',
     thumb: 'https://i.vimeocdn.com/video/2188265524-4fb9e0ca30cc6d8acb3df1a1c4259eee688d7929c486e1f353c4f0858475be60-d_1280x720?region=us',
     description: 'A showreel pulling together property, commercial and event work from across the studio — the fastest way to see the full range of what Example Content does in one sitting.',
+  },
+  {
+    id: 'graeme-road',
+    title: 'Graeme Road',
+    client: 'Residential Listing',
+    category: 'Architectural',
+    type: 'Property Film',
+    propertyType: 'Property',
+    vimeoId: '1234892305',
+    thumb: 'https://vumbnail.com/1234892305_large.jpg',
+    extraVideos: [
+      { label: 'Coming Soon', vimeoId: '1234892266', aspect: '9/16' },
+      { label: 'Sold', vimeoId: '1234892348', aspect: '9/16' },
+    ],
+  },
+  {
+    id: 'la-dolce-vita',
+    title: 'La Dolce Vita',
+    client: 'Residential Listing · 1025 River Road',
+    category: 'Architectural',
+    type: 'Property Film',
+    propertyType: 'Property',
+    vimeoId: '1234892074',
+    thumb: 'https://vumbnail.com/1234892074_large.jpg',
+    extraVideos: [
+      { label: 'Sold', vimeoId: '1234892523', aspect: '9/16' },
+    ],
+  },
+  {
+    id: 'raglan-rangatahi-road',
+    title: 'Rangatahi Road',
+    client: 'Residential Listing · Raglan',
+    category: 'Architectural',
+    type: 'Property Film',
+    propertyType: 'Property',
+    vimeoId: '1234892070',
+    thumb: 'https://vumbnail.com/1234892070_large.jpg',
+  },
+  {
+    id: '138a-great-south-road',
+    title: '138A Great South Road',
+    client: 'Architectural Project · Great South Road',
+    category: 'Architectural',
+    type: 'Property Film',
+    propertyType: 'Property',
+    vimeoId: '1234896600',
+    aspect: '4/3',
+    thumb: 'https://vumbnail.com/1234896600_large.jpg',
+    extraVideos: [
+      { label: 'Reel', vimeoId: '1234896599', aspect: '9/16' },
+    ],
+  },
+  {
+    id: 'stark-hills-construction',
+    title: 'Stark Hills Construction Update',
+    client: 'Stark Property · Construction Update',
+    category: 'Architectural',
+    type: 'Construction Update',
+    propertyType: 'Construction',
+    vimeoId: '1234891997',
+    thumb: 'https://vumbnail.com/1234891997_large.jpg',
+  },
+  {
+    id: 'zebuild-epsom',
+    title: 'Epsom Site Update',
+    client: 'Zebuild · Construction Update',
+    category: 'Architectural',
+    type: 'Construction Update',
+    propertyType: 'Construction',
+    vimeoId: '1234891407',
+    thumb: 'https://vumbnail.com/1234891407_large.jpg',
+  },
+  {
+    id: 'omaha-valley-site-update',
+    title: 'Omaha Valley Site Update',
+    client: 'Construction Update',
+    category: 'Architectural',
+    type: 'Construction Update',
+    propertyType: 'Construction',
+    vimeoId: '1234896618',
+    thumb: 'https://vumbnail.com/1234896618_large.jpg',
+  },
+  {
+    id: 'the-avenue-site-update',
+    title: 'The Avenue Site Update',
+    client: 'Construction Update',
+    category: 'Architectural',
+    type: 'Construction Update',
+    propertyType: 'Construction',
+    vimeoId: '1234896601',
+    thumb: 'https://vumbnail.com/1234896601_large.jpg',
+  },
+  {
+    id: '13-monyash',
+    title: '13 Monyash',
+    client: 'Construction Update · Social Reel',
+    category: 'Architectural',
+    type: 'Construction Update',
+    propertyType: 'Construction',
+    vimeoId: '1234891408',
+    aspect: '9/16',
+    thumb: 'https://vumbnail.com/1234891408_large.jpg',
+  },
+  {
+    id: 'hartles-and-co-brand',
+    title: 'Hartles & Co',
+    client: 'Hartles & Co · Brand Film',
+    category: 'Commercial',
+    type: 'Brand Film',
+    vimeoId: '1234892245',
+    thumb: 'https://vumbnail.com/1234892245_large.jpg',
+  },
+  {
+    id: 'lugtons-educational-series',
+    title: 'Lugtons Educational Series',
+    client: 'Lugtons Real Estate · Hugo and Abbie',
+    category: 'Commercial',
+    type: 'Brand Film',
+    vimeoId: '1234891429',
+    aspect: '9/16',
+    thumb: 'https://vumbnail.com/1234891429_large.jpg',
+  },
+  {
+    id: 'hcc-nature-in-the-city',
+    title: 'Nature in the City',
+    client: 'Hamilton City Council · Campaign',
+    category: 'Commercial',
+    type: 'Brand Film',
+    vimeoId: '1234898560',
+    aspect: '4/3',
+    thumb: 'https://vumbnail.com/1234898560_large.jpg',
+  },
+  {
+    id: 'uniworlds',
+    title: 'Uniworlds',
+    client: 'Event Coverage',
+    category: 'Events',
+    type: 'Event Film',
+    vimeoId: '1234897904',
+    thumb: 'https://vumbnail.com/1234897904_large.jpg',
+  },
+  {
+    id: 'sheer-negotiations-event-recap',
+    title: 'Sheer Negotiations',
+    client: 'Event Recap',
+    category: 'Events',
+    type: 'Event Film',
+    vimeoId: '1234897903',
+    thumb: 'https://vumbnail.com/1234897903_large.jpg',
+  },
+  {
+    id: 'cycle-challenge-ad',
+    title: 'Cycle Challenge',
+    client: 'Event Coverage',
+    category: 'Events',
+    type: 'Event Film',
+    vimeoId: '1234897901',
+    thumb: 'https://vumbnail.com/1234897901_large.jpg',
   },
 ]

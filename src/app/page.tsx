@@ -5,7 +5,7 @@ import SiteNav from '@/components/public/SiteNav'
 import SiteFooter from '@/components/public/SiteFooter'
 
 
-const TICKER_BRANDS = ['Hartles & Co', 'Life Fitness', 'Lodge Real Estate', 'Tuatahi Fibre', 'ZeGroup', 'Flex Fitness', 'Lugtons Real Estate', 'IBM', 'DaSilva', 'Wake NZ', 'Stark Property', 'Trans-Tasman Business Circle']
+const TICKER_BRANDS = ['Hartles & Co', 'Life Fitness', 'Lodge Real Estate', 'Tuatahi Fibre', 'ZeGroup', 'Flex Fitness', 'Lugtons Real Estate', 'IBM', 'DaSilva', 'Wake NZ', 'Stark Property', 'Trans-Tasman Business Circle', 'Hamilton City Council']
 
 const CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789*#@!'
 
@@ -60,7 +60,7 @@ function StatementSection() {
 
   return (
     <div ref={ref} style={{ padding: 'clamp(36px, 7vw, 60px) clamp(20px, 5vw, 48px)', background: '#0E1014', display: 'flex', justifyContent: 'center', textAlign: 'center' }}>
-      <h2 style={{ fontSize: 'clamp(28px, 4.6vw, 54px)', fontWeight: 400, color: '#fff', lineHeight: 1.15, letterSpacing: '0.02em', margin: 0, maxWidth: 900, fontFamily: "'Bebas Neue', sans-serif", textTransform: 'uppercase', opacity: visible ? 1 : 0, transition: 'opacity 0.5s ease' }}>
+      <h2 style={{ fontSize: 'clamp(34px, 5.8vw, 68px)', fontWeight: 400, color: '#fff', lineHeight: 1.15, letterSpacing: '0.02em', margin: 0, maxWidth: 1100, fontFamily: "'Bebas Neue', sans-serif", textTransform: 'uppercase', opacity: visible ? 1 : 0, transition: 'opacity 0.5s ease' }}>
         <div>{visible && <ScrambleText text="GOOD CONTENT GETS LIKES." delay={0} />}</div>
         <div>{visible && <ScrambleText text="STRATEGIC CONTENT GETS RESULTS." delay={150} />}</div>
       </h2>
@@ -89,28 +89,45 @@ function ShowreelHero({ onNavOpacity }: { onNavOpacity: (v: number) => void }) {
   const [muted, setMuted] = React.useState(true)
   const [indicatorOpacity, setIndicatorOpacity] = React.useState(0)
 
+  // Holds a click that arrives before the SDK has finished loading, so it
+  // isn't silently dropped — applied the moment the player is ready.
+  const pendingMutedRef = React.useRef<boolean | null>(null)
+
   React.useEffect(() => {
     let cancelled = false
+    let pollId: ReturnType<typeof setInterval> | undefined
     function init() {
-      if (cancelled || !iframeRef.current || !(window as any).Vimeo) return
+      if (cancelled || !iframeRef.current || playerRef.current || !(window as any).Vimeo) return
       const player = new (window as any).Vimeo.Player(iframeRef.current)
       player.setVolume(0).catch(() => {})
       playerRef.current = player
+      if (pendingMutedRef.current !== null) {
+        const wantMuted = pendingMutedRef.current
+        player.setMuted(wantMuted)
+        if (!wantMuted) player.setVolume(0.6)
+        pendingMutedRef.current = null
+      }
     }
     if ((window as any).Vimeo) {
       init()
     } else {
       const existing = document.querySelector('script[src="https://player.vimeo.com/api/player.js"]')
-      if (existing) {
-        existing.addEventListener('load', init)
-      } else {
+      if (!existing) {
         const script = document.createElement('script')
         script.src = 'https://player.vimeo.com/api/player.js'
-        script.onload = init
         document.body.appendChild(script)
       }
+      // Polling rather than relying solely on a 'load' listener — if the
+      // script tag already existed from an earlier page and its load
+      // event already fired, a listener attached now would never see it.
+      pollId = setInterval(() => {
+        if ((window as any).Vimeo) {
+          clearInterval(pollId)
+          init()
+        }
+      }, 150)
     }
-    return () => { cancelled = true }
+    return () => { cancelled = true; if (pollId) clearInterval(pollId) }
   }, [])
 
   React.useEffect(() => {
@@ -159,12 +176,20 @@ function ShowreelHero({ onNavOpacity }: { onNavOpacity: (v: number) => void }) {
   }, [muted, onNavOpacity])
 
   function toggleSound() {
+    // newMuted is the state we're switching TO. The previous version
+    // passed `!newMuted` to both the player and setMuted — i.e. the OLD
+    // value — so the click never actually changed anything, regardless
+    // of which state it started from. That was the real bug; the button
+    // looking broken had nothing to do with Vimeo or the network.
+    const newMuted = !muted
+    setMuted(newMuted)
     const player = playerRef.current
-    if (!player) return
-    const next = !muted
-    player.setMuted(!next)
-    if (next) player.setVolume(0.6)
-    setMuted(!next)
+    if (!player) {
+      pendingMutedRef.current = newMuted
+      return
+    }
+    player.setMuted(newMuted)
+    if (!newMuted) player.setVolume(0.6)
   }
 
   return (

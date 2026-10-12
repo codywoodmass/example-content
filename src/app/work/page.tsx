@@ -250,6 +250,13 @@ function CustomVimeoPlayer({ vimeoId, poster, title }: { vimeoId: string; poster
   )
 }
 
+function aspectToPaddingTop(aspect?: string): string {
+  if (!aspect) return '56.25%'
+  const [w, h] = aspect.split('/').map(Number)
+  if (!w || !h) return '56.25%'
+  return `${(h / w) * 100}%`
+}
+
 function Spec({ label, value }: { label: string; value: string }) {
   return (
     <div style={{ padding: '18px 0' }}>
@@ -283,7 +290,7 @@ function ProjectModal({ project, onClose }: { project: WorkProject; onClose: () 
       <button onClick={onClose} style={{ position: 'fixed', top: 30, left: 'clamp(20px, 5vw, 48px)', zIndex: 10, fontSize: 12, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.6)', background: 'transparent', border: 'none', cursor: 'pointer' }}>← Back to work</button>
 
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: 'clamp(90px, 14vh, 120px) clamp(20px, 5vw, 48px) 0' }}>
-        <div style={{ position: 'relative', paddingTop: '56.25%', background: '#000', borderRadius: 4, overflow: 'hidden', boxShadow: '0 30px 80px rgba(0,0,0,0.6)' }}>
+        <div style={{ position: 'relative', paddingTop: aspectToPaddingTop(project.aspect), background: '#000', borderRadius: 4, overflow: 'hidden', boxShadow: '0 30px 80px rgba(0,0,0,0.6)', maxWidth: project.aspect === '9/16' ? 420 : undefined, margin: project.aspect === '9/16' ? '0 auto' : undefined }}>
           {project.vimeoId ? (
             <CustomVimeoPlayer vimeoId={project.vimeoId} poster={project.thumb} title={project.title} />
           ) : (
@@ -309,9 +316,25 @@ function ProjectModal({ project, onClose }: { project: WorkProject; onClose: () 
           <Spec label="Type" value={project.type} />
         </div>
 
-        {project.images && project.images.length > 0 && (
+        {project.extraVideos && project.extraVideos.length > 0 && (
           <div style={{ marginTop: 56 }}>
             <p style={{ fontSize: 11, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)', marginBottom: 20 }}>More from this project</p>
+            <div className="project-gallery-grid">
+              {project.extraVideos.map(v => (
+                <div key={v.vimeoId}>
+                  <div style={{ position: 'relative', paddingTop: aspectToPaddingTop(v.aspect), background: '#000', borderRadius: 3, overflow: 'hidden' }}>
+                    <CustomVimeoPlayer vimeoId={v.vimeoId} poster={`https://vumbnail.com/${v.vimeoId}.jpg`} title={`${project.title} — ${v.label}`} />
+                  </div>
+                  <p style={{ fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.45)', marginTop: 10 }}>{v.label}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {project.images && project.images.length > 0 && (
+          <div style={{ marginTop: 56 }}>
+            <p style={{ fontSize: 11, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)', marginBottom: 20 }}>Photos</p>
             <div className="project-gallery-grid">
               {project.images.map(src => (
                 <img key={src} src={src} alt={project.title} style={{ width: '100%', borderRadius: 3, display: 'block' }} />

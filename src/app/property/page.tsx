@@ -12,11 +12,14 @@ const STATS = [
 ]
 
 const FEATURES = [
-  'Bare land & site documentation',
-  'Construction progress coverage, stage by stage',
-  'Completed property film & photography',
-  'Flexible scheduling — sunrise through to sunset',
-  'Architectural detail & interior lifestyle shots',
+  'High-end architectural photography & video',
+  'Construction site updates through to completed projects',
+  'Real estate photo & video',
+  'Shooting your project in the best light, every time',
+  'Development pre-sale through to completed project content',
+  'Strategy & pre-planning to set up the best results',
+  'Sunrise to sunset, shooting all across the country',
+  'Real estate & architectural packages available',
 ]
 
 const CATEGORIES: PropertyType[] = ['Property', 'Construction']

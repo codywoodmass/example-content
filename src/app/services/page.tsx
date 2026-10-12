@@ -74,31 +74,31 @@ const SERVICES: Service[] = [
 // the same template.
 const TILE_LAYOUTS: { top: string; left: string; width: number; z: number }[][] = [
   [ // 3-column, 2-row grid
-    { top: '4%', left: '2%', width: 280, z: 1 },
-    { top: '7%', left: '36%', width: 260, z: 2 },
-    { top: '2%', left: '68%', width: 260, z: 1 },
-    { top: '34%', left: '4%', width: 250, z: 2 },
-    { top: '37%', left: '38%', width: 270, z: 1 },
-    { top: '32%', left: '70%', width: 240, z: 2 },
+    { top: '4%', left: '2%', width: 330, z: 1 },
+    { top: '7%', left: '36%', width: 310, z: 2 },
+    { top: '2%', left: '68%', width: 310, z: 1 },
+    { top: '34%', left: '4%', width: 300, z: 2 },
+    { top: '37%', left: '38%', width: 320, z: 1 },
+    { top: '32%', left: '70%', width: 290, z: 2 },
   ],
   [ // 3-column grid, one accent tile lower
-    { top: '2%', left: '4%', width: 270, z: 1 },
-    { top: '6%', left: '40%', width: 290, z: 2 },
-    { top: '0%', left: '74%', width: 230, z: 1 },
-    { top: '36%', left: '20%', width: 260, z: 2 },
-    { top: '32%', left: '56%', width: 250, z: 1 },
+    { top: '2%', left: '4%', width: 320, z: 1 },
+    { top: '6%', left: '40%', width: 340, z: 2 },
+    { top: '0%', left: '74%', width: 280, z: 1 },
+    { top: '36%', left: '20%', width: 310, z: 2 },
+    { top: '32%', left: '56%', width: 300, z: 1 },
   ],
   [ // 2-column masonry, taller tiles
-    { top: '0%', left: '6%', width: 300, z: 1 },
-    { top: '2%', left: '54%', width: 280, z: 2 },
-    { top: '36%', left: '8%', width: 260, z: 1 },
-    { top: '32%', left: '54%', width: 300, z: 2 },
+    { top: '0%', left: '6%', width: 350, z: 1 },
+    { top: '2%', left: '54%', width: 330, z: 2 },
+    { top: '36%', left: '8%', width: 310, z: 1 },
+    { top: '32%', left: '54%', width: 350, z: 2 },
   ],
   [ // airy 2x2 grid, more breathing room
-    { top: '4%', left: '6%', width: 300, z: 1 },
-    { top: '8%', left: '56%', width: 290, z: 2 },
-    { top: '40%', left: '10%', width: 260, z: 1 },
-    { top: '36%', left: '58%', width: 270, z: 2 },
+    { top: '4%', left: '6%', width: 350, z: 1 },
+    { top: '8%', left: '56%', width: 340, z: 2 },
+    { top: '40%', left: '10%', width: 310, z: 1 },
+    { top: '36%', left: '58%', width: 320, z: 2 },
   ],
 ]
 
@@ -115,8 +115,16 @@ function ServiceModal({ service, onClose }: { service: Service; onClose: () => v
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(5,6,8,0.85)', backdropFilter: 'blur(8px)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 'clamp(16px, 3vw, 40px)' }}>
       <style>{`
         @keyframes tileFloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
-        .service-tile { position: absolute; border-radius: 6px; overflow: hidden; box-shadow: 0 20px 50px rgba(0,0,0,0.45); transition: transform 0.3s ease, opacity 0.3s ease; animation: tileFloat 6s ease-in-out infinite; }
-        .service-tile .tile-img, .service-tile .tile-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border: none; }
+        /* No box-shadow — against the modal's own near-black background
+           a dark drop shadow just reads as an unwanted ring/border around
+           every tile rather than a lift. */
+        .service-tile { position: absolute; border-radius: 6px; overflow: hidden; transition: transform 0.3s ease, opacity 0.3s ease; animation: tileFloat 6s ease-in-out infinite; }
+        /* object-fit: cover alone wasn't enough — several of the source
+           thumbnails have a thin letterbox/matte baked into the image
+           itself, which read as an unwanted "border" around the tile.
+           Scaling the media up slightly crops that edge out regardless
+           of which photo lands in a given slot. */
+        .service-tile .tile-img, .service-tile .tile-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border: none; transform: scale(1.2); }
         .service-tile .tile-video { opacity: 0; transition: opacity 0.3s ease; pointer-events: none; }
         .tiles-wrap:hover .service-tile { opacity: 0.45; }
         /* !important here is load-bearing: each tile already carries an
@@ -154,7 +162,7 @@ function ServiceModal({ service, onClose }: { service: Service; onClose: () => v
             }
           }}
           onMouseLeave={() => { if (cursorRef.current) cursorRef.current.style.opacity = '0' }}
-          style={{ position: 'relative', height: 'clamp(380px, 48vw, 480px)', margin: 'clamp(32px, 5vw, 56px) clamp(28px, 6vw, 64px) clamp(48px, 7vw, 72px)' }}
+          style={{ position: 'relative', height: 'clamp(440px, 54vw, 560px)', margin: 'clamp(32px, 5vw, 56px) clamp(28px, 6vw, 64px) clamp(48px, 7vw, 72px)' }}
         >
           {tiles.map((t, i) => (
             <div key={i} className="service-tile" style={{ top: t.top, left: t.left, width: t.width, zIndex: t.z, aspectRatio: '4/3', animationDelay: `${i * 0.4}s` }}>

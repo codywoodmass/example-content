@@ -22,29 +22,43 @@ export default function AboutPage() {
       {/* TEAM SECTION */}
       <div style={{ padding: 'clamp(120px, 20vh, 170px) clamp(20px, 5vw, 48px) clamp(56px, 12vw, 100px)' }}>
         <div className="ec-grid-2" style={{ gap: 'clamp(40px, 6vw, 80px)', alignItems: 'center', maxWidth: 1200, margin: '0 auto' }}>
-          {/* LEFT — IMAGE */}
+          {/* LEFT — placeholder, real team photo coming once the shoot's done */}
           <div style={{ position: 'relative' }}>
             <div style={{ position: 'absolute', top: -20, left: -20, width: '100%', height: '100%', border: '0.5px solid rgba(200,194,187,0.1)', borderRadius: 4, zIndex: 0 }} />
-            <img
-              src="/images/Cody.jpg"
-              alt="The Team"
-              style={{ width: '100%', aspectRatio: '3/4', objectFit: 'cover', objectPosition: 'top', borderRadius: 4, position: 'relative', zIndex: 1, filter: 'grayscale(20%)' }}
-            />
+            <div
+              style={{
+                width: '100%', aspectRatio: '3/4', borderRadius: 4, position: 'relative', zIndex: 1,
+                border: '0.5px dashed rgba(200,194,187,0.2)', background: 'rgba(200,194,187,0.03)',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, textAlign: 'center', padding: 24,
+              }}
+            >
+              <span style={{ fontSize: 28, opacity: 0.4 }}>📷</span>
+              <div>
+                <p style={{ fontSize: 12, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.55)', margin: '0 0 6px', fontFamily: 'Inter, sans-serif' }}>Under construction</p>
+                <p style={{ fontSize: 12, color: 'rgba(200,194,187,0.35)', margin: 0, fontFamily: 'Inter, sans-serif' }}>Team shoot loading soon</p>
+              </div>
+            </div>
           </div>
           {/* RIGHT — TEXT */}
           <div>
             <p style={{ fontSize: 11, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)', marginBottom: 16, fontFamily: 'Inter, sans-serif', display: 'flex', alignItems: 'center', gap: 12 }}>
               <span style={{ display: 'inline-block', width: 28, height: 1, background: 'rgba(200,194,187,0.4)' }} />
-              The Team Behind It
+              Who we are
             </p>
             <h1 style={{ fontSize: 'clamp(36px, 4vw, 56px)', fontWeight: 400, color: '#fff', lineHeight: 1.05, letterSpacing: '0.04em', margin: '0 0 28px', textTransform: 'uppercase', fontFamily: "'Bebas Neue', sans-serif" }}>
-              We don't just show up with a camera. We show up with a plan.
+              What is Example Content?
             </h1>
             <p style={{ fontSize: 14, color: 'rgba(200,194,187,0.55)', lineHeight: 1.85, margin: '0 0 20px', fontFamily: 'Inter, sans-serif' }}>
-              Example Content is an Auckland based video production and photography studio, covering Auckland, Waikato and the Bay of Plenty as our core patch — and happy to travel anywhere for the right project. We work with property developers, real estate agents, architects and commercial brands across New Zealand to create content that doesn't just look good — it performs.
+              We're a photo and video creative powerhouse, specialising in all things architecture, lifestyle and experiences. Based in Auckland and the Waikato.
+            </p>
+            <p style={{ fontSize: 17, color: '#C8C2BB', lineHeight: 1.6, margin: '0 0 20px', fontFamily: 'Inter, sans-serif', fontWeight: 500 }}>
+              We're more than property. We are brand, lifestyle and strategy.
+            </p>
+            <p style={{ fontSize: 14, color: 'rgba(200,194,187,0.55)', lineHeight: 1.85, margin: '0 0 20px', fontFamily: 'Inter, sans-serif' }}>
+              We work with real estate agents, construction companies, developers, architects, businesses and events across the country on a variety of photo and video content that doesn't just look good — it performs.
             </p>
             <p style={{ fontSize: 14, color: 'rgba(200,194,187,0.55)', lineHeight: 1.85, margin: '0 0 40px', fontFamily: 'Inter, sans-serif' }}>
-              Every project starts with a conversation about outcomes. What do you need this content to do? From there, we build the strategy, plan the shoot, and deliver work that earns its place.
+              At the heart of Example is a team of creatives who care about the details, the people and the bigger picture. We like good ideas, good people and work that makes you stop scrolling. From the first conversation to the final cut, we bring a considered approach, a bit of personality and a genuine drive to create something worth putting your name on. No cookie-cutter content, just good people making good work.
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20, paddingTop: 32, borderTop: '0.5px solid rgba(200,194,187,0.1)' }}>
               {[
