@@ -9,25 +9,40 @@ import { WORK_PROJECTS, WorkCategory, WorkProject } from '@/lib/workProjects'
 const CATEGORIES: ('All' | WorkCategory)[] = ['All', 'Architectural', 'Commercial', 'Events']
 
 function ProjectCard({ project, onSelect, style }: { project: WorkProject; onSelect: () => void; style?: React.CSSProperties }) {
-  // The hover-preview iframe is only mounted once actually hovered —
-  // with 20+ projects (and the reel rendering the list twice for its
-  // seamless loop), mounting every card's autoplaying video unconditionally
+  // The video iframe is only mounted once the play button is actually
+  // clicked — with 20+ projects (and the reel rendering the list twice
+  // for its seamless loop), mounting every card's video unconditionally
   // on load meant dozens of simultaneous Vimeo streams just to show a
-  // static thumbnail. Lazy-mounting keeps the initial load to just the
-  // thumbnail images.
-  const [hovered, setHovered] = React.useState(false)
+  // static thumbnail. The thumbnail <img> itself is eager/high-priority
+  // so it's never waiting behind anything else on the page.
+  const [playing, setPlaying] = React.useState(false)
   return (
-    <div className="work-card" onClick={onSelect} onMouseEnter={() => setHovered(true)} style={{ cursor: 'pointer', ...style }}>
+    <div className="work-card" onClick={() => { if (!playing) onSelect() }} style={{ cursor: 'pointer', ...style }}>
       <div className="work-thumb">
-        <div className="work-thumb-img" style={{ backgroundImage: `url(${project.thumb})`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
-        {hovered && project.vimeoId && (
+        <img className="work-thumb-img" src={project.thumb} alt={project.title} loading="eager" decoding="async" fetchPriority="high" />
+        {playing && project.vimeoId && (
           <iframe
-            src={`https://player.vimeo.com/video/${project.vimeoId}?background=1&autoplay=1&loop=1&muted=1&title=0&byline=0&portrait=0&controls=0&badge=0&autopause=0`}
-            allow="autoplay; fullscreen"
+            className="work-thumb-player"
+            src={`https://player.vimeo.com/video/${project.vimeoId}?autoplay=1&muted=0&title=0&byline=0&portrait=0&controls=1&badge=0&autopause=0`}
+            allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
             frameBorder="0"
           />
         )}
         <span className="work-thumb-cat">{project.category}</span>
+        {!playing && project.vimeoId && (
+          <button
+            className="work-play-btn"
+            onClick={e => { e.stopPropagation(); setPlaying(true) }}
+            aria-label={`Play ${project.title}`}
+          >▶</button>
+        )}
+        {playing && (
+          <button
+            className="work-expand-btn"
+            onClick={e => { e.stopPropagation(); onSelect() }}
+            aria-label={`Open ${project.title}`}
+          >⤢</button>
+        )}
       </div>
       <p style={{ fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.38)', margin: '14px 0 5px' }}>{project.client} · {project.type}</p>
       <p style={{ fontSize: 18, fontWeight: 500, color: '#fff', margin: 0 }}>{project.title}</p>
@@ -104,11 +119,13 @@ function ReelView({ projects, onSelect }: { projects: WorkProject[]; onSelect: (
         .reel-track { display: flex; gap: 20px; width: max-content; padding: 0 clamp(20px, 5vw, 48px); }
         .work-card { flex-shrink: 0; width: min(560px, 82vw); }
         .work-thumb { position: relative; padding-top: 56.25%; border-radius: 3px; overflow: hidden; background: #1a1f28; }
-        .work-thumb iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none; opacity: 0; transition: opacity 0.4s ease; pointer-events: none; }
-        .work-card:hover .work-thumb iframe { opacity: 1; }
-        .work-thumb-img { position: absolute; inset: 0; transition: opacity 0.4s ease; }
-        .work-card:hover .work-thumb-img { opacity: 0; }
+        .work-thumb-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+        .work-thumb-player { position: absolute; inset: 0; width: 100%; height: 100%; border: none; z-index: 2; }
         .work-thumb-cat { position: absolute; top: 12px; left: 12px; font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(200,194,187,0.7); background: rgba(10,12,16,0.6); padding: 5px 10px; border-radius: 2px; border: 0.5px solid rgba(200,194,187,0.15); }
+        .work-play-btn { position: absolute; inset: 0; margin: auto; width: 60px; height: 60px; border-radius: 50%; background: rgba(10,12,16,0.55); border: 0.5px solid rgba(200,194,187,0.4); backdrop-filter: blur(6px); color: #fff; font-size: 20px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: transform 0.2s ease, background 0.2s ease; z-index: 2; }
+        .work-play-btn:hover { background: rgba(200,194,187,0.25); transform: scale(1.08); }
+        .work-expand-btn { position: absolute; top: 12px; right: 12px; z-index: 3; width: 34px; height: 34px; border-radius: 50%; background: rgba(10,12,16,0.6); border: 0.5px solid rgba(200,194,187,0.3); color: #C8C2BB; font-size: 14px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+        .work-expand-btn:hover { background: rgba(200,194,187,0.2); color: #fff; }
         .reel-cursor { position: fixed; top: 0; left: 0; pointer-events: none; z-index: 60; width: 60px; height: 60px; border-radius: 50%; background: rgba(200,194,187,0.12); border: 1px solid rgba(200,194,187,0.35); backdrop-filter: blur(4px); opacity: 0; transition: opacity 0.2s ease; transform: translate(-50%, -50%); }
         .reel-arrow { position: absolute; top: 40%; transform: translateY(-50%); width: 48px; height: 48px; border-radius: 50%; border: 0.5px solid rgba(200,194,187,0.25); background: rgba(14,16,20,0.7); color: #C8C2BB; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 5; font-size: 16px; transition: background 0.2s; }
         .reel-arrow:hover { background: rgba(200,194,187,0.15); }
@@ -142,11 +159,13 @@ function GridView({ projects, onSelect }: { projects: WorkProject[]; onSelect: (
     <>
       <style>{`
         .work-thumb { position: relative; padding-top: 56.25%; border-radius: 3px; overflow: hidden; background: #1a1f28; }
-        .work-thumb iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none; opacity: 0; transition: opacity 0.4s ease; pointer-events: none; }
-        .work-card:hover .work-thumb iframe { opacity: 1; }
-        .work-thumb-img { position: absolute; inset: 0; transition: opacity 0.4s ease; }
-        .work-card:hover .work-thumb-img { opacity: 0; }
+        .work-thumb-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+        .work-thumb-player { position: absolute; inset: 0; width: 100%; height: 100%; border: none; z-index: 2; }
         .work-thumb-cat { position: absolute; top: 12px; left: 12px; font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(200,194,187,0.7); background: rgba(10,12,16,0.6); padding: 5px 10px; border-radius: 2px; border: 0.5px solid rgba(200,194,187,0.15); }
+        .work-play-btn { position: absolute; inset: 0; margin: auto; width: 60px; height: 60px; border-radius: 50%; background: rgba(10,12,16,0.55); border: 0.5px solid rgba(200,194,187,0.4); backdrop-filter: blur(6px); color: #fff; font-size: 20px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: transform 0.2s ease, background 0.2s ease; z-index: 2; }
+        .work-play-btn:hover { background: rgba(200,194,187,0.25); transform: scale(1.08); }
+        .work-expand-btn { position: absolute; top: 12px; right: 12px; z-index: 3; width: 34px; height: 34px; border-radius: 50%; background: rgba(10,12,16,0.6); border: 0.5px solid rgba(200,194,187,0.3); color: #C8C2BB; font-size: 14px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+        .work-expand-btn:hover { background: rgba(200,194,187,0.2); color: #fff; }
         .work-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 32px clamp(20px, 4vw, 40px); padding: 0 clamp(20px, 5vw, 48px) 60px; }
         @media (max-width: 760px) { .work-grid { grid-template-columns: 1fr; } }
       `}</style>
