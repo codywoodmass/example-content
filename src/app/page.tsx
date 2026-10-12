@@ -2,6 +2,7 @@
 import React from 'react'
 import { useSiteGate } from '@/lib/sitePreview'
 import SiteNav from '@/components/public/SiteNav'
+import LogoWatermark from '@/components/public/LogoWatermark'
 import SiteFooter from '@/components/public/SiteFooter'
 
 
@@ -59,7 +60,7 @@ function StatementSection() {
   }, [])
 
   return (
-    <div ref={ref} style={{ padding: 'clamp(36px, 7vw, 60px) clamp(20px, 5vw, 48px)', background: '#0E1014', display: 'flex', justifyContent: 'center', textAlign: 'center' }}>
+    <div ref={ref} style={{ padding: 'clamp(24px, 4vw, 40px) clamp(20px, 5vw, 48px)', background: '#0E1014', display: 'flex', justifyContent: 'center', textAlign: 'center' }}>
       <h2 style={{ fontSize: 'clamp(34px, 5.8vw, 68px)', fontWeight: 400, color: '#fff', lineHeight: 1.15, letterSpacing: '0.02em', margin: 0, maxWidth: 1100, fontFamily: "'Bebas Neue', sans-serif", textTransform: 'uppercase', opacity: visible ? 1 : 0, transition: 'opacity 0.5s ease' }}>
         <div>{visible && <ScrambleText text="GOOD CONTENT GETS LIKES." delay={0} />}</div>
         <div>{visible && <ScrambleText text="STRATEGIC CONTENT GETS RESULTS." delay={150} />}</div>
@@ -262,6 +263,29 @@ const RECENT_WORK = [
   { id: '1216751474', title: 'Clyde Street', client: 'Property Film · Hawkes Bay', type: 'Property Film', thumb: 'https://i.vimeocdn.com/video/2188266667-68b9d4ee59946fef552d97ba3dd5b3917302c427d524f800fbb8c2638e9fb654-d_1280x720?region=us' },
 ]
 
+// Lazy-mounted hover-preview — the iframe only loads once actually
+// hovered, so the 12 doubled carousel items don't all open a Vimeo stream
+// the instant the homepage loads.
+function CarouselItem({ proj }: { proj: typeof RECENT_WORK[number] }) {
+  const [hovered, setHovered] = React.useState(false)
+  return (
+    <div className="carousel-item" onMouseEnter={() => setHovered(true)}>
+      <div className="vid-thumb">
+        <div className="vid-thumb-img" style={{ backgroundImage: proj.thumb ? `url(${proj.thumb})` : `url(https://vumbnail.com/${proj.id}_large.jpg), url(https://vumbnail.com/${proj.id}.jpg)`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
+        {hovered && (
+          <iframe
+            src={`https://player.vimeo.com/video/${proj.id}?background=1&autoplay=1&loop=1&muted=1&title=0&byline=0&portrait=0&controls=0&badge=0&autopause=0`}
+            allow="autoplay; fullscreen"
+            frameBorder="0"
+          />
+        )}
+      </div>
+      <p style={{ fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.38)', marginBottom: 5 }}>{proj.client} · {proj.type}</p>
+      <p style={{ fontSize: 18, fontWeight: 500, color: '#fff', margin: 0 }}>{proj.title}</p>
+    </div>
+  )
+}
+
 // Same ambient-drift + edge-hover-accelerate pattern as the Our Work page's
 // reel, so the two autoscrolling strips feel consistent across the site —
 // just slower here, since this is a teaser, not the main browsing view.
@@ -270,6 +294,15 @@ function RecentWorkCarousel() {
   const trackRef = React.useRef<HTMLDivElement>(null)
   const extraSpeed = React.useRef(0)
   const cursorRef = React.useRef<HTMLDivElement>(null)
+  // Pauses the ambient tick so it stops fighting a real scroll/drag input
+  // (previously it rewrote scrollLeft from its own accumulator every
+  // single frame, so any manual wheel/trackpad/drag input got overwritten
+  // within ~16ms and felt completely unresponsive).
+  const dragging = React.useRef(false)
+  const paused = React.useRef(false)
+  const wheelResumeTimer = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const dragStartX = React.useRef(0)
+  const dragStartScroll = React.useRef(0)
 
   const doubled = [...RECENT_WORK, ...RECENT_WORK]
 
@@ -286,7 +319,7 @@ function RecentWorkCarousel() {
     function tick() {
       const wrap = wrapRef.current
       const track = trackRef.current
-      if (wrap && track) {
+      if (wrap && track && !dragging.current && !paused.current) {
         accum.current += BASE_SPEED + extraSpeed.current
         const half = track.scrollWidth / 2
         if (accum.current >= half) accum.current -= half
@@ -317,6 +350,18 @@ function RecentWorkCarousel() {
     }
   }
 
+  // Wheel/trackpad scroll — pause, let the browser handle it natively,
+  // then resync the accumulator to wherever that left scrollLeft so the
+  // ambient drift picks back up from there instead of snapping away.
+  function onWheel() {
+    paused.current = true
+    clearTimeout(wheelResumeTimer.current)
+    wheelResumeTimer.current = setTimeout(() => {
+      if (wrapRef.current) accum.current = wrapRef.current.scrollLeft
+      paused.current = false
+    }, 500)
+  }
+
   return (
     <>
       <style>{`
@@ -341,24 +386,18 @@ function RecentWorkCarousel() {
         onMouseLeave={() => {
           extraSpeed.current = 0
           if (cursorRef.current) cursorRef.current.style.opacity = '0'
+          if (wrapRef.current) accum.current = wrapRef.current.scrollLeft
         }}
+        onWheel={onWheel}
+        onPointerDown={e => { dragging.current = true; paused.current = true; dragStartX.current = e.clientX; dragStartScroll.current = wrapRef.current?.scrollLeft || 0 }}
+        onPointerMove={e => { if (!dragging.current || !wrapRef.current) return; wrapRef.current.scrollLeft = dragStartScroll.current - (e.clientX - dragStartX.current) }}
+        onPointerUp={() => { dragging.current = false; if (wrapRef.current) accum.current = wrapRef.current.scrollLeft; setTimeout(() => { paused.current = false }, 400) }}
         style={{ overflowX: 'scroll', scrollbarWidth: 'none' as const }}
       >
         <div ref={cursorRef} className="carousel-cursor">⟵ ⟶</div>
         <div ref={trackRef} className="carousel-track" style={{ padding: '0 clamp(20px, 5vw, 48px)' }}>
           {doubled.map((proj, i) => (
-            <div key={proj.id + '-' + i} className="carousel-item">
-              <div className="vid-thumb">
-                <div className="vid-thumb-img" style={{ backgroundImage: proj.thumb ? `url(${proj.thumb})` : `url(https://vumbnail.com/${proj.id}_large.jpg), url(https://vumbnail.com/${proj.id}.jpg)`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
-                <iframe
-                  src={`https://player.vimeo.com/video/${proj.id}?background=1&autoplay=1&loop=1&muted=1&title=0&byline=0&portrait=0&controls=0&badge=0&autopause=0`}
-                  allow="autoplay; fullscreen"
-                  frameBorder="0"
-                />
-              </div>
-              <p style={{ fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.38)', marginBottom: 5 }}>{proj.client} · {proj.type}</p>
-              <p style={{ fontSize: 18, fontWeight: 500, color: '#fff', margin: 0 }}>{proj.title}</p>
-            </div>
+            <CarouselItem key={proj.id + '-' + i} proj={proj} />
           ))}
         </div>
       </div>
@@ -393,6 +432,7 @@ export default function Home() {
           .ec-row-stack { flex-direction: column; align-items: flex-start !important; gap: 16px; }
         }
       `}</style>
+      <LogoWatermark />
       <SiteNav opacity={navOpacity} />
       {/* HERO / SHOWREEL — fades to black internally before releasing its
           scroll pin, so it hands off to the next section clean (no taper
@@ -403,7 +443,7 @@ export default function Home() {
       <StatementSection />
 
       {/* WORK SECTION */}
-      <div style={{ padding: 'clamp(48px, 10vw, 80px) 0 0', borderTop: '0.5px solid rgba(200,194,187,0.1)' }}>
+      <div style={{ padding: 'clamp(24px, 5vw, 40px) 0 0', borderTop: '0.5px solid rgba(200,194,187,0.1)' }}>
         <a href="/work" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 16, padding: '0 clamp(20px, 5vw, 48px)', paddingBottom: 40, borderBottom: '0.5px solid rgba(200,194,187,0.1)', marginBottom: 48, textDecoration: 'none' }}>
           <div>
             <p style={{ fontSize: 11, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)', marginBottom: 10 }}>Selected work</p>

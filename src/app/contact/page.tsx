@@ -3,6 +3,7 @@ import React from 'react'
 import { useSiteGate } from '@/lib/sitePreview'
 import SiteNav from '@/components/public/SiteNav'
 import SiteFooter from '@/components/public/SiteFooter'
+import LogoWatermark from '@/components/public/LogoWatermark'
 
 const inputStyle: React.CSSProperties = { width: '100%', background: 'rgba(200,194,187,0.05)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 3, padding: '13px 16px', fontSize: 14, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }
 const labelStyle: React.CSSProperties = { fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.45)', marginBottom: 8, display: 'block' }
@@ -34,6 +35,7 @@ export default function ContactPage() {
     <main style={{ background: '#0E1014', minHeight: '100vh', color: '#C8C2BB', fontFamily: "'Inter', sans-serif" }}>
       <link rel="preconnect" href="https://fonts.googleapis.com" />
       <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500&display=swap" rel="stylesheet" />
+      <LogoWatermark />
       <SiteNav />
 
       <style>{`
@@ -103,7 +105,7 @@ export default function ContactPage() {
                   </div>
                 </div>
                 <div>
-                  <label style={labelStyle}>Tell us about it</label>
+                  <label style={labelStyle}>How can we help you with your project?</label>
                   <textarea required rows={5} style={{ ...inputStyle, resize: 'vertical' as const, lineHeight: 1.6 }} value={form.message} onChange={e => setForm(f => ({ ...f, message: e.target.value }))} />
                 </div>
                 {error && <div style={{ fontSize: 13, color: 'rgba(210,90,90,0.85)' }}>{error}</div>}

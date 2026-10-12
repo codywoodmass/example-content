@@ -2,6 +2,7 @@
 import React from 'react'
 import { useSiteGate } from '@/lib/sitePreview'
 import SiteNav from '@/components/public/SiteNav'
+import LogoWatermark from '@/components/public/LogoWatermark'
 import SiteFooter from '@/components/public/SiteFooter'
 
 export default function AboutPage() {
@@ -12,6 +13,7 @@ export default function AboutPage() {
     <main style={{ background: '#0E1014', minHeight: '100vh', color: '#C8C2BB', fontFamily: "'Inter', sans-serif" }}>
       <link rel="preconnect" href="https://fonts.googleapis.com" />
       <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500&display=swap" rel="stylesheet" />
+      <LogoWatermark />
       <SiteNav />
 
       <style>{`
@@ -64,6 +66,7 @@ export default function AboutPage() {
               {[
                 { label: 'Cody Woodmass', role: 'Director / Founder' },
                 { label: 'Fin', role: 'Shooter / Editor' },
+                { label: 'Nyk', role: 'Top Dog' },
               ].map(({ label, role }) => (
                 <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ fontSize: 13, fontWeight: 500, color: '#C8C2BB', fontFamily: 'Inter, sans-serif', letterSpacing: '0.04em', textTransform: 'uppercase' }}>{label}</span>

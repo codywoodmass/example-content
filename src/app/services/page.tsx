@@ -2,17 +2,34 @@
 import React from 'react'
 import { useSiteGate } from '@/lib/sitePreview'
 import SiteNav from '@/components/public/SiteNav'
+import LogoWatermark from '@/components/public/LogoWatermark'
 import SiteFooter from '@/components/public/SiteFooter'
 import InstagramFeed from '@/components/public/InstagramFeed'
-import { WORK_PROJECTS } from '@/lib/workProjects'
+import { WORK_PROJECTS, WorkProject } from '@/lib/workProjects'
 
-// Reused from the Our Work portfolio as stand-in imagery for the floating
-// tile showcase below — swap in real per-service shots whenever they're
-// ready (see CONTENT_README.md). Paired with each project's vimeoId too,
-// so a tile that has one quietly loops a muted preview underneath its
-// still, revealed on hover — the still never disappears to a blank frame
-// while the video loads.
-const TILE_POOL = WORK_PROJECTS.map(p => ({ img: p.thumb, vimeoId: p.vimeoId }))
+// Which real projects are relevant to each service — keyed by service
+// number, filtering WORK_PROJECTS rather than pulling from a flat rotating
+// pool, so a service's tiles actually show its own kind of work instead of
+// a random mix. Falls back to the full pool only if a filter ever matches
+// nothing (shouldn't happen with the current data, but keeps the tiles
+// from going empty if a category's work is ever removed).
+const SERVICE_TILE_FILTER: Record<string, (p: WorkProject) => boolean> = {
+  '01': p => p.category === 'Architectural' && p.propertyType !== 'Construction', // Property & Real Estate Film
+  '02': p => p.category === 'Architectural', // Architectural Photography — property and construction both
+  '03': p => p.category === 'Commercial', // Brand & Commercial Film
+  '04': p => p.category === 'Commercial' || p.aspect === '9/16', // Social Media Content & Ads — commercial plus anything vertical/social-cut
+  '05': () => true, // Pre-Production & Strategy — applies across every kind of shoot
+  '06': p => p.category === 'Events', // Event Coverage
+  '07': () => true, // Client Portal, Feedback & Booking — not tied to a shoot category
+  '08': p => p.category === 'Architectural' && p.propertyType === 'Construction', // Development Campaigns
+}
+
+function tilePoolFor(serviceNum: string) {
+  const filter = SERVICE_TILE_FILTER[serviceNum] ?? (() => true)
+  const matches = WORK_PROJECTS.filter(filter)
+  const pool = matches.length > 0 ? matches : WORK_PROJECTS
+  return pool.map(p => ({ img: p.thumb, vimeoId: p.vimeoId }))
+}
 
 type Service = { num: string; title: string; desc: string; longDesc: string }
 
@@ -67,38 +84,39 @@ const SERVICES: Service[] = [
   },
 ]
 
-// Four distinct arrangements — each built on an implicit grid (consistent
-// column bands, aligned row bands) with just a little jitter per tile, so
-// it reads as "laid out" rather than scattered, while still varying size,
-// overlap and photo choice enough that no two services in a row look like
-// the same template.
+// Four distinct arrangements — each on an implicit grid with just enough
+// overlap between neighbours to feel assembled rather than gridded, but
+// spaced apart enough that each photo still reads clearly on its own.
+// (An earlier pass had these overlapping 50%+, which just turned into an
+// illegible blur where tiles met — these keep the overlap in the 10-20%
+// range at most.)
 const TILE_LAYOUTS: { top: string; left: string; width: number; z: number }[][] = [
   [ // 3-column, 2-row grid
-    { top: '4%', left: '2%', width: 330, z: 1 },
-    { top: '7%', left: '36%', width: 310, z: 2 },
-    { top: '2%', left: '68%', width: 310, z: 1 },
-    { top: '34%', left: '4%', width: 300, z: 2 },
-    { top: '37%', left: '38%', width: 320, z: 1 },
-    { top: '32%', left: '70%', width: 290, z: 2 },
+    { top: '2%', left: '0%', width: 300, z: 1 },
+    { top: '4%', left: '36%', width: 280, z: 2 },
+    { top: '0%', left: '70%', width: 280, z: 1 },
+    { top: '54%', left: '4%', width: 280, z: 2 },
+    { top: '56%', left: '38%', width: 300, z: 1 },
+    { top: '52%', left: '72%', width: 260, z: 2 },
   ],
-  [ // 3-column grid, one accent tile lower
-    { top: '2%', left: '4%', width: 320, z: 1 },
-    { top: '6%', left: '40%', width: 340, z: 2 },
-    { top: '0%', left: '74%', width: 280, z: 1 },
-    { top: '36%', left: '20%', width: 310, z: 2 },
-    { top: '32%', left: '56%', width: 300, z: 1 },
+  [ // 3-column grid, two-tile accent row below
+    { top: '2%', left: '2%', width: 290, z: 1 },
+    { top: '5%', left: '38%', width: 300, z: 2 },
+    { top: '0%', left: '74%', width: 250, z: 1 },
+    { top: '54%', left: '16%', width: 290, z: 2 },
+    { top: '56%', left: '52%', width: 280, z: 1 },
   ],
   [ // 2-column masonry, taller tiles
-    { top: '0%', left: '6%', width: 350, z: 1 },
-    { top: '2%', left: '54%', width: 330, z: 2 },
-    { top: '36%', left: '8%', width: 310, z: 1 },
-    { top: '32%', left: '54%', width: 350, z: 2 },
+    { top: '2%', left: '2%', width: 300, z: 1 },
+    { top: '6%', left: '54%', width: 290, z: 2 },
+    { top: '54%', left: '4%', width: 280, z: 1 },
+    { top: '50%', left: '56%', width: 300, z: 2 },
   ],
-  [ // airy 2x2 grid, more breathing room
-    { top: '4%', left: '6%', width: 350, z: 1 },
-    { top: '8%', left: '56%', width: 340, z: 2 },
-    { top: '40%', left: '10%', width: 310, z: 1 },
-    { top: '36%', left: '58%', width: 320, z: 2 },
+  [ // airy 2x2 grid, the most breathing room
+    { top: '2%', left: '4%', width: 290, z: 1 },
+    { top: '6%', left: '56%', width: 280, z: 2 },
+    { top: '54%', left: '8%', width: 270, z: 1 },
+    { top: '52%', left: '58%', width: 290, z: 2 },
   ],
 ]
 
@@ -107,8 +125,8 @@ function ServiceModal({ service, onClose }: { service: Service; onClose: () => v
   const tiles = React.useMemo(() => {
     const index = SERVICES.findIndex(s => s.num === service.num)
     const layout = TILE_LAYOUTS[index % TILE_LAYOUTS.length]
-    const offset = index * 2
-    return layout.map((pos, i) => ({ ...pos, ...TILE_POOL[(offset + i) % TILE_POOL.length] }))
+    const pool = tilePoolFor(service.num)
+    return layout.map((pos, i) => ({ ...pos, ...pool[i % pool.length] }))
   }, [service.num])
 
   return (
@@ -195,6 +213,7 @@ export default function ServicesPage() {
     <main style={{ background: '#0E1014', minHeight: '100vh', color: '#C8C2BB', fontFamily: "'Inter', sans-serif" }}>
       <link rel="preconnect" href="https://fonts.googleapis.com" />
       <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500&display=swap" rel="stylesheet" />
+      <LogoWatermark />
       <SiteNav />
 
       <style>{`

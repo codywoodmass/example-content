@@ -70,13 +70,21 @@ export const WORK_PROJECTS: WorkProject[] = [
   },
   {
     id: 'social-project',
-    title: 'Social Project',
-    client: 'Commercial · Wellington',
+    title: 'Sopro',
+    client: 'Sopro',
     category: 'Commercial',
     type: 'Brand Film',
     vimeoId: '1216751477',
     thumb: 'https://i.vimeocdn.com/video/2188267258-642a37f197a11b257107e3026f603bd9b101e150481feba60d316c736e8fcedd-d_1280x720?region=us',
     description: 'A social-first brand film built to perform in a crowded feed — short, punchy and edited for sound-off viewing first, with a cut built for the platforms it was actually made for.',
+    images: [
+      '/images/work/social-project/1.jpg',
+      '/images/work/social-project/2.jpg',
+      '/images/work/social-project/3.jpg',
+      '/images/work/social-project/4.jpg',
+      '/images/work/social-project/5.jpg',
+      '/images/work/social-project/6.jpg',
+    ],
   },
   {
     id: 'flex-fitness-taupo',
@@ -267,6 +275,13 @@ export const WORK_PROJECTS: WorkProject[] = [
     type: 'Event Film',
     vimeoId: '1234897903',
     thumb: 'https://vumbnail.com/1234897903_large.jpg',
+    images: [
+      '/images/work/sheer-negotiations-event-recap/1.jpg',
+      '/images/work/sheer-negotiations-event-recap/2.jpg',
+      '/images/work/sheer-negotiations-event-recap/3.jpg',
+      '/images/work/sheer-negotiations-event-recap/4.jpg',
+      '/images/work/sheer-negotiations-event-recap/5.jpg',
+    ],
   },
   {
     id: 'cycle-challenge-ad',

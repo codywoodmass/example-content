@@ -2,17 +2,25 @@
 import React from 'react'
 import { useSiteGate } from '@/lib/sitePreview'
 import SiteNav from '@/components/public/SiteNav'
+import LogoWatermark from '@/components/public/LogoWatermark'
 import SiteFooter from '@/components/public/SiteFooter'
 import { WORK_PROJECTS, WorkCategory, WorkProject } from '@/lib/workProjects'
 
 const CATEGORIES: ('All' | WorkCategory)[] = ['All', 'Architectural', 'Commercial', 'Events']
 
 function ProjectCard({ project, onSelect, style }: { project: WorkProject; onSelect: () => void; style?: React.CSSProperties }) {
+  // The hover-preview iframe is only mounted once actually hovered —
+  // with 20+ projects (and the reel rendering the list twice for its
+  // seamless loop), mounting every card's autoplaying video unconditionally
+  // on load meant dozens of simultaneous Vimeo streams just to show a
+  // static thumbnail. Lazy-mounting keeps the initial load to just the
+  // thumbnail images.
+  const [hovered, setHovered] = React.useState(false)
   return (
-    <div className="work-card" onClick={onSelect} style={{ cursor: 'pointer', ...style }}>
+    <div className="work-card" onClick={onSelect} onMouseEnter={() => setHovered(true)} style={{ cursor: 'pointer', ...style }}>
       <div className="work-thumb">
         <div className="work-thumb-img" style={{ backgroundImage: `url(${project.thumb})`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
-        {project.vimeoId && (
+        {hovered && project.vimeoId && (
           <iframe
             src={`https://player.vimeo.com/video/${project.vimeoId}?background=1&autoplay=1&loop=1&muted=1&title=0&byline=0&portrait=0&controls=0&badge=0&autopause=0`}
             allow="autoplay; fullscreen"
@@ -337,7 +345,7 @@ function ProjectModal({ project, onClose }: { project: WorkProject; onClose: () 
             <p style={{ fontSize: 11, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)', marginBottom: 20 }}>Photos</p>
             <div className="project-gallery-grid">
               {project.images.map(src => (
-                <img key={src} src={src} alt={project.title} style={{ width: '100%', borderRadius: 3, display: 'block' }} />
+                <img key={src} src={src} alt={project.title} loading="lazy" style={{ width: '100%', borderRadius: 3, display: 'block' }} />
               ))}
             </div>
           </div>
@@ -364,6 +372,7 @@ export default function WorkPage() {
     <main style={{ background: '#0E1014', minHeight: '100vh', color: '#C8C2BB', fontFamily: "'Inter', sans-serif" }}>
       <link rel="preconnect" href="https://fonts.googleapis.com" />
       <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500&display=swap" rel="stylesheet" />
+      <LogoWatermark />
       <SiteNav />
 
       <style>{`

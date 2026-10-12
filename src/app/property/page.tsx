@@ -2,8 +2,9 @@
 import React from 'react'
 import { useSiteGate } from '@/lib/sitePreview'
 import SiteNav from '@/components/public/SiteNav'
+import LogoWatermark from '@/components/public/LogoWatermark'
 import SiteFooter from '@/components/public/SiteFooter'
-import { WORK_PROJECTS, PropertyType } from '@/lib/workProjects'
+import { WORK_PROJECTS, PropertyType, WorkProject } from '@/lib/workProjects'
 
 const STATS = [
   { value: '10+', label: 'Years in property & architectural film' },
@@ -24,6 +25,25 @@ const FEATURES = [
 
 const CATEGORIES: PropertyType[] = ['Property', 'Construction']
 
+// Lazy-mounted hover-preview, same reasoning as the Our Work page's
+// cards — don't open a Vimeo stream for every tile until it's actually
+// hovered.
+function PropertyCard({ project: p }: { project: WorkProject }) {
+  const [hovered, setHovered] = React.useState(false)
+  return (
+    <div className="property-card" onMouseEnter={() => setHovered(true)}>
+      <div className="work-thumb">
+        <div className="work-thumb-img" style={{ backgroundImage: `url(${p.thumb})`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
+        {hovered && p.vimeoId && (
+          <iframe src={`https://player.vimeo.com/video/${p.vimeoId}?background=1&autoplay=1&loop=1&muted=1&title=0&byline=0&portrait=0&controls=0&badge=0&autopause=0`} allow="autoplay; fullscreen" frameBorder="0" />
+        )}
+      </div>
+      <p style={{ fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.38)', margin: '14px 0 5px' }}>{p.client}</p>
+      <p style={{ fontSize: 18, fontWeight: 500, color: '#fff', margin: 0 }}>{p.title}</p>
+    </div>
+  )
+}
+
 export default function PropertyPage() {
   const gate = useSiteGate()
   const [category, setCategory] = React.useState<PropertyType>('Property')
@@ -35,6 +55,7 @@ export default function PropertyPage() {
     <main style={{ background: '#0E1014', minHeight: '100vh', color: '#C8C2BB', fontFamily: "'Inter', sans-serif" }}>
       <link rel="preconnect" href="https://fonts.googleapis.com" />
       <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500&display=swap" rel="stylesheet" />
+      <LogoWatermark />
       <SiteNav />
 
       <style>{`
@@ -123,16 +144,7 @@ export default function PropertyPage() {
         ) : (
           <div className="property-grid">
             {projects.map(p => (
-              <div key={p.id} className="property-card">
-                <div className="work-thumb">
-                  <div className="work-thumb-img" style={{ backgroundImage: `url(${p.thumb})`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
-                  {p.vimeoId && (
-                    <iframe src={`https://player.vimeo.com/video/${p.vimeoId}?background=1&autoplay=1&loop=1&muted=1&title=0&byline=0&portrait=0&controls=0&badge=0&autopause=0`} allow="autoplay; fullscreen" frameBorder="0" />
-                  )}
-                </div>
-                <p style={{ fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.38)', margin: '14px 0 5px' }}>{p.client}</p>
-                <p style={{ fontSize: 18, fontWeight: 500, color: '#fff', margin: 0 }}>{p.title}</p>
-              </div>
+              <PropertyCard key={p.id} project={p} />
             ))}
           </div>
         )}
