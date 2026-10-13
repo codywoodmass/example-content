@@ -487,12 +487,11 @@ export default function Home() {
         </div>
         <div className="ec-grid-2" style={{ gap: 0 }}>
           {[['01','Property & Real Estate Film'],['02','Architectural Photography'],['03','Brand & Commercial Film'],['04','Social Media Content & Ads'],['05','Pre-Production & Strategy'],['06','Event Coverage']].map(([num, title]) => (
-            <div key={num} className="ec-services-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '24px 24px 24px 0', borderBottom: '0.5px solid rgba(200,194,187,0.08)', cursor: 'pointer' }}>
+            <div key={num} className="ec-services-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '24px 24px 24px 0', borderBottom: '0.5px solid rgba(200,194,187,0.08)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                 <span style={{ fontSize: 11, color: 'rgba(200,194,187,0.25)', letterSpacing: '0.1em' }}>{num}</span>
                 <span style={{ fontSize: 18, fontWeight: 500, color: 'rgba(255,255,255,0.8)' }}>{title}</span>
               </div>
-              <span style={{ color: 'rgba(200,194,187,0.2)', fontSize: 16 }}>→</span>
             </div>
           ))}
         </div>
