@@ -269,6 +269,26 @@ function ProjectsPageInner() {
     const s = Math.floor(seconds % 60)
     return `${m}:${s.toString().padStart(2, '0')}`
   }
+
+  // A client can queue up several timestamped notes and send them
+  // together as one request — the client portal gives every row in that
+  // batch the exact same created_at, which is what's used here to
+  // recognise and group them, so the studio sees "Change request — 3
+  // items" instead of 3 separate unrelated-looking cards.
+  function groupFeedback(items: any[]) {
+    const groups = new Map<string, any[]>()
+    for (const fb of items) {
+      const key = `${fb.file_id}|${fb.client_email}|${fb.created_at}`
+      if (!groups.has(key)) groups.set(key, [])
+      groups.get(key)!.push(fb)
+    }
+    return Array.from(groups.values())
+  }
+
+  async function resolveFeedbackGroup(ids: string[]) {
+    await supabase.from('video_feedback').update({ status: 'resolved' }).in('id', ids)
+    setProjectFeedback(p => p.map(f => ids.includes(f.id) ? { ...f, status: 'resolved' } : f))
+  }
   const [creatingFolder, setCreatingFolder] = useState(false)
 
   async function createProjectFolder(proj: Project) {
@@ -1272,20 +1292,34 @@ function ProjectsPageInner() {
                     <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)' }}>Client feedback</div>
                     <span style={{ fontSize: 10, color: 'rgba(200,194,187,0.3)' }}>{projectFeedback.filter(f => f.status !== 'resolved').length} pending</span>
                   </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {projectFeedback.map(fb => (
-                      <div key={fb.id} style={{ background: fb.status === 'resolved' ? 'rgba(200,194,187,0.03)' : 'rgba(210,175,80,0.05)', border: `0.5px solid ${fb.status === 'resolved' ? 'rgba(200,194,187,0.08)' : 'rgba(210,175,80,0.2)'}`, borderRadius: 5, padding: '10px 12px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
-                          <div style={{ fontSize: 11, fontWeight: 500, color: '#C8C2BB' }}>{fb.client_name || fb.client_email} · <span style={{ color: 'rgba(200,194,187,0.4)', fontWeight: 400 }}>{fb.file_name} @ {formatFeedbackTimestamp(fb.timestamp_seconds)}</span></div>
-                          {fb.status === 'resolved' ? (
-                            <span style={{ fontSize: 9, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'rgba(100,200,130,0.8)' }}>✓ Resolved</span>
-                          ) : (
-                            <button onClick={() => resolveFeedback(fb.id)} style={{ fontSize: 9, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '3px 8px', borderRadius: 3, border: '0.5px solid rgba(210,175,80,0.3)', color: 'rgba(210,175,80,0.9)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Mark resolved</button>
-                          )}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {groupFeedback(projectFeedback).map(group => {
+                      const first = group[0]
+                      const allResolved = group.every((f: any) => f.status === 'resolved')
+                      const pendingIds = group.filter((f: any) => f.status !== 'resolved').map((f: any) => f.id)
+                      return (
+                        <div key={`${first.file_id}|${first.client_email}|${first.created_at}`} style={{ background: allResolved ? 'rgba(200,194,187,0.03)' : 'rgba(210,175,80,0.05)', border: `0.5px solid ${allResolved ? 'rgba(200,194,187,0.08)' : 'rgba(210,175,80,0.2)'}`, borderRadius: 5, padding: '10px 12px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                            <div style={{ fontSize: 11, fontWeight: 500, color: '#C8C2BB' }}>
+                              {first.client_name || first.client_email} · <span style={{ color: 'rgba(200,194,187,0.4)', fontWeight: 400 }}>{first.file_name}{group.length > 1 ? ` · Change request — ${group.length} items` : ` @ ${formatFeedbackTimestamp(first.timestamp_seconds)}`}</span>
+                            </div>
+                            {allResolved ? (
+                              <span style={{ fontSize: 9, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'rgba(100,200,130,0.8)' }}>✓ Resolved</span>
+                            ) : (
+                              <button onClick={() => resolveFeedbackGroup(pendingIds)} style={{ fontSize: 9, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '3px 8px', borderRadius: 3, border: '0.5px solid rgba(210,175,80,0.3)', color: 'rgba(210,175,80,0.9)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>{group.length > 1 ? 'Mark all resolved' : 'Mark resolved'}</button>
+                            )}
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            {group.map((fb: any) => (
+                              <div key={fb.id} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', opacity: fb.status === 'resolved' ? 0.5 : 1 }}>
+                                {group.length > 1 && <span style={{ fontSize: 10, fontWeight: 700, color: '#C8C2BB', background: 'rgba(200,194,187,0.08)', borderRadius: 3, padding: '2px 6px', flexShrink: 0 }}>{formatFeedbackTimestamp(fb.timestamp_seconds)}</span>}
+                                <div style={{ fontSize: 12, color: 'rgba(200,194,187,0.7)', lineHeight: 1.5 }}>{fb.message}</div>
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                        <div style={{ fontSize: 12, color: 'rgba(200,194,187,0.7)', lineHeight: 1.5 }}>{fb.message}</div>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 </div>
               )}

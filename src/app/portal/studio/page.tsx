@@ -555,6 +555,12 @@ export default function StudioPortal() {
     setVideoFeedbackCount(c => Math.max(0, c - 1))
   }
 
+  async function resolveDashboardFeedbackGroup(ids: string[]) {
+    await supabase.from('video_feedback').update({ status: 'resolved' }).in('id', ids)
+    setVideoFeedbackList(p => p.filter(f => !ids.includes(f.id)))
+    setVideoFeedbackCount(c => Math.max(0, c - ids.length))
+  }
+
   async function connectGoogleCalendar() {
     setShowConnectPrompt(false)
     const res = await fetch('/api/calendar?action=auth_url')
@@ -1688,19 +1694,44 @@ export default function StudioPortal() {
                           {project && <button onClick={() => router.push('/portal/studio/projects?open=' + project.id)} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>View project →</button>}
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column' }}>
-                          {items.map((fb: any, i: number) => (
-                            <div key={fb.id} style={{ padding: '12px 18px', borderBottom: i < items.length - 1 ? '0.5px solid rgba(200,194,187,0.06)' : 'none' }}>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
-                                <div style={{ fontSize: 11, fontWeight: 500, color: '#C8C2BB' }}>
-                                  {fb.client_name || fb.client_email}
-                                  <span style={{ color: 'rgba(200,194,187,0.4)', fontWeight: 400 }}> · {fb.file_name ? `${fb.file_name}${fb.timestamp_seconds != null ? ' @ ' + Math.floor(fb.timestamp_seconds / 60) + ':' + String(Math.floor(fb.timestamp_seconds % 60)).padStart(2, '0') : ''}` : 'General project feedback'}</span>
+                          {(() => {
+                            // A client can queue up several timestamped notes on one
+                            // clip and send them together — every row in that batch
+                            // shares the exact same created_at, which is what's used
+                            // here to recognise and group them as one change request
+                            // instead of several unrelated-looking cards.
+                            const batches: Record<string, any[]> = {}
+                            items.forEach((f: any) => {
+                              const key = `${f.file_id || 'general'}|${f.client_email}|${f.created_at}`
+                              if (!batches[key]) batches[key] = []
+                              batches[key].push(f)
+                            })
+                            const batchList = Object.values(batches)
+                            return batchList.map((batch, i) => {
+                              const first = batch[0]
+                              const ids = batch.map((f: any) => f.id)
+                              return (
+                                <div key={`${first.file_id}|${first.client_email}|${first.created_at}`} style={{ padding: '12px 18px', borderBottom: i < batchList.length - 1 ? '0.5px solid rgba(200,194,187,0.06)' : 'none' }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
+                                    <div style={{ fontSize: 11, fontWeight: 500, color: '#C8C2BB' }}>
+                                      {first.client_name || first.client_email}
+                                      <span style={{ color: 'rgba(200,194,187,0.4)', fontWeight: 400 }}> · {first.file_name ? `${first.file_name}${batch.length > 1 ? ` · Change request — ${batch.length} items` : first.timestamp_seconds != null ? ' @ ' + Math.floor(first.timestamp_seconds / 60) + ':' + String(Math.floor(first.timestamp_seconds % 60)).padStart(2, '0') : ''}` : 'General project feedback'}</span>
+                                    </div>
+                                    <button onClick={() => resolveDashboardFeedbackGroup(ids)} style={{ fontSize: 9, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '3px 8px', borderRadius: 3, border: '0.5px solid rgba(210,175,80,0.3)', color: 'rgba(210,175,80,0.9)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>{batch.length > 1 ? 'Mark all resolved' : 'Mark resolved'}</button>
+                                  </div>
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                    {batch.map((fb: any) => (
+                                      <div key={fb.id} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                                        {batch.length > 1 && <span style={{ fontSize: 10, fontWeight: 700, color: '#C8C2BB', background: 'rgba(200,194,187,0.08)', borderRadius: 3, padding: '2px 6px', flexShrink: 0 }}>{Math.floor(fb.timestamp_seconds / 60)}:{String(Math.floor(fb.timestamp_seconds % 60)).padStart(2, '0')}</span>}
+                                        <div style={{ fontSize: 12, color: 'rgba(200,194,187,0.7)', lineHeight: 1.5 }}>{fb.message}</div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                  <div style={{ fontSize: 10, color: 'rgba(200,194,187,0.25)', marginTop: 4 }}>{new Date(first.created_at).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
                                 </div>
-                                <button onClick={() => resolveDashboardFeedback(fb.id)} style={{ fontSize: 9, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '3px 8px', borderRadius: 3, border: '0.5px solid rgba(210,175,80,0.3)', color: 'rgba(210,175,80,0.9)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Mark resolved</button>
-                              </div>
-                              <div style={{ fontSize: 12, color: 'rgba(200,194,187,0.7)', lineHeight: 1.5 }}>{fb.message}</div>
-                              <div style={{ fontSize: 10, color: 'rgba(200,194,187,0.25)', marginTop: 4 }}>{new Date(fb.created_at).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
-                            </div>
-                          ))}
+                              )
+                            })
+                          })()}
                         </div>
                       </div>
                     ))}

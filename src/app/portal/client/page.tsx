@@ -261,6 +261,10 @@ function DriveFolder({ project, clientEmail, clientName }: { project: any; clien
   const [feedbackList, setFeedbackList] = React.useState<any[]>([])
   const [feedbackTimestamp, setFeedbackTimestamp] = React.useState('')
   const [feedbackMessage, setFeedbackMessage] = React.useState('')
+  // Queued-but-not-sent timestamped notes — lets a client mark up several
+  // moments in the clip before sending them all together as one request,
+  // rather than firing off a separate notification/email per note.
+  const [draftStops, setDraftStops] = React.useState<{ timestamp: string; message: string }[]>([])
   const [submittingFeedback, setSubmittingFeedback] = React.useState(false)
   const [generalFeedbackMessage, setGeneralFeedbackMessage] = React.useState('')
   const [submittingGeneralFeedback, setSubmittingGeneralFeedback] = React.useState(false)
@@ -287,21 +291,47 @@ function DriveFolder({ project, clientEmail, clientName }: { project: any; clien
     return `${m}:${s.toString().padStart(2, '0')}`
   }
 
+  // Queues the current timestamp + message as another stop rather than
+  // sending immediately, so a client can mark up several moments before
+  // sending them as one request.
+  function addDraftStop() {
+    if (!feedbackMessage.trim()) return
+    setDraftStops(p => [...p, { timestamp: feedbackTimestamp.trim() || '0:00', message: feedbackMessage.trim() }])
+    setFeedbackTimestamp('')
+    setFeedbackMessage('')
+  }
+
+  function removeDraftStop(index: number) {
+    setDraftStops(p => p.filter((_, i) => i !== index))
+  }
+
   async function submitFeedback() {
-    if (!feedbackMessage.trim() || !clientEmail || !previewFile) return
+    if (!clientEmail || !previewFile) return
+    // Whatever's still sitting in the inputs counts as one more stop, so
+    // the common case of "just one note" doesn't need an extra click of
+    // Add before Send works.
+    const stops = feedbackMessage.trim()
+      ? [...draftStops, { timestamp: feedbackTimestamp.trim() || '0:00', message: feedbackMessage.trim() }]
+      : draftStops
+    if (stops.length === 0) return
     setSubmittingFeedback(true)
-    const timestamp_seconds = parseTimestamp(feedbackTimestamp)
-    const { data, error } = await supabase.from('video_feedback').insert([{
+    // Every row in this batch shares the exact same created_at, which is
+    // how the studio side recognises them as one change request (several
+    // stops sent together) instead of unrelated individual notes.
+    const batchCreatedAt = new Date().toISOString()
+    const rows = stops.map(s => ({
       project_id: project.id,
       file_id: previewFile.id,
       file_name: previewFile.name,
       client_email: clientEmail,
       client_name: clientName || clientEmail,
-      timestamp_seconds,
-      message: feedbackMessage.trim(),
-    }]).select().single()
+      timestamp_seconds: parseTimestamp(s.timestamp),
+      message: s.message,
+      created_at: batchCreatedAt,
+    }))
+    const { data, error } = await supabase.from('video_feedback').insert(rows).select()
     if (!error && data) {
-      setFeedbackList(p => [...p, data].sort((a, b) => a.timestamp_seconds - b.timestamp_seconds))
+      setFeedbackList(p => [...p, ...data].sort((a, b) => a.timestamp_seconds - b.timestamp_seconds))
       try {
         await fetch('/api/video-feedback', {
           method: 'POST',
@@ -312,11 +342,11 @@ function DriveFolder({ project, clientEmail, clientName }: { project: any; clien
             fileName: previewFile.name,
             clientName: clientName || clientEmail,
             clientEmail,
-            timestampSeconds: timestamp_seconds,
-            message: feedbackMessage.trim(),
+            stops: stops.map(s => ({ timestampSeconds: parseTimestamp(s.timestamp), message: s.message })),
           }),
         })
       } catch (e) { console.error('Feedback notify error:', e) }
+      setDraftStops([])
       setFeedbackTimestamp('')
       setFeedbackMessage('')
       setFeedbackSent(true)
@@ -529,7 +559,7 @@ function DriveFolder({ project, clientEmail, clientName }: { project: any; clien
                     <div style={{ width:30, height:30, borderRadius:'50%', background:'rgba(200,194,187,0.08)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}><IconDocument size={14} style={{ color:'rgba(200,194,187,0.6)' }} /></div>
                     <div>
                       <div style={{ fontSize:13, fontWeight:600, color:'#fff' }}>Feedback on this clip</div>
-                      <div style={{ fontSize:11, color:'rgba(200,194,187,0.4)' }}>Note the time you see on the player, then describe the change</div>
+                      <div style={{ fontSize:11, color:'rgba(200,194,187,0.4)' }}>Note the time you see on the player, then describe the change — add as many as you like and send them together</div>
                     </div>
                   </div>
                   {feedbackList.length > 0 && (
@@ -545,11 +575,26 @@ function DriveFolder({ project, clientEmail, clientName }: { project: any; clien
                       ))}
                     </div>
                   )}
+                  {draftStops.length > 0 && (
+                    <div style={{ padding:'14px 22px 0', display:'flex', flexDirection:'column', gap:8 }}>
+                      <div style={{ fontSize:10, letterSpacing:'0.1em', textTransform:'uppercase', color:'rgba(210,175,80,0.8)' }}>Queued — not sent yet</div>
+                      {draftStops.map((s, i) => (
+                        <div key={i} style={{ background:'rgba(210,175,80,0.06)', border:'0.5px solid rgba(210,175,80,0.2)', borderRadius:8, padding:'10px 14px', display:'flex', gap:12, alignItems:'flex-start' }}>
+                          <span style={{ fontSize:11, fontWeight:700, color:'#C8C2BB', background:'rgba(200,194,187,0.08)', borderRadius:4, padding:'3px 8px', flexShrink:0 }}>{s.timestamp}</span>
+                          <div style={{ flex:1, fontSize:12, color:'rgba(200,194,187,0.75)', lineHeight:1.5 }}>{s.message}</div>
+                          <button onClick={() => removeDraftStop(i)} aria-label="Remove queued note" style={{ background:'transparent', border:'none', color:'rgba(200,194,187,0.4)', cursor:'pointer', fontSize:16, lineHeight:1, padding:0, flexShrink:0 }}>×</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   <div style={{ padding:'18px 22px', display:'flex', gap:10, alignItems:'flex-start' }}>
                     <input value={feedbackTimestamp} onChange={e => setFeedbackTimestamp(e.target.value)} placeholder="1:23" style={{ width:64, flexShrink:0, background:'rgba(200,194,187,0.06)', border:'0.5px solid rgba(200,194,187,0.15)', borderRadius:6, padding:'10px 10px', fontSize:12, color:'#C8C2BB', fontFamily:'inherit', outline:'none', textAlign:'center' }} />
                     <textarea value={feedbackMessage} onChange={e => setFeedbackMessage(e.target.value)} placeholder="What would you like changed?" rows={1} style={{ flex:1, background:'rgba(200,194,187,0.06)', border:'0.5px solid rgba(200,194,187,0.15)', borderRadius:6, padding:'10px 12px', fontSize:12, color:'#C8C2BB', fontFamily:'inherit', outline:'none', resize:'vertical' as const, minHeight:40 }} />
-                    <button onClick={submitFeedback} disabled={submittingFeedback || !feedbackMessage.trim()} style={{ fontSize:11, letterSpacing:'0.08em', textTransform:'uppercase', padding:'11px 16px', borderRadius:6, background: feedbackSent ? 'rgba(100,200,130,0.15)' : '#C8C2BB', color: feedbackSent ? 'rgba(100,200,130,0.9)' : '#111', border: feedbackSent ? '0.5px solid rgba(100,200,130,0.3)' : 'none', cursor: submittingFeedback || !feedbackMessage.trim() ? 'not-allowed' : 'pointer', fontWeight:500, fontFamily:'inherit', flexShrink:0, opacity: !feedbackMessage.trim() && !submittingFeedback ? 0.5 : 1 }}>
-                      {submittingFeedback ? 'Sending...' : feedbackSent ? '✓ Sent' : 'Send'}
+                    <button onClick={addDraftStop} disabled={!feedbackMessage.trim()} title="Queue another timestamped note before sending" style={{ fontSize:11, letterSpacing:'0.08em', textTransform:'uppercase', padding:'11px 14px', borderRadius:6, background:'transparent', border:'0.5px solid rgba(200,194,187,0.25)', color:'rgba(200,194,187,0.7)', cursor: !feedbackMessage.trim() ? 'not-allowed' : 'pointer', fontWeight:500, fontFamily:'inherit', flexShrink:0, opacity: !feedbackMessage.trim() ? 0.5 : 1 }}>
+                      + Add
+                    </button>
+                    <button onClick={submitFeedback} disabled={submittingFeedback || (draftStops.length === 0 && !feedbackMessage.trim())} style={{ fontSize:11, letterSpacing:'0.08em', textTransform:'uppercase', padding:'11px 16px', borderRadius:6, background: feedbackSent ? 'rgba(100,200,130,0.15)' : '#C8C2BB', color: feedbackSent ? 'rgba(100,200,130,0.9)' : '#111', border: feedbackSent ? '0.5px solid rgba(100,200,130,0.3)' : 'none', cursor: submittingFeedback || (draftStops.length === 0 && !feedbackMessage.trim()) ? 'not-allowed' : 'pointer', fontWeight:500, fontFamily:'inherit', flexShrink:0, opacity: draftStops.length === 0 && !feedbackMessage.trim() && !submittingFeedback ? 0.5 : 1 }}>
+                      {submittingFeedback ? 'Sending...' : feedbackSent ? '✓ Sent' : draftStops.length > 0 ? `Send ${draftStops.length + (feedbackMessage.trim() ? 1 : 0)}` : 'Send'}
                     </button>
                   </div>
                 </div>
