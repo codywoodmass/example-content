@@ -268,6 +268,14 @@ export default function StudioPortal() {
   // it's shoot-ready — if not, it skips Enquiry/awaiting-brief entirely
   // and lands straight in Pre-Production, already marked confirmed.
   const [needsBrief, setNeedsBrief] = useState(false)
+  // Guards finalizeBooking's "Create project →" button against a
+  // double-click/slow-network re-click creating two projects for the
+  // same booking — exactly what happened in a real incident: the second
+  // project ends up orphaned (no booking pointing at it) while the
+  // booking's project_id races to point at whichever write finished
+  // last, and later deleting the "duplicate" cancels the booking that
+  // was actually the real, already-delivered one.
+  const [finalizingBookingId, setFinalizingBookingId] = useState<string | null>(null)
   const [scheduleMonthOffset, setScheduleMonthOffset] = useState(0)
   const [shootTime, setShootTime] = useState("08:00")
   const [calendarView, setCalendarView] = useState(false)
@@ -897,33 +905,39 @@ export default function StudioPortal() {
   // event now (only the studio's own browser session has the Google cookies
   // needed for either), then link the booking to the new project.
   async function finalizeBooking(booking: any) {
-    const data = await createProjectFromBooking(booking, booking.proposed_date || booking.preferred_date || null, '', booking.proposed_start_time, booking.proposed_end_time)
-    if (!data) return
-    if (booking.proposed_date && booking.proposed_start_time && booking.proposed_end_time) {
-      try {
-        const res = await fetch('/api/calendar', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            title: `Example Content — ${booking.address || booking.shoot_package || 'Shoot'}`,
-            date: booking.proposed_date,
-            startTime: booking.proposed_start_time,
-            endTime: booking.proposed_end_time,
-            clientEmail: booking.client_email,
-            location: booking.address || '',
-            description: `Confirmed shoot for ${booking.client_name || booking.client_email}\nPackage: ${booking.shoot_package || ''}\nDeliverables: ${booking.deliverables || ''}`,
-          }),
-        })
-        const calData = await res.json()
-        if (calData.success && calData.eventId) await supabase.from('projects1').update({ calendar_event_id: calData.eventId }).eq('id', data.id)
-        else if (!calData.success && calData.error !== 'Not authenticated') {
-          notify('Project created, but the calendar event failed: ' + calData.error, 'error')
-        }
-      } catch (e) { console.error('Calendar event error:', e) }
+    if (finalizingBookingId === booking.id) return
+    setFinalizingBookingId(booking.id)
+    try {
+      const data = await createProjectFromBooking(booking, booking.proposed_date || booking.preferred_date || null, '', booking.proposed_start_time, booking.proposed_end_time)
+      if (!data) return
+      if (booking.proposed_date && booking.proposed_start_time && booking.proposed_end_time) {
+        try {
+          const res = await fetch('/api/calendar', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              title: `Example Content — ${booking.address || booking.shoot_package || 'Shoot'}`,
+              date: booking.proposed_date,
+              startTime: booking.proposed_start_time,
+              endTime: booking.proposed_end_time,
+              clientEmail: booking.client_email,
+              location: booking.address || '',
+              description: `Confirmed shoot for ${booking.client_name || booking.client_email}\nPackage: ${booking.shoot_package || ''}\nDeliverables: ${booking.deliverables || ''}`,
+            }),
+          })
+          const calData = await res.json()
+          if (calData.success && calData.eventId) await supabase.from('projects1').update({ calendar_event_id: calData.eventId }).eq('id', data.id)
+          else if (!calData.success && calData.error !== 'Not authenticated') {
+            notify('Project created, but the calendar event failed: ' + calData.error, 'error')
+          }
+        } catch (e) { console.error('Calendar event error:', e) }
+      }
+      await supabase.from('bookings1').update({ project_id: data.id }).eq('id', booking.id)
+      loadBookings()
+      router.push('/portal/studio/projects/' + data.id)
+    } finally {
+      setFinalizingBookingId(null)
     }
-    await supabase.from('bookings1').update({ project_id: data.id }).eq('id', booking.id)
-    loadBookings()
-    router.push('/portal/studio/projects/' + data.id)
   }
 
   async function handleSignOut() {
@@ -1609,7 +1623,7 @@ export default function StudioPortal() {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 }}>
                       {booking.status === 'confirmed' ? (
                         <>
-                          <button onClick={() => finalizeBooking(booking)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>Create project →</button>
+                          <button disabled={finalizingBookingId === booking.id} onClick={() => finalizeBooking(booking)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 3, background: finalizingBookingId === booking.id ? 'rgba(200,194,187,0.1)' : '#C8C2BB', color: finalizingBookingId === booking.id ? 'rgba(200,194,187,0.3)' : '#111', border: 'none', cursor: finalizingBookingId === booking.id ? 'not-allowed' : 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>{finalizingBookingId === booking.id ? 'Creating...' : 'Create project →'}</button>
                           <button onClick={() => declineBooking(booking.id)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 3, border: '0.5px solid rgba(210,90,90,0.4)', color: 'rgba(210,90,90,0.8)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Decline</button>
                         </>
                       ) : booking.status === 'date_proposed' ? (
