@@ -1958,7 +1958,7 @@ export default function ClientPortal() {
                     <button onClick={async () => {
                       if (!tcAccepted) return
                       try {
-                        await supabase.from('bookings1').insert([selectedCat === 'commercial' ? {
+                        const { data: newBooking } = await supabase.from('bookings1').insert([selectedCat === 'commercial' ? {
                           client_id: user?.id,
                           client_name: clientContactName || user?.email,
                           category: selectedCat,
@@ -2018,7 +2018,13 @@ export default function ClientPortal() {
                           tc_accepted: true,
                           status: 'pending',
                           attachment_urls: bookingAttachments,
-                        }])
+                        }]).select().single()
+                        // Without this, the dashboard kept showing the
+                        // pre-submission list until a manual page reload —
+                        // clientBookings was only ever populated on the
+                        // initial auth-check load, never updated after a
+                        // new booking was actually created.
+                        if (newBooking) setClientBookings(prev => [newBooking, ...prev])
                       } catch (e) { console.error('Booking save error:', e) }
                       try {
                         await supabase.from('clients1').upsert([{
