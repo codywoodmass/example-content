@@ -762,6 +762,18 @@ export default function ClientPortal() {
   const [respondingBookingId, setRespondingBookingId] = useState<string | null>(null)
   const [altTimeBookingId, setAltTimeBookingId] = useState<string | null>(null)
   const [altTimeMessage, setAltTimeMessage] = useState('')
+  // Still-pending bookings (no studio response yet) weren't viewable or
+  // editable at all — a client could only see a bare "Pending" badge.
+  // expandedBookingId reveals the full details inline; a change request
+  // is a free-text note tagged with what it's about, same "client flags
+  // it, studio actions it" shape as the alt-time-request flow above,
+  // rather than letting a client silently edit a booking studio hasn't
+  // seen yet.
+  const [expandedBookingId, setExpandedBookingId] = useState<string | null>(null)
+  const [changeRequestBookingId, setChangeRequestBookingId] = useState<string | null>(null)
+  const [changeRequestType, setChangeRequestType] = useState<'package' | 'date' | 'addons' | 'other'>('other')
+  const [changeRequestMessage, setChangeRequestMessage] = useState('')
+  const [submittingChangeRequest, setSubmittingChangeRequest] = useState(false)
   const [showNotifications, setShowNotifications] = useState(false)
   const [changeRequest, setChangeRequest] = useState('')
   const [changeRequestSent, setChangeRequestSent] = useState(false)
@@ -889,6 +901,37 @@ export default function ClientPortal() {
       setAltTimeMessage('')
     } finally {
       setRespondingBookingId(null)
+    }
+  }
+
+  // Doesn't touch the booking's status (it stays 'pending' — studio
+  // hasn't actioned it yet) — just appends the request to its notes so
+  // it's visible whenever studio opens it, and raises an in-portal
+  // notification so it's not easy to miss.
+  async function submitBookingChangeRequest(booking: any) {
+    if (!changeRequestMessage.trim()) return
+    setSubmittingChangeRequest(true)
+    const typeLabel = { package: 'Package', date: 'Date/time', addons: 'Add-ons', other: 'Other' }[changeRequestType]
+    const appendedNotes = (booking.notes ? booking.notes + '\n\n' : '') +
+      `--- Client requested a change (${typeLabel}) · ${new Date().toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })} ---\n${changeRequestMessage.trim()}`
+    try {
+      const { error } = await supabase.from('bookings1').update({ notes: appendedNotes }).eq('id', booking.id)
+      if (error) { console.error('Booking change request error:', error); return }
+      setClientBookings(prev => prev.map(b => b.id === booking.id ? { ...b, notes: appendedNotes } : b))
+      try {
+        await supabase.from('notifications').insert([{
+          user_email: 'cody@examplecontent.co.nz',
+          type: 'booking_change_request',
+          title: `Booking change requested — ${typeLabel}`,
+          message: `${booking.client_name || booking.client_email} requested a ${typeLabel.toLowerCase()} change on their pending booking (${booking.address || booking.shoot_package || 'booking'}): ${changeRequestMessage.trim()}`,
+          read: false,
+        }])
+      } catch (e) { console.error('Change request notification error:', e) }
+      setChangeRequestBookingId(null)
+      setChangeRequestMessage('')
+      setChangeRequestType('other')
+    } finally {
+      setSubmittingChangeRequest(false)
     }
   }
 
@@ -2187,16 +2230,48 @@ export default function ClientPortal() {
                             </div>
                           )
                         }
+                        const expanded = expandedBookingId === b.id
                         return (
-                          <div key={b.id} style={{ display:'flex', alignItems:'center', gap:14, padding:'14px 18px', borderBottom: isLast ? 'none' : '0.5px solid rgba(200,194,187,0.06)' }}>
-                            <div style={{ width:42, flexShrink:0, textAlign:'center', background:'rgba(210,175,80,0.08)', border:'0.5px solid rgba(210,175,80,0.2)', borderRadius:5, padding:'10px 4px' }}>
-                              <IconClock size={16} style={{ color: 'rgba(210,175,80,0.8)' }} />
+                          <div key={b.id} style={{ borderBottom: isLast ? 'none' : '0.5px solid rgba(200,194,187,0.06)' }}>
+                            <div onClick={() => setExpandedBookingId(expanded ? null : b.id)} style={{ display:'flex', alignItems:'center', gap:14, padding:'14px 18px', cursor:'pointer' }}>
+                              <div style={{ width:42, flexShrink:0, textAlign:'center', background:'rgba(210,175,80,0.08)', border:'0.5px solid rgba(210,175,80,0.2)', borderRadius:5, padding:'10px 4px' }}>
+                                <IconClock size={16} style={{ color: 'rgba(210,175,80,0.8)' }} />
+                              </div>
+                              <div style={{ flex:1 }}>
+                                <div style={{ fontSize:13, fontWeight:500, color:'#C8C2BB', marginBottom:2 }}>{b.address || b.shoot_package || 'Booking request'}</div>
+                                <div style={{ fontSize:11, color:'rgba(200,194,187,0.4)' }}>{b.shoot_package} {b.preferred_date ? '· ' + new Date(b.preferred_date+'T12:00:00').toLocaleDateString('en-NZ',{day:'numeric',month:'short',year:'numeric'}) : ''}</div>
+                              </div>
+                              <span style={{ fontSize:9, letterSpacing:'0.08em', textTransform:'uppercase', padding:'3px 9px', borderRadius:2, background:'rgba(210,175,80,0.12)', color:'rgba(210,175,80,0.9)', border:'0.5px solid rgba(210,175,80,0.25)' }}>Pending</span>
+                              <span style={{ fontSize:14, color:'rgba(200,194,187,0.3)', transform: expanded ? 'rotate(180deg)' : 'none', transition:'transform 0.15s ease' }}>▾</span>
                             </div>
-                            <div style={{ flex:1 }}>
-                              <div style={{ fontSize:13, fontWeight:500, color:'#C8C2BB', marginBottom:2 }}>{b.address || b.shoot_package || 'Booking request'}</div>
-                              <div style={{ fontSize:11, color:'rgba(200,194,187,0.4)' }}>{b.shoot_package} {b.preferred_date ? '· ' + new Date(b.preferred_date+'T12:00:00').toLocaleDateString('en-NZ',{day:'numeric',month:'short',year:'numeric'}) : ''}</div>
-                            </div>
-                            <span style={{ fontSize:9, letterSpacing:'0.08em', textTransform:'uppercase', padding:'3px 9px', borderRadius:2, background:'rgba(210,175,80,0.12)', color:'rgba(210,175,80,0.9)', border:'0.5px solid rgba(210,175,80,0.25)' }}>Pending</span>
+                            {expanded && (
+                              <div style={{ padding:'0 18px 18px 74px' }}>
+                                <div style={{ display:'flex', flexDirection:'column', gap:7, marginBottom:16, fontSize:12, color:'rgba(200,194,187,0.65)', lineHeight:1.6 }}>
+                                  {b.shoot_package && <div><span style={{color:'#C8C2BB', fontWeight:500}}>Package: </span>{b.shoot_package}{b.total ? ' — ' + b.total : ''}</div>}
+                                  {b.deliverables && <div><span style={{color:'#C8C2BB', fontWeight:500}}>Deliverables: </span>{b.deliverables}</div>}
+                                  {b.addons && <div><span style={{color:'#C8C2BB', fontWeight:500}}>Add-ons: </span>{b.addons}</div>}
+                                  {b.address && <div><span style={{color:'#C8C2BB', fontWeight:500}}>Address: </span>{b.address}</div>}
+                                  {b.preferred_date && <div><span style={{color:'#C8C2BB', fontWeight:500}}>Preferred date: </span>{new Date(b.preferred_date+'T12:00:00').toLocaleDateString('en-NZ',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}{b.preferred_time ? ' · '+formatTime12(b.preferred_time) : ''}</div>}
+                                  {b.notes && <div style={{whiteSpace:'pre-wrap'}}><span style={{color:'#C8C2BB', fontWeight:500}}>Notes: </span>{b.notes}</div>}
+                                </div>
+                                {changeRequestBookingId === b.id ? (
+                                  <div onClick={e => e.stopPropagation()}>
+                                    <div style={{ display:'flex', gap:6, marginBottom:8, flexWrap:'wrap' }}>
+                                      {(['package', 'date', 'addons', 'other'] as const).map(t => (
+                                        <button key={t} onClick={() => setChangeRequestType(t)} style={{ fontSize:10, letterSpacing:'0.08em', textTransform:'uppercase', padding:'6px 11px', borderRadius:3, border:`0.5px solid ${changeRequestType===t ? 'rgba(200,194,187,0.5)' : 'rgba(200,194,187,0.15)'}`, background: changeRequestType===t ? '#C8C2BB' : 'transparent', color: changeRequestType===t ? '#111' : 'rgba(200,194,187,0.5)', cursor:'pointer', fontFamily:'inherit', fontWeight: changeRequestType===t ? 500 : 400 }}>{{ package:'Package', date:'Date / time', addons:'Add-ons', other:'Other' }[t]}</button>
+                                      ))}
+                                    </div>
+                                    <textarea value={changeRequestMessage} onChange={e => setChangeRequestMessage(e.target.value)} placeholder="Describe the change you'd like..." rows={2} style={{ width:'100%', background:'rgba(200,194,187,0.04)', border:'0.5px solid rgba(200,194,187,0.09)', borderRadius:4, padding:'8px 10px', fontSize:12, color:'#C8C2BB', fontFamily:'inherit', outline:'none', resize:'vertical', marginBottom:8 }} />
+                                    <div style={{ display:'flex', gap:8 }}>
+                                      <button onClick={() => { setChangeRequestBookingId(null); setChangeRequestMessage('') }} style={{ fontSize:11, letterSpacing:'0.09em', textTransform:'uppercase', padding:'7px 14px', borderRadius:3, border:'0.5px solid rgba(200,194,187,0.2)', color:'rgba(200,194,187,0.5)', background:'transparent', cursor:'pointer', fontFamily:'inherit' }}>Cancel</button>
+                                      <button disabled={submittingChangeRequest || !changeRequestMessage.trim()} onClick={() => submitBookingChangeRequest(b)} style={{ fontSize:11, letterSpacing:'0.09em', textTransform:'uppercase', padding:'7px 14px', borderRadius:3, background: submittingChangeRequest || !changeRequestMessage.trim() ? 'rgba(200,194,187,0.1)' : '#C8C2BB', color: submittingChangeRequest || !changeRequestMessage.trim() ? 'rgba(200,194,187,0.3)' : '#111', border:'none', cursor: submittingChangeRequest || !changeRequestMessage.trim() ? 'not-allowed' : 'pointer', fontWeight:500, fontFamily:'inherit' }}>{submittingChangeRequest ? 'Sending...' : 'Send request'}</button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <button onClick={e => { e.stopPropagation(); setChangeRequestBookingId(b.id); setChangeRequestType('other'); setChangeRequestMessage('') }} style={{ fontSize:11, letterSpacing:'0.09em', textTransform:'uppercase', padding:'7px 14px', borderRadius:3, border:'0.5px solid rgba(200,194,187,0.2)', color:'rgba(200,194,187,0.5)', background:'transparent', cursor:'pointer', fontFamily:'inherit' }}>Request a change</button>
+                                )}
+                              </div>
+                            )}
                           </div>
                         )
                       })}
