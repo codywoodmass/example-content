@@ -482,13 +482,13 @@ export default function WorkPage() {
         </div>
       </div>
 
-      {/* VIEWER */}
-      {/* overflowAnchor: 'none' — swapping Reel (short, fixed height) for
-          Grid (tall, many rows) or back is a drastic content-height change
-          right in the middle of the page. Without this, the browser's
-          default scroll anchoring can try to "compensate" for that change
-          and visibly jump the scroll position instead of leaving it alone. */}
-      <div style={{ overflowAnchor: 'none' }}>
+      {/* VIEWER — the Reel/Grid scroll-jump fix lives in globals.css
+          (overflow-anchor: none on body), not here. overflow-anchor only
+          has an effect on an element that's itself a scroll container;
+          for page-level scrolling that's the root/body box, so setting
+          it on a div nested inside the page (as tried here originally)
+          computed fine but did nothing. */}
+      <div>
         {filtered.length === 0 ? (
           <div style={{ padding: '60px clamp(20px, 5vw, 48px) 100px', textAlign: 'center', color: 'rgba(200,194,187,0.35)', fontSize: 14 }}>
             More {category} work coming soon.
