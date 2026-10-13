@@ -601,7 +601,7 @@ function DriveFolder({ project, clientEmail, clientName }: { project: any; clien
               </>
             ) : isImage(previewFile.mimeType) ? (
               <>
-                <img src={`https://drive.google.com/uc?id=${previewFile.id}`} alt={previewFile.name} style={{ maxWidth:'100%', maxHeight:'80vh', objectFit:'contain', borderRadius:10, boxShadow:'0 20px 60px rgba(0,0,0,0.5)' }} />
+                <img src={`/api/drive?thumb=${previewFile.id}&size=2000`} alt={previewFile.name} style={{ maxWidth:'100%', maxHeight:'80vh', objectFit:'contain', borderRadius:10, boxShadow:'0 20px 60px rgba(0,0,0,0.5)' }} />
                 <div style={{ fontSize:13, color:'rgba(200,194,187,0.6)', marginTop:14 }}>{previewFile.name}</div>
               </>
             ) : (

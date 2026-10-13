@@ -201,7 +201,7 @@ function PublicDriveViewer({ project }: { project: Project }) {
             {isVideo(previewFile.mimeType) ? (
               <iframe src={`https://drive.google.com/file/d/${previewFile.id}/preview`} style={{ width: '100%', maxWidth: previewFile.videoMediaMetadata && parseInt(previewFile.videoMediaMetadata.height) > parseInt(previewFile.videoMediaMetadata.width) ? 'min(40vw,700px)' : '84vw', height: '82vh', border: 'none', borderRadius: 6 }} allow="autoplay; fullscreen" allowFullScreen />
             ) : isImage(previewFile.mimeType) ? (
-              <img src={`https://drive.google.com/uc?id=${previewFile.id}`} alt={previewFile.name} style={{ maxWidth: '94vw', maxHeight: '86vh', objectFit: 'contain', borderRadius: 6 }} />
+              <img src={`/api/drive?thumb=${previewFile.id}&size=2000`} alt={previewFile.name} style={{ maxWidth: '94vw', maxHeight: '86vh', objectFit: 'contain', borderRadius: 6 }} />
             ) : (
               <a href={previewFile.webViewLink} target="_blank" rel="noopener noreferrer" style={{ color: '#C8C2BB', fontSize: 14 }}>Open file in Google Drive</a>
             )}

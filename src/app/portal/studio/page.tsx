@@ -153,7 +153,7 @@ function StudioDriveFolder({ driveUrl }: { driveUrl: string }) {
           ) : (
             <div onClick={e => e.stopPropagation()}>
               {previewFile.mimeType?.includes('image') ? (
-                <img src={`https://drive.google.com/uc?id=${previewFile.id}`} alt={previewFile.name} style={{ maxWidth:'94vw', maxHeight:'88vh', objectFit:'contain', borderRadius:6 }} />
+                <img src={`/api/drive?thumb=${previewFile.id}&size=2000`} alt={previewFile.name} style={{ maxWidth:'94vw', maxHeight:'88vh', objectFit:'contain', borderRadius:6 }} />
               ) : (
                 <a href={previewFile.webViewLink} target="_blank" rel="noopener noreferrer" style={{ color:'#C8C2BB', fontSize:14 }}>Open file in Google Drive</a>
               )}

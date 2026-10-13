@@ -6,13 +6,19 @@ export async function GET(req: NextRequest) {
   const thumbId = searchParams.get('thumb')
   const folderIdParam = searchParams.get('folderId')
 
-  // Proxy thumbnail
+  // Proxy thumbnail — also doubles as the full preview image (with a
+  // larger ?size=) since drive.google.com/uc?id= (the old direct-serving
+  // URL every preview modal used to hit) no longer reliably renders
+  // inline — Google has progressively locked it down, so it was just
+  // showing a broken image. Fetching thumbnailLink through the Drive API
+  // with our own key sidesteps that entirely.
   if (thumbId) {
+    const size = searchParams.get('size') || '800'
     const apiKey = process.env.GOOGLE_DRIVE_API_KEY
     const res = await fetch(`https://www.googleapis.com/drive/v3/files/${thumbId}?fields=thumbnailLink&key=${apiKey}`)
     const data = await res.json()
     if (data.thumbnailLink) {
-      const imgRes = await fetch(data.thumbnailLink.replace('=s220', '=s800'))
+      const imgRes = await fetch(data.thumbnailLink.replace('=s220', `=s${size}`))
       const buffer = await imgRes.arrayBuffer()
       return new NextResponse(buffer, { headers: { 'Content-Type': 'image/jpeg', 'Cache-Control': 'public, max-age=3600' } })
     }
