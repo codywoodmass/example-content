@@ -519,8 +519,8 @@ export default function Home() {
       </div>
 
       {/* CTA */}
-      <div style={{ padding: 'clamp(56px, 12vw, 96px) clamp(20px, 5vw, 48px)', textAlign: 'center', borderTop: '0.5px solid rgba(200,194,187,0.1)' }}>
-        <h2 style={{ fontSize: 'clamp(30px, 7vw, 50px)', fontWeight: 500, color: '#fff', letterSpacing: '-0.02em', marginBottom: 20 }}>Got a property to <span style={{ color: '#C8C2BB' }}>showcase?</span></h2>
+      <div style={{ padding: 'clamp(90px, 18vw, 140px) clamp(20px, 5vw, 48px) clamp(56px, 12vw, 96px)', textAlign: 'center' }}>
+        <h2 style={{ fontSize: 'clamp(30px, 7vw, 50px)', fontWeight: 500, color: '#fff', letterSpacing: '-0.02em', marginBottom: 20 }}>Got a project you want to <span style={{ color: '#C8C2BB' }}>showcase?</span></h2>
         <p style={{ fontSize: 15, color: 'rgba(200,194,187,0.4)', marginBottom: 38 }}>Tell us about your listing or project and we'll be in touch within 24 hours.</p>
         <div style={{ display: 'flex', gap: 16, justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap' }}>
           <a href="/contact" style={{ background: '#C8C2BB', color: '#111', fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', padding: '14px 28px', borderRadius: 2, textDecoration: 'none', fontWeight: 500 }}>Start a project</a>
