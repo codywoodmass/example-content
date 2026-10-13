@@ -264,6 +264,10 @@ export default function StudioPortal() {
   const [selectedBooking, setSelectedBooking] = useState<any>(null)
   const [shootDate, setShootDate] = useState("")
   const [meetingMode, setMeetingMode] = useState(false)
+  // Whether the project this confirm action creates needs a brief before
+  // it's shoot-ready — if not, it skips Enquiry/awaiting-brief entirely
+  // and lands straight in Pre-Production, already marked confirmed.
+  const [needsBrief, setNeedsBrief] = useState(false)
   const [scheduleMonthOffset, setScheduleMonthOffset] = useState(0)
   const [shootTime, setShootTime] = useState("08:00")
   const [calendarView, setCalendarView] = useState(false)
@@ -651,7 +655,17 @@ export default function StudioPortal() {
   // Shared by confirmBooking and bookMeeting — creates the project, Drive folder and
   // deliverables checklist from a pending booking. shootDateForProject is only set when
   // an actual shoot date is being locked in (not for a discovery/scoping meeting).
-  async function createProjectFromBooking(booking: any, shootDateForProject: string | null, extraNotes: string, shootStartTime?: string | null, shootEndTime?: string | null) {
+  // needsBrief decides where a newly-confirmed booking lands: projects
+  // used to always start at 'Enquiry' regardless, which meant a booking
+  // that had already been through the full client-request -> studio-
+  // confirm cycle still needed a *second*, separate "Mark confirmed"
+  // click on the project itself before it counted as real work — easy
+  // to forget, and confusing to see a just-confirmed booking still
+  // sitting under Enquiries. A project only needs that extra Enquiry/
+  // awaiting-brief stop if it genuinely needs a brief first; otherwise
+  // it goes straight to Pre-Production, already marked confirmed.
+  async function createProjectFromBooking(booking: any, shootDateForProject: string | null, extraNotes: string, shootStartTime?: string | null, shootEndTime?: string | null, needsBrief: boolean = false) {
+    const confirmed_at = new Date().toISOString()
     const { data, error: projectError } = await supabase.from('projects1').insert([{
       title: booking.address || booking.shoot_package || 'New project',
       client: booking.client_name || booking.client_email || '',
@@ -659,13 +673,15 @@ export default function StudioPortal() {
       email: booking.client_email || '',
       category: booking.category === 'property' ? 'Property' : 'Commercial',
       address: booking.address || '',
-      stage: 'Enquiry',
+      stage: needsBrief ? 'Enquiry' : 'Pre-Production',
       shoot_date: shootDateForProject,
       shoot_window_start: shootDateForProject ? (shootStartTime || null) : null,
       shoot_window_end: shootDateForProject ? (shootEndTime || null) : null,
       draft_due: booking.draft_due || null,
       delivery_due: booking.delivery_due || null,
-      progress: 0,
+      progress: needsBrief ? 0 : STAGE_PROGRESS['Pre-Production'],
+      client_confirmed: !needsBrief,
+      confirmed_at: needsBrief ? null : confirmed_at,
       from_booking: true,
       general_notes: (booking.notes || '') + extraNotes,
       editor_notes: '',
@@ -708,7 +724,7 @@ export default function StudioPortal() {
   }
 
   async function confirmBooking(booking: any) {
-    const data = await createProjectFromBooking(booking, shootDate || booking.preferred_date || null, '', startTime, endTime)
+    const data = await createProjectFromBooking(booking, shootDate || booking.preferred_date || null, '', startTime, endTime, needsBrief)
     // Fast path (no negotiation) — set project_id in the same write so this
     // booking never also shows up in the "ready to create project" queue.
     await supabase.from('bookings1').update({ status: 'confirmed', project_id: data?.id || null }).eq('id', booking.id)
@@ -1608,7 +1624,7 @@ export default function StudioPortal() {
                         </>
                       ) : booking.status === 'meeting_booked' ? (
                         <>
-                          <button onClick={() => { setSelectedBooking(booking); setShootDate(booking.preferred_date || ''); setMeetingMode(false); setScheduleMonthOffset(0); setScheduleModal(true) }} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>Confirm shoot</button>
+                          <button onClick={() => { setSelectedBooking(booking); setShootDate(booking.preferred_date || ''); setMeetingMode(false); setNeedsBrief(false); setScheduleMonthOffset(0); setScheduleModal(true) }} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>Confirm shoot</button>
                           <button onClick={() => openProposeModal(booking)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Change meeting time</button>
                           <button onClick={() => declineBooking(booking.id)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 3, border: '0.5px solid rgba(210,90,90,0.4)', color: 'rgba(210,90,90,0.8)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Decline</button>
                         </>
@@ -1620,7 +1636,7 @@ export default function StudioPortal() {
                       ) : (
                         <>
                           <button onClick={() => openProposeModal(booking)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>Propose date/time</button>
-                          <button onClick={() => { setSelectedBooking(booking); setShootDate(booking.preferred_date || ''); setMeetingMode(false); setScheduleMonthOffset(0); setScheduleModal(true) }} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Confirm directly</button>
+                          <button onClick={() => { setSelectedBooking(booking); setShootDate(booking.preferred_date || ''); setMeetingMode(false); setNeedsBrief(false); setScheduleMonthOffset(0); setScheduleModal(true) }} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Confirm directly</button>
                           <button onClick={() => { setSelectedBooking(booking); setShootDate(''); setMeetingMode(true); setScheduleMonthOffset(0); setScheduleModal(true) }} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 3, border: '0.5px solid rgba(100,150,220,0.35)', color: 'rgba(100,150,220,0.9)', background: 'rgba(100,150,220,0.08)', cursor: 'pointer', fontFamily: 'inherit' }}>Book a meeting</button>
                           <button onClick={() => declineBooking(booking.id)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 3, border: '0.5px solid rgba(210,90,90,0.4)', color: 'rgba(210,90,90,0.8)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Decline</button>
                         </>
@@ -2102,6 +2118,16 @@ export default function StudioPortal() {
               {respondingToCR ? (respondingToCR.project_title + ' · ' + respondingToCR.client_name) : (selectedBooking?.address || selectedBooking?.shoot_package) + ' · ' + (selectedBooking?.client_name || selectedBooking?.client_email)}
             </div>
 
+            {/* The client's originally-requested date, shown as fixed text
+                (not just a calendar highlight) so it stays visible even
+                after navigating to a different month — easy to lose track
+                of otherwise and book the wrong day entirely. */}
+            {!respondingToCR && selectedBooking?.preferred_date && (
+              <div style={{ background: 'rgba(210,175,80,0.08)', border: '0.5px solid rgba(210,175,80,0.25)', borderRadius: 6, padding: '10px 14px', marginBottom: 16, fontSize: 12, color: 'rgba(210,175,80,0.9)' }}>
+                <strong>Client requested:</strong> {new Date(selectedBooking.preferred_date + 'T12:00:00').toLocaleDateString('en-NZ', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}{selectedBooking.preferred_time ? ' at ' + formatTime12(selectedBooking.preferred_time) : ''}
+              </div>
+            )}
+
             {eventLink ? (
               <div style={{ background: 'rgba(100,200,130,0.08)', border: '0.5px solid rgba(100,200,130,0.25)', borderRadius: 6, padding: '16px 18px', marginBottom: 20 }}>
                 <div style={{ fontSize: 12, fontWeight: 500, color: 'rgba(100,200,130,0.9)', marginBottom: 8 }}>✓ Calendar event created</div>
@@ -2146,10 +2172,15 @@ export default function StudioPortal() {
                               const hasShoot = shootDatesSet.has(dateStr)
                               const isSelected = shootDate === dateStr
                               const isPast = new Date(dateStr) < today
+                              // The client's originally-requested day gets its
+                              // own persistent ring regardless of selection —
+                              // stays visible across month navigation, unlike
+                              // the ephemeral "selected" state.
+                              const isRequested = !respondingToCR && selectedBooking?.preferred_date === dateStr
                               return (
                                 <div key={i} style={{ position: 'relative' }} onMouseEnter={() => hasShoot && setHoveredDate(dateStr)} onMouseLeave={() => setHoveredDate(null)}>
-                                  <div onClick={() => !isPast && setShootDate(dateStr)} style={{ height: 30, borderRadius: 4, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: isPast ? 'default' : 'pointer', background: isSelected ? '#C8C2BB' : hasShoot ? 'rgba(210,175,80,0.12)' : 'transparent', border: '0.5px solid ' + (isSelected ? '#C8C2BB' : hasShoot ? 'rgba(210,175,80,0.35)' : 'rgba(200,194,187,0.06)') }}>
-                                    <span style={{ fontSize: 11, fontWeight: isSelected ? 700 : 400, color: isSelected ? '#111' : isPast ? 'rgba(200,194,187,0.2)' : '#C8C2BB' }}>{d}</span>
+                                  <div onClick={() => !isPast && setShootDate(dateStr)} style={{ height: 30, borderRadius: 4, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: isPast ? 'default' : 'pointer', background: isSelected ? '#C8C2BB' : hasShoot ? 'rgba(210,175,80,0.12)' : 'transparent', border: isRequested ? '1.5px solid rgba(100,200,130,0.9)' : '0.5px solid ' + (isSelected ? '#C8C2BB' : hasShoot ? 'rgba(210,175,80,0.35)' : 'rgba(200,194,187,0.06)'), boxShadow: isRequested && !isSelected ? 'inset 0 0 0 1px rgba(100,200,130,0.3)' : 'none' }}>
+                                    <span style={{ fontSize: 11, fontWeight: isSelected || isRequested ? 700 : 400, color: isSelected ? '#111' : isPast ? 'rgba(200,194,187,0.2)' : isRequested ? 'rgba(100,200,130,0.95)' : '#C8C2BB' }}>{d}</span>
                                     {hasShoot && !isSelected && <div style={{ width: 4, height: 4, borderRadius: '50%', background: 'rgba(210,175,80,0.9)', marginTop: 1 }} />}
                                   </div>
                                   {hasShoot && hoveredDate === dateStr && (
@@ -2170,6 +2201,7 @@ export default function StudioPortal() {
                           <div style={{ display: 'flex', gap: 12, marginTop: 8, paddingTop: 8, borderTop: '0.5px solid rgba(200,194,187,0.07)' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}><div style={{ width: 6, height: 6, borderRadius: '50%', background: 'rgba(210,175,80,0.9)' }} /><span style={{ fontSize: 9, color: 'rgba(200,194,187,0.4)' }}>Shoot booked</span></div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}><div style={{ width: 12, height: 12, borderRadius: 2, background: '#C8C2BB' }} /><span style={{ fontSize: 9, color: 'rgba(200,194,187,0.4)' }}>Selected</span></div>
+                            {!respondingToCR && selectedBooking?.preferred_date && <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}><div style={{ width: 12, height: 12, borderRadius: 2, border: '1.5px solid rgba(100,200,130,0.9)' }} /><span style={{ fontSize: 9, color: 'rgba(200,194,187,0.4)' }}>Client requested</span></div>}
                           </div>
                         </div>
                       )
@@ -2194,6 +2226,15 @@ export default function StudioPortal() {
                     </div>
                   </div>
                 </div>
+
+                {!meetingMode && !respondingToCR && (
+                  <div onClick={() => setNeedsBrief(b => !b)} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, cursor: 'pointer' }}>
+                    <div style={{ width: 18, height: 18, borderRadius: 4, border: `1.5px solid ${needsBrief ? 'rgba(100,150,220,0.6)' : 'rgba(200,194,187,0.2)'}`, background: needsBrief ? 'rgba(100,150,220,0.15)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      {needsBrief && <span style={{ fontSize: 10, color: 'rgba(100,150,220,0.9)' }}>✓</span>}
+                    </div>
+                    <label style={{ fontSize: 12, color: 'rgba(200,194,187,0.6)', cursor: 'pointer' }}>Needs a brief before it's shoot-ready <span style={{ color: 'rgba(200,194,187,0.35)' }}>— otherwise this goes straight to Pre-Production</span></label>
+                  </div>
+                )}
 
                 <div style={{ background: 'rgba(61,71,86,0.2)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 5, padding: '12px 14px', marginBottom: 20, fontSize: 11, color: 'rgba(200,194,187,0.5)', lineHeight: 1.6 }}>
                   <div style={{ fontWeight: 500, color: '#C8C2BB', marginBottom: 4 }}>Calendar invite will be sent to:</div>
@@ -2268,6 +2309,12 @@ export default function StudioPortal() {
               {(proposeBooking.address || proposeBooking.shoot_package) + ' · ' + (proposeBooking.client_name || proposeBooking.client_email)}
             </div>
 
+            {proposeBooking.preferred_date && (
+              <div style={{ background: 'rgba(210,175,80,0.08)', border: '0.5px solid rgba(210,175,80,0.25)', borderRadius: 6, padding: '10px 14px', marginBottom: 16, fontSize: 12, color: 'rgba(210,175,80,0.9)' }}>
+                <strong>Client requested:</strong> {new Date(proposeBooking.preferred_date + 'T12:00:00').toLocaleDateString('en-NZ', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}{proposeBooking.preferred_time ? ' at ' + formatTime12(proposeBooking.preferred_time) : ''}
+              </div>
+            )}
+
             {proposeBooking.client_response_message && (
               <div style={{ background: 'rgba(210,175,80,0.08)', border: '0.5px solid rgba(210,175,80,0.2)', borderRadius: 6, padding: '10px 14px', marginBottom: 16, fontSize: 11, color: 'rgba(210,175,80,0.85)', lineHeight: 1.6 }}>
                 <div style={{ fontWeight: 500, marginBottom: 2 }}>Client's note:</div>
@@ -2298,12 +2345,13 @@ export default function StudioPortal() {
                       const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
                       const isPast = d < today
                       const isSelected = proposeDate === dateStr
+                      const isRequested = proposeBooking.preferred_date === dateStr
                       const busy = weekBusy[dateStr] || []
                       const hasInternalShoot = shootDatesSet.has(dateStr)
                       return (
-                        <div key={i} onClick={() => !isPast && setProposeDate(dateStr)} style={{ borderRadius: 5, padding: '8px 6px', minHeight: 100, cursor: isPast ? 'default' : 'pointer', background: isSelected ? 'rgba(200,194,187,0.12)' : 'rgba(200,194,187,0.02)', border: '0.5px solid ' + (isSelected ? '#C8C2BB' : 'rgba(200,194,187,0.07)'), opacity: isPast ? 0.35 : 1 }}>
+                        <div key={i} onClick={() => !isPast && setProposeDate(dateStr)} style={{ borderRadius: 5, padding: '8px 6px', minHeight: 100, cursor: isPast ? 'default' : 'pointer', background: isSelected ? 'rgba(200,194,187,0.12)' : 'rgba(200,194,187,0.02)', border: isRequested ? '1.5px solid rgba(100,200,130,0.9)' : '0.5px solid ' + (isSelected ? '#C8C2BB' : 'rgba(200,194,187,0.07)'), opacity: isPast ? 0.35 : 1 }}>
                           <div style={{ fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 2 }}>{dayLabels[i]}</div>
-                          <div style={{ fontSize: 13, fontWeight: isSelected ? 700 : 400, color: isSelected ? '#fff' : '#C8C2BB', marginBottom: 6 }}>{d.getDate()}</div>
+                          <div style={{ fontSize: 13, fontWeight: isSelected || isRequested ? 700 : 400, color: isSelected ? '#fff' : isRequested ? 'rgba(100,200,130,0.95)' : '#C8C2BB', marginBottom: 6 }}>{d.getDate()}</div>
                           {hasInternalShoot && (
                             <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 3 }}>
                               <div style={{ width: 5, height: 5, borderRadius: '50%', background: 'rgba(210,175,80,0.9)', flexShrink: 0 }} />
@@ -2323,6 +2371,7 @@ export default function StudioPortal() {
                   <div style={{ display: 'flex', gap: 12, marginTop: 10, paddingTop: 8, borderTop: '0.5px solid rgba(200,194,187,0.07)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}><div style={{ width: 8, height: 8, borderRadius: 2, background: 'rgba(220,120,120,0.15)', border: '0.5px solid rgba(220,120,120,0.4)' }} /><span style={{ fontSize: 9, color: 'rgba(200,194,187,0.4)' }}>Busy (Google Calendar)</span></div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}><div style={{ width: 6, height: 6, borderRadius: '50%', background: 'rgba(210,175,80,0.9)' }} /><span style={{ fontSize: 9, color: 'rgba(200,194,187,0.4)' }}>Internal shoot</span></div>
+                    {proposeBooking.preferred_date && <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}><div style={{ width: 8, height: 8, borderRadius: 2, border: '1.5px solid rgba(100,200,130,0.9)' }} /><span style={{ fontSize: 9, color: 'rgba(200,194,187,0.4)' }}>Client requested</span></div>}
                   </div>
                 </div>
               )
