@@ -866,12 +866,11 @@ export default function ClientPortal() {
       name: 'Content Campaign Package', price: 890,
       tag: 'Campaign package',
       description: "Give us direction or just let us do the work creating ads for your property. Campaigns comprise of momentum and this load of content does exactly that.",
-      includes: ['20 Second Ad', '20 Second Property Ad', '5-8 Second Ad', 'Carousel'],
+      includes: ['20 Second Ad', '20 Second Property Ad', 'Carousel'],
       allIncluded: true,
       deliverables: [
         { name: 'Ad (20s)', price: 0, includes: ['1x social-optimised video', 'Vertical & landscape formats', 'Google Drive delivery'] },
         { name: 'Property Ad (20s)', price: 0, includes: ['1x property-focused social video', 'Vertical & landscape formats', 'Google Drive delivery'] },
-        { name: 'Ad (5-8s)', price: 0, includes: ['1x short-form video ad', 'Vertical & landscape formats', 'Google Drive delivery'] },
         { name: 'Carousel (8-10 slides)', price: 0, includes: ['1x branded property carousel', 'Google Drive delivery'] },
       ]
     },
