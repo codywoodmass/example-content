@@ -921,6 +921,8 @@ export default function ClientPortal() {
     { name: 'Stills Pack', price: 240, includes: ['20-30 edited stills', 'High-res + web-res', 'Google Drive delivery'] },
   ]
   const propertyAddons = [
+    { name: 'Property Ad (5-8s)', price: 150, desc: '1x short-form property ad from the shoot (5-8s)' },
+    { name: 'Additional Lifestyle Filming (1hr)', price: 175, desc: 'An extra hour of lifestyle filming with talent' },
     { name: 'Additional 20s Reel', price: 250, desc: 'An edited reel consisting of footage from the shoot (20s)' },
     { name: 'Additional 40s Reel', price: 400, desc: 'An edited reel consisting of footage from the shoot (40s)' },
     { name: 'Carousel', price: 100, desc: 'Visually engaging property showcase carousel' },
