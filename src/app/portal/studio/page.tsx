@@ -9,6 +9,7 @@ import { xeroAuthedFetch } from '@/lib/xeroClient'
 import { notify, confirmDialog, ToastHost, ConfirmHost } from '@/lib/notify'
 import { useRouter } from 'next/navigation'
 import LoadingScreen from '@/components/public/LoadingScreen'
+import LabeledNotes from '@/components/studio/LabeledNotes'
 
 function StudioDriveFolder({ driveUrl }: { driveUrl: string }) {
   const [files, setFiles] = React.useState<any[]>([])
@@ -467,7 +468,7 @@ export default function StudioPortal() {
 
   async function loadBookings(digestUserEmail?: string, digestRole?: string) {
     const [{ data, error }, { data: projects }, { data: crs }, { data: vf }] = await Promise.all([
-      supabase.from('bookings1').select('*').in('status', ['pending', 'date_proposed', 'alt_requested', 'confirmed']).order('created_at', { ascending: false }),
+      supabase.from('bookings1').select('*').in('status', ['pending', 'date_proposed', 'alt_requested', 'meeting_booked', 'confirmed']).order('created_at', { ascending: false }),
       supabase.from('projects1').select('*').order('created_at', { ascending: false }),
       supabase.from('change_requests').select('*').eq('status', 'pending').order('created_at', { ascending: false }),
       supabase.from('video_feedback').select('*').eq('status', 'pending').order('created_at', { ascending: false }),
@@ -629,12 +630,11 @@ export default function StudioPortal() {
       const data = await res.json()
       if (data.success) {
         setEventLink(data.eventLink)
-        const proj = await bookMeeting(booking)
+        await bookMeeting(booking)
         setTimeout(() => {
           setScheduleModal(false)
           setEventLink('')
           setMeetingMode(false)
-          if (proj?.id) router.push('/portal/studio/projects/' + proj.id)
         }, 1500)
       } else if (data.error === 'Not authenticated') {
         notify('Please connect your Google Calendar first', 'error')
@@ -747,23 +747,35 @@ export default function StudioPortal() {
     return data
   }
 
+  // Booking a discovery-call meeting is NOT a confirmation — it used to
+  // create a project immediately (stage: 'Enquiry', shoot_date: null),
+  // which both pulled the booking out of the active Requests queue (its
+  // 'meeting_booked' status wasn't even in loadBookings's fetch filter,
+  // so it just vanished) and meant the real shoot date had no path to
+  // ever land on the project, since nothing linked back to the booking's
+  // original request once that project existed. Now it only books the
+  // calendar event and updates the booking — no project — so it stays
+  // visible and actionable until studio does an actual "Confirm shoot".
+  // Reuses proposed_date/start/end (no schema change) to hold the
+  // meeting's own date/time; a booking is never in both this flow and
+  // the separate client date-negotiation flow at once.
   async function bookMeeting(booking: any) {
-    await supabase.from('bookings1').update({ status: 'meeting_booked' }).eq('id', booking.id)
+    await supabase.from('bookings1').update({
+      status: 'meeting_booked',
+      proposed_date: shootDate || null,
+      proposed_start_time: startTime || null,
+      proposed_end_time: endTime || null,
+    }).eq('id', booking.id)
     const meetingLabel = shootDate ? new Date(shootDate + 'T12:00:00').toLocaleDateString('en-NZ',{weekday:'long',day:'numeric',month:'long',year:'numeric'}) + ' at ' + formatTime12(startTime) : ''
-    const data = await createProjectFromBooking(booking, null, meetingLabel ? '\n\nMeeting scheduled: ' + meetingLabel : '')
-    // Send notification to client
-    if (data?.id) {
-      await supabase.from('notifications').insert([{
-        user_email: booking.client_email,
-        type: 'meeting_booked',
-        title: 'Meeting booked',
-        message: 'We\'ve booked a meeting to discuss ' + (booking.shoot_package || booking.address || 'your project') + '.' + (meetingLabel ? ' Meeting date: ' + meetingLabel : ''),
-        project_id: data.id,
-        read: false,
-      }])
-    }
+    await supabase.from('notifications').insert([{
+      user_email: booking.client_email,
+      type: 'meeting_booked',
+      title: 'Meeting booked',
+      message: 'We\'ve booked a meeting to discuss ' + (booking.shoot_package || booking.address || 'your project') + '.' + (meetingLabel ? ' Meeting date: ' + meetingLabel : ''),
+      project_id: null,
+      read: false,
+    }])
     loadBookings()
-    return data
   }
 
   async function declineBooking(id: string) {
@@ -1505,11 +1517,12 @@ export default function StudioPortal() {
                         <span style={{ fontSize: 13, fontWeight: 500, color: '#C8C2BB' }}>{booking.address || booking.shoot_package || 'New booking'}</span>
                         <span style={{ fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '3px 9px', borderRadius: 2, background: 'rgba(200,194,187,0.1)', color: '#C8C2BB', border: '0.5px solid rgba(200,194,187,0.2)' }}>{booking.category}</span>
                         {(() => {
-                          const statusLabel: Record<string, string> = { pending: 'Pending', date_proposed: 'Awaiting client', alt_requested: 'Wants a different time', confirmed: 'Confirmed — create project' }
+                          const statusLabel: Record<string, string> = { pending: 'Pending', date_proposed: 'Awaiting client', alt_requested: 'Wants a different time', meeting_booked: 'Meeting booked', confirmed: 'Confirmed — create project' }
                           const statusColor: Record<string, { bg: string; color: string; border: string }> = {
                             pending: { bg: 'rgba(210,175,80,0.15)', color: 'rgba(210,175,80,0.9)', border: 'rgba(210,175,80,0.25)' },
                             date_proposed: { bg: 'rgba(100,150,220,0.15)', color: 'rgba(100,150,220,0.9)', border: 'rgba(100,150,220,0.25)' },
                             alt_requested: { bg: 'rgba(210,90,90,0.15)', color: 'rgba(210,90,90,0.9)', border: 'rgba(210,90,90,0.25)' },
+                            meeting_booked: { bg: 'rgba(160,100,220,0.15)', color: 'rgba(160,100,220,0.9)', border: 'rgba(160,100,220,0.25)' },
                             confirmed: { bg: 'rgba(100,200,130,0.15)', color: 'rgba(100,200,130,0.9)', border: 'rgba(100,200,130,0.25)' },
                           }
                           const sc = statusColor[booking.status] || statusColor.pending
@@ -1519,6 +1532,11 @@ export default function StudioPortal() {
                       {booking.status === 'date_proposed' && (
                         <div style={{ marginBottom: 10, padding: '10px 14px', background: 'rgba(100,150,220,0.06)', border: '0.5px solid rgba(100,150,220,0.2)', borderRadius: 5, fontSize: 12, color: 'rgba(100,150,220,0.9)' }}>
                           Proposed {new Date(booking.proposed_date + 'T12:00:00').toLocaleDateString('en-NZ', { weekday: 'long', day: 'numeric', month: 'long' })} · {formatTime12(booking.proposed_start_time)}–{formatTime12(booking.proposed_end_time)} — waiting on the client
+                        </div>
+                      )}
+                      {booking.status === 'meeting_booked' && (
+                        <div style={{ marginBottom: 10, padding: '10px 14px', background: 'rgba(160,100,220,0.06)', border: '0.5px solid rgba(160,100,220,0.2)', borderRadius: 5, fontSize: 12, color: 'rgba(160,100,220,0.9)' }}>
+                          Meeting booked for {new Date(booking.proposed_date + 'T12:00:00').toLocaleDateString('en-NZ', { weekday: 'long', day: 'numeric', month: 'long' })} · {formatTime12(booking.proposed_start_time)}–{formatTime12(booking.proposed_end_time)} — confirm the shoot once you've spoken
                         </div>
                       )}
                       {booking.status === 'alt_requested' && (
@@ -1541,8 +1559,7 @@ export default function StudioPortal() {
                        </div>
                        {booking.notes && (
                          <div style={{ marginTop:14, paddingTop:14, borderTop:'0.5px solid rgba(200,194,187,0.07)' }}>
-                           <div style={{ fontSize:9, letterSpacing:'0.14em', textTransform:'uppercase', color:'rgba(200,194,187,0.35)', marginBottom:6 }}>Notes</div>
-                           <div style={{ fontSize:12, color:'rgba(200,194,187,0.6)', lineHeight:1.7, whiteSpace:'pre-wrap' }}>{booking.notes}</div>
+                           <LabeledNotes text={booking.notes} />
                          </div>
                        )}
                        {booking.attachment_urls && booking.attachment_urls.length > 0 && (
@@ -1572,6 +1589,11 @@ export default function StudioPortal() {
                       ) : booking.status === 'alt_requested' ? (
                         <>
                           <button onClick={() => openProposeModal(booking)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>Propose new time</button>
+                          <button onClick={() => declineBooking(booking.id)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 3, border: '0.5px solid rgba(210,90,90,0.4)', color: 'rgba(210,90,90,0.8)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Decline</button>
+                        </>
+                      ) : booking.status === 'meeting_booked' ? (
+                        <>
+                          <button onClick={() => { setSelectedBooking(booking); setShootDate(booking.preferred_date || ''); setMeetingMode(false); setScheduleMonthOffset(0); setScheduleModal(true) }} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>Confirm shoot</button>
                           <button onClick={() => declineBooking(booking.id)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 3, border: '0.5px solid rgba(210,90,90,0.4)', color: 'rgba(210,90,90,0.8)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Decline</button>
                         </>
                       ) : (
@@ -2194,9 +2216,8 @@ export default function StudioPortal() {
       }])
       setRespondingToCR(null); setScheduleModal(false); setShootDate('')
                     } else if (meetingMode) {
-                      const proj = await bookMeeting(selectedBooking)
+                      await bookMeeting(selectedBooking)
                       setScheduleModal(false); setEventLink(''); setMeetingMode(false)
-                      if (proj?.id) router.push('/portal/studio/projects/' + proj.id)
                     } else {
                       const proj = await confirmBooking(selectedBooking)
                       if (proj?.id && shootDate) { await supabase.from('projects1').update({ general_notes: (selectedBooking?.notes || '') + '\n\nShoot confirmed: ' + new Date(shootDate + 'T12:00:00').toLocaleDateString('en-NZ',{weekday:'long',day:'numeric',month:'long',year:'numeric'}) + ' at ' + formatTime12(startTime) }).eq('id', proj.id) }
@@ -2437,7 +2458,7 @@ export default function StudioPortal() {
                   {modalProject.general_notes && (
                     <div style={{ marginBottom: 14 }}>
                       <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>Notes</div>
-                      <div style={{ fontSize: 12, color: 'rgba(200,194,187,0.6)', lineHeight: 1.7, background: 'rgba(200,194,187,0.04)', borderRadius: 4, padding: '10px 12px', border: '0.5px solid rgba(200,194,187,0.08)' }}>{modalProject.general_notes}</div>
+                      <div style={{ background: 'rgba(200,194,187,0.04)', borderRadius: 4, padding: '2px 12px', border: '0.5px solid rgba(200,194,187,0.08)' }}><LabeledNotes text={modalProject.general_notes} /></div>
                     </div>
                   )}
                   {modalProject.editor_notes && (
@@ -2574,7 +2595,7 @@ export default function StudioPortal() {
                   {modalProject.general_notes && (
                     <div style={{ marginBottom: 14 }}>
                       <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>Notes</div>
-                      <div style={{ fontSize: 12, color: 'rgba(200,194,187,0.6)', lineHeight: 1.7, background: 'rgba(200,194,187,0.04)', borderRadius: 4, padding: '10px 12px', border: '0.5px solid rgba(200,194,187,0.08)' }}>{modalProject.general_notes}</div>
+                      <div style={{ background: 'rgba(200,194,187,0.04)', borderRadius: 4, padding: '2px 12px', border: '0.5px solid rgba(200,194,187,0.08)' }}><LabeledNotes text={modalProject.general_notes} /></div>
                     </div>
                   )}
                   {modalProject.editor_notes && (

@@ -8,6 +8,8 @@ import { xeroAuthedFetch } from '@/lib/xeroClient'
 import { notify, confirmDialog, ToastHost, ConfirmHost } from '@/lib/notify'
 import { formatTime12 } from '@/lib/time'
 import { stageLabel } from '@/lib/stages'
+import { parseLabeledNotes } from '@/lib/parseNotes'
+import LabeledNotes from '@/components/studio/LabeledNotes'
 
 function formatDate(dateStr: string | null | undefined): string {
   if (!dateStr) return '—'
@@ -1324,6 +1326,12 @@ function ProjectsPageInner() {
                 </div>
               )}
               <div style={{ marginBottom: 20 }}>
+                {parseLabeledNotes(modalProject.general_notes).length > 1 && (
+                  <div style={{ marginBottom: 14 }}>
+                    <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>Client brief</div>
+                    <div style={{ background: 'rgba(200,194,187,0.04)', borderRadius: 4, padding: '2px 12px', border: '0.5px solid rgba(200,194,187,0.08)' }}><LabeledNotes text={modalProject.general_notes} /></div>
+                  </div>
+                )}
                 <div style={{ marginBottom: 14 }}>
                   <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>Notes</div>
                   <textarea value={modalProject.general_notes || ''} onChange={e => setModalProject(p => { const u = p ? { ...p, general_notes: e.target.value } : p; if (u) triggerAutoSave(u); return u })} style={{ width: '100%', background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.08)', borderRadius: 4, padding: '10px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', lineHeight: 1.7, resize: 'vertical' as const, minHeight: 80 }} placeholder="General notes..." />

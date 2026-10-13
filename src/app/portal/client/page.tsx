@@ -1175,15 +1175,17 @@ export default function ClientPortal() {
           const clientName = clientProfile?.name || user?.email?.split('@')[0] || 'there'
           const confirmedShoots = clientProjects.filter((p: any) => p.shoot_date && new Date(p.shoot_date) >= now)
           const confirmedShootDates = new Set(clientProjects.map((p: any) => p.shoot_date).filter(Boolean))
-          // A booking is still "in flight" (not yet a project) across three statuses:
+          // A booking is still "in flight" (not yet a project) across four statuses:
           // pending (no studio response yet), date_proposed (waiting on us to answer),
-          // alt_requested (we asked for another time, waiting on the studio).
-          const isUnresolved = (s: string) => s === 'pending' || s === 'date_proposed' || s === 'alt_requested'
+          // alt_requested (we asked for another time, waiting on the studio), and
+          // meeting_booked (a discovery call is booked — proposed_date here is the
+          // meeting's date, not a shoot date; studio still owes a real confirm).
+          const isUnresolved = (s: string) => s === 'pending' || s === 'date_proposed' || s === 'alt_requested' || s === 'meeting_booked'
           // A confirmed booking with no project yet is also still "in flight" — the
           // studio hasn't finalized it into a project/calendar event — so it shouldn't
           // vanish from these lists in the gap between the client confirming and that.
           const isAwaitingProject = (b: any) => isUnresolved(b.status) || (b.status === 'confirmed' && !b.project_id)
-          const pendingShootBookings = clientBookings.filter((b: any) => (b.proposed_date || b.preferred_date) && new Date(b.proposed_date || b.preferred_date) >= now && isAwaitingProject(b) && !confirmedShootDates.has(b.proposed_date || b.preferred_date)).map((b: any) => ({ id: b.id, title: b.address || b.shoot_package || 'Pending booking', shoot_date: b.proposed_date || b.preferred_date, stage: b.status === 'date_proposed' ? 'Time proposed' : b.status === 'alt_requested' ? 'Awaiting new time' : b.status === 'confirmed' ? 'Confirmed' : 'Pending', client: b.client_name, address: b.address, progress: 0, isPending: true, shoot_package: b.shoot_package, deliverables_type: b.deliverables, addons: b.addons, total: b.total }))
+          const pendingShootBookings = clientBookings.filter((b: any) => (b.proposed_date || b.preferred_date) && new Date(b.proposed_date || b.preferred_date) >= now && isAwaitingProject(b) && !confirmedShootDates.has(b.proposed_date || b.preferred_date)).map((b: any) => ({ id: b.id, title: b.address || b.shoot_package || 'Pending booking', shoot_date: b.proposed_date || b.preferred_date, stage: b.status === 'date_proposed' ? 'Time proposed' : b.status === 'alt_requested' ? 'Awaiting new time' : b.status === 'meeting_booked' ? 'Meeting booked' : b.status === 'confirmed' ? 'Confirmed' : 'Pending', client: b.client_name, address: b.address, progress: 0, isPending: true, shoot_package: b.shoot_package, deliverables_type: b.deliverables, addons: b.addons, total: b.total }))
           const upcomingShoots = [...confirmedShoots, ...pendingShootBookings].sort((a: any, b: any) => new Date(a.shoot_date).getTime() - new Date(b.shoot_date).getTime())
           const activeProjects = clientProjects.filter((p: any) => p.stage !== 'Awaiting Confirmation' && p.stage !== 'Completed')
           const awaitingSchedule = clientBookings.filter((b: any) => !b.preferred_date && !b.proposed_date && isUnresolved(b.status))
@@ -2142,7 +2144,7 @@ export default function ClientPortal() {
           const now = new Date()
           const upcomingProjects = clientProjects.filter((p: any) => p.shoot_date && new Date(p.shoot_date) >= now).sort((a: any, b: any) => new Date(a.shoot_date).getTime() - new Date(b.shoot_date).getTime())
           const deliveredProjects = allClientProjects.filter((p: any) => p.stage === 'Awaiting Confirmation' || p.stage === 'Completed').sort((a: any, b: any) => new Date(b.delivery_due || b.created_at).getTime() - new Date(a.delivery_due || a.created_at).getTime())
-          const pendingBookings = clientBookings.filter((b: any) => b.status === 'pending' || b.status === 'date_proposed' || b.status === 'alt_requested' || (b.status === 'confirmed' && !b.project_id))
+          const pendingBookings = clientBookings.filter((b: any) => b.status === 'pending' || b.status === 'date_proposed' || b.status === 'alt_requested' || b.status === 'meeting_booked' || (b.status === 'confirmed' && !b.project_id))
           // A booking the studio declined (before a project ever existed) or
           // cancelled (after deleting an existing project) must never just
           // vanish on the client — they still see it here, clearly labelled.
@@ -2227,6 +2229,20 @@ export default function ClientPortal() {
                                 <div style={{ fontSize:11, color:'rgba(200,194,187,0.4)' }}>{b.proposed_date ? new Date(b.proposed_date+'T12:00:00').toLocaleDateString('en-NZ',{weekday:'long',day:'numeric',month:'long'}) + (b.proposed_start_time ? ' · ' + formatTime12(b.proposed_start_time) : '') + ' — ' : ''}We're setting up your project</div>
                               </div>
                               <span style={{ fontSize:9, letterSpacing:'0.08em', textTransform:'uppercase', padding:'3px 9px', borderRadius:2, background:'rgba(100,200,130,0.12)', color:'rgba(100,200,130,0.9)', border:'0.5px solid rgba(100,200,130,0.25)' }}>Confirmed</span>
+                            </div>
+                          )
+                        }
+                        if (b.status === 'meeting_booked') {
+                          return (
+                            <div key={b.id} style={{ display:'flex', alignItems:'center', gap:14, padding:'14px 18px', borderBottom: isLast ? 'none' : '0.5px solid rgba(200,194,187,0.06)' }}>
+                              <div style={{ width:42, flexShrink:0, textAlign:'center', background:'rgba(100,150,220,0.08)', border:'0.5px solid rgba(100,150,220,0.2)', borderRadius:5, padding:'10px 4px' }}>
+                                <IconCalendar size={16} style={{ color: 'rgba(100,150,220,0.85)' }} />
+                              </div>
+                              <div style={{ flex:1 }}>
+                                <div style={{ fontSize:13, fontWeight:500, color:'#C8C2BB', marginBottom:2 }}>{b.address || b.shoot_package || 'Booking request'}</div>
+                                <div style={{ fontSize:11, color:'rgba(100,150,220,0.9)' }}>{b.proposed_date ? 'Call booked: ' + new Date(b.proposed_date+'T12:00:00').toLocaleDateString('en-NZ',{weekday:'long',day:'numeric',month:'long'}) + (b.proposed_start_time ? ' · ' + formatTime12(b.proposed_start_time) : '') : 'A discovery call has been booked'} — we'll confirm your shoot after we talk</div>
+                              </div>
+                              <span style={{ fontSize:9, letterSpacing:'0.08em', textTransform:'uppercase', padding:'3px 9px', borderRadius:2, background:'rgba(100,150,220,0.12)', color:'rgba(100,150,220,0.9)', border:'0.5px solid rgba(100,150,220,0.25)' }}>Meeting booked</span>
                             </div>
                           )
                         }

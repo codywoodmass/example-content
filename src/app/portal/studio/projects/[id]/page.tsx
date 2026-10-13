@@ -4,6 +4,8 @@ import { useRouter, useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import StudioSidebar from '../../StudioSidebar'
 import { stageLabel } from '@/lib/stages'
+import { parseLabeledNotes } from '@/lib/parseNotes'
+import LabeledNotes from '@/components/studio/LabeledNotes'
 
 const STAGES = ['Enquiry', 'Pre-Production', 'Shooting', 'Post-Production', 'Revisions', 'Awaiting Confirmation', 'Completed']
 const STAGE_COLORS: Record<string, { color: string; bg: string }> = {
@@ -232,10 +234,20 @@ export default function ProjectDetailPage() {
               </div>
             )}
             {activeTab === 'notes' && (
-              <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, overflow: 'hidden' }}>
-                <div style={{ padding: '13px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>General notes</div>
-                <div style={{ padding: 18 }}>
-                  <textarea value={project.general_notes} onChange={e => updateField('general_notes', e.target.value)} style={{ ...inp, resize: 'vertical' as const, lineHeight: 1.75, minHeight: 420, fontSize: 13 }} placeholder="Project notes, client feedback, shoot day observations..." />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                {parseLabeledNotes(project.general_notes).length > 1 && (
+                  <div style={{ background: '#1A1F28', border: '0.5px solid rgba(100,150,220,0.2)', borderRadius: 7, overflow: 'hidden' }}>
+                    <div style={{ padding: '13px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>Client brief</div>
+                    <div style={{ padding: '2px 18px' }}>
+                      <LabeledNotes text={project.general_notes} />
+                    </div>
+                  </div>
+                )}
+                <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, overflow: 'hidden' }}>
+                  <div style={{ padding: '13px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>General notes</div>
+                  <div style={{ padding: 18 }}>
+                    <textarea value={project.general_notes} onChange={e => updateField('general_notes', e.target.value)} style={{ ...inp, resize: 'vertical' as const, lineHeight: 1.75, minHeight: 420, fontSize: 13 }} placeholder="Project notes, client feedback, shoot day observations..." />
+                  </div>
                 </div>
               </div>
             )}
