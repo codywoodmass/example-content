@@ -866,32 +866,35 @@ export default function ClientPortal() {
       name: 'Content Campaign Package', price: 890,
       tag: 'Campaign package',
       description: "Give us direction or just let us do the work creating ads for your property. Campaigns comprise of momentum and this load of content does exactly that.",
-      includes: ['20-30 Second Ad', '8-10 Slide Standard Carousel', '5-8 Second Ad'],
+      includes: ['20 Second Ad', '20 Second Property Ad', '5-8 Second Ad', 'Carousel'],
       allIncluded: true,
       deliverables: [
-        { name: 'Ad (20-30s)', price: 0, includes: ['1x social-optimised video', 'Vertical & landscape formats', 'Google Drive delivery'] },
-        { name: 'Carousel (8-10 slides)', price: 0, includes: ['1x branded property carousel', 'Google Drive delivery'] },
+        { name: 'Ad (20s)', price: 0, includes: ['1x social-optimised video', 'Vertical & landscape formats', 'Google Drive delivery'] },
+        { name: 'Property Ad (20s)', price: 0, includes: ['1x property-focused social video', 'Vertical & landscape formats', 'Google Drive delivery'] },
         { name: 'Ad (5-8s)', price: 0, includes: ['1x short-form video ad', 'Vertical & landscape formats', 'Google Drive delivery'] },
+        { name: 'Carousel (8-10 slides)', price: 0, includes: ['1x branded property carousel', 'Google Drive delivery'] },
       ]
     },
     {
       name: 'The Walkthrough Package', price: 890,
       tag: 'Our base package',
       description: '60–90s cinematic property tour with a handful of agent lifestyle shots to bring the listing to life.',
-      includes: ['60–90s property tour', 'Agent lifestyle shots'],
+      includes: ['60–90s property tour', 'Agent lifestyle shots', 'Carousel'],
       deliverables: [
         { name: 'Walkthrough Film (60–90s)', price: 0, includes: ['1x walkthrough film', 'Google Drive delivery'] },
         { name: '2x Showcase Reels (20s)', price: 0, includes: ['2x 20s showcase reels', 'Vertical & landscape', 'Google Drive delivery'] },
+        { name: 'Carousel', price: 0, includes: ['1x branded property carousel', 'Google Drive delivery'] },
       ]
     },
     {
       name: 'Lifestyle and Living Package', price: 1280,
       tag: 'The lifestyle showcase',
       description: 'Everything in The Walkthrough Package, plus a full hour of lifestyle filming with talent to elevate the property narrative.',
-      includes: ['60–90s property tour', '1hr lifestyle shoot with talent', 'Agent lifestyle shots', 'Vertical formatting'],
+      includes: ['60–90s property tour', '1hr lifestyle shoot with talent', 'Agent lifestyle shots', 'Vertical formatting', 'Carousel'],
       deliverables: [
         { name: 'Showcase Film (60–90s)', price: 0, includes: ['1x cinematic film', 'Vertical & landscape formats', 'Google Drive delivery'] },
-        { name: '3x Reels + Carousel', price: 0, includes: ['3x social reels', '1x carousel', 'Vertical & landscape formats', 'Google Drive delivery'] },
+        { name: '3x Reels', price: 0, includes: ['3x social reels', 'Vertical & landscape formats', 'Google Drive delivery'] },
+        { name: 'Carousel', price: 0, includes: ['1x branded property carousel', 'Google Drive delivery'] },
       ]
     },
     {
@@ -937,7 +940,12 @@ export default function ClientPortal() {
   ]
   const shootPackages = selectedCat === 'property' ? propertyShootPackages : commercialShootPackages
   const deliverables = selectedCat === 'property' ? propertyDeliverables : commercialDeliverables
-  const addons = selectedCat === 'property' ? propertyAddons : commercialAddons
+  // Several property packages now bundle a carousel in directly — hide
+  // the paid Carousel add-on when the chosen package already includes
+  // one, so a client can't end up paying $100 extra for something
+  // that's already covered.
+  const packageHasCarousel = selectedShoot?.deliverables?.some((d: any) => d.name.toLowerCase().includes('carousel'))
+  const addons = (selectedCat === 'property' ? propertyAddons : commercialAddons).filter(a => !(packageHasCarousel && a.name === 'Carousel'))
 
   const s = { panel: { background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7 } as React.CSSProperties }
   const cInp: React.CSSProperties = { background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }
