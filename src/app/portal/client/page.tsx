@@ -914,10 +914,21 @@ export default function ClientPortal() {
     const typeLabel = { package: 'Package', date: 'Date/time', addons: 'Add-ons', other: 'Other' }[changeRequestType]
     const appendedNotes = (booking.notes ? booking.notes + '\n\n' : '') +
       `--- Client requested a change (${typeLabel}) · ${new Date().toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })} ---\n${changeRequestMessage.trim()}`
+    // A date/time change while a meeting is booked is a real negotiation
+    // round, not just a note — flips the booking to meeting_alt_requested
+    // (mirroring the existing date_proposed/alt_requested back-and-forth
+    // used for the actual shoot date) so studio sees it as something that
+    // needs a response, not just text sitting in the notes.
+    const isMeetingTimeRequest = changeRequestType === 'date' && booking.status === 'meeting_booked'
+    const updates: any = { notes: appendedNotes }
+    if (isMeetingTimeRequest) {
+      updates.status = 'meeting_alt_requested'
+      updates.client_response_message = changeRequestMessage.trim()
+    }
     try {
-      const { error } = await supabase.from('bookings1').update({ notes: appendedNotes }).eq('id', booking.id)
+      const { error } = await supabase.from('bookings1').update(updates).eq('id', booking.id)
       if (error) { console.error('Booking change request error:', error); return }
-      setClientBookings(prev => prev.map(b => b.id === booking.id ? { ...b, notes: appendedNotes } : b))
+      setClientBookings(prev => prev.map(b => b.id === booking.id ? { ...b, ...updates } : b))
       try {
         await supabase.from('notifications').insert([{
           user_email: 'cody@examplecontent.co.nz',
@@ -1180,12 +1191,12 @@ export default function ClientPortal() {
           // alt_requested (we asked for another time, waiting on the studio), and
           // meeting_booked (a discovery call is booked — proposed_date here is the
           // meeting's date, not a shoot date; studio still owes a real confirm).
-          const isUnresolved = (s: string) => s === 'pending' || s === 'date_proposed' || s === 'alt_requested' || s === 'meeting_booked'
+          const isUnresolved = (s: string) => s === 'pending' || s === 'date_proposed' || s === 'alt_requested' || s === 'meeting_booked' || s === 'meeting_alt_requested'
           // A confirmed booking with no project yet is also still "in flight" — the
           // studio hasn't finalized it into a project/calendar event — so it shouldn't
           // vanish from these lists in the gap between the client confirming and that.
           const isAwaitingProject = (b: any) => isUnresolved(b.status) || (b.status === 'confirmed' && !b.project_id)
-          const pendingShootBookings = clientBookings.filter((b: any) => (b.proposed_date || b.preferred_date) && new Date(b.proposed_date || b.preferred_date) >= now && isAwaitingProject(b) && !confirmedShootDates.has(b.proposed_date || b.preferred_date)).map((b: any) => ({ id: b.id, title: b.address || b.shoot_package || 'Pending booking', shoot_date: b.proposed_date || b.preferred_date, stage: b.status === 'date_proposed' ? 'Time proposed' : b.status === 'alt_requested' ? 'Awaiting new time' : b.status === 'meeting_booked' ? 'Meeting booked' : b.status === 'confirmed' ? 'Confirmed' : 'Pending', client: b.client_name, address: b.address, progress: 0, isPending: true, shoot_package: b.shoot_package, deliverables_type: b.deliverables, addons: b.addons, total: b.total }))
+          const pendingShootBookings = clientBookings.filter((b: any) => (b.proposed_date || b.preferred_date) && new Date(b.proposed_date || b.preferred_date) >= now && isAwaitingProject(b) && !confirmedShootDates.has(b.proposed_date || b.preferred_date)).map((b: any) => ({ id: b.id, title: b.address || b.shoot_package || 'Pending booking', shoot_date: b.proposed_date || b.preferred_date, stage: b.status === 'date_proposed' ? 'Time proposed' : b.status === 'alt_requested' ? 'Awaiting new time' : b.status === 'meeting_booked' ? 'Meeting booked' : b.status === 'meeting_alt_requested' ? 'Awaiting new meeting time' : b.status === 'confirmed' ? 'Confirmed' : 'Pending', client: b.client_name, address: b.address, progress: 0, isPending: true, shoot_package: b.shoot_package, deliverables_type: b.deliverables, addons: b.addons, total: b.total }))
           const upcomingShoots = [...confirmedShoots, ...pendingShootBookings].sort((a: any, b: any) => new Date(a.shoot_date).getTime() - new Date(b.shoot_date).getTime())
           const activeProjects = clientProjects.filter((p: any) => p.stage !== 'Awaiting Confirmation' && p.stage !== 'Completed')
           const awaitingSchedule = clientBookings.filter((b: any) => !b.preferred_date && !b.proposed_date && isUnresolved(b.status))
@@ -2144,7 +2155,7 @@ export default function ClientPortal() {
           const now = new Date()
           const upcomingProjects = clientProjects.filter((p: any) => p.shoot_date && new Date(p.shoot_date) >= now).sort((a: any, b: any) => new Date(a.shoot_date).getTime() - new Date(b.shoot_date).getTime())
           const deliveredProjects = allClientProjects.filter((p: any) => p.stage === 'Awaiting Confirmation' || p.stage === 'Completed').sort((a: any, b: any) => new Date(b.delivery_due || b.created_at).getTime() - new Date(a.delivery_due || a.created_at).getTime())
-          const pendingBookings = clientBookings.filter((b: any) => b.status === 'pending' || b.status === 'date_proposed' || b.status === 'alt_requested' || b.status === 'meeting_booked' || (b.status === 'confirmed' && !b.project_id))
+          const pendingBookings = clientBookings.filter((b: any) => b.status === 'pending' || b.status === 'date_proposed' || b.status === 'alt_requested' || b.status === 'meeting_booked' || b.status === 'meeting_alt_requested' || (b.status === 'confirmed' && !b.project_id))
           // A booking the studio declined (before a project ever existed) or
           // cancelled (after deleting an existing project) must never just
           // vanish on the client — they still see it here, clearly labelled.
@@ -2232,32 +2243,34 @@ export default function ClientPortal() {
                             </div>
                           )
                         }
-                        if (b.status === 'meeting_booked') {
-                          return (
-                            <div key={b.id} style={{ display:'flex', alignItems:'center', gap:14, padding:'14px 18px', borderBottom: isLast ? 'none' : '0.5px solid rgba(200,194,187,0.06)' }}>
-                              <div style={{ width:42, flexShrink:0, textAlign:'center', background:'rgba(100,150,220,0.08)', border:'0.5px solid rgba(100,150,220,0.2)', borderRadius:5, padding:'10px 4px' }}>
-                                <IconCalendar size={16} style={{ color: 'rgba(100,150,220,0.85)' }} />
-                              </div>
-                              <div style={{ flex:1 }}>
-                                <div style={{ fontSize:13, fontWeight:500, color:'#C8C2BB', marginBottom:2 }}>{b.address || b.shoot_package || 'Booking request'}</div>
-                                <div style={{ fontSize:11, color:'rgba(100,150,220,0.9)' }}>{b.proposed_date ? 'Call booked: ' + new Date(b.proposed_date+'T12:00:00').toLocaleDateString('en-NZ',{weekday:'long',day:'numeric',month:'long'}) + (b.proposed_start_time ? ' · ' + formatTime12(b.proposed_start_time) : '') : 'A discovery call has been booked'} — we'll confirm your shoot after we talk</div>
-                              </div>
-                              <span style={{ fontSize:9, letterSpacing:'0.08em', textTransform:'uppercase', padding:'3px 9px', borderRadius:2, background:'rgba(100,150,220,0.12)', color:'rgba(100,150,220,0.9)', border:'0.5px solid rgba(100,150,220,0.25)' }}>Meeting booked</span>
-                            </div>
-                          )
-                        }
+                        // meeting_booked, meeting_alt_requested and plain
+                        // pending all share the same expandable details +
+                        // "Request a change" composer — only the icon,
+                        // colour and status line differ.
                         const expanded = expandedBookingId === b.id
+                        const isMeeting = b.status === 'meeting_booked' || b.status === 'meeting_alt_requested'
+                        const badge = b.status === 'meeting_alt_requested'
+                          ? { label: 'Awaiting new time', bg: 'rgba(160,100,220,0.12)', color: 'rgba(160,100,220,0.9)', border: 'rgba(160,100,220,0.25)' }
+                          : b.status === 'meeting_booked'
+                          ? { label: 'Meeting booked', bg: 'rgba(100,150,220,0.12)', color: 'rgba(100,150,220,0.9)', border: 'rgba(100,150,220,0.25)' }
+                          : { label: 'Pending', bg: 'rgba(210,175,80,0.12)', color: 'rgba(210,175,80,0.9)', border: 'rgba(210,175,80,0.25)' }
                         return (
                           <div key={b.id} style={{ borderBottom: isLast ? 'none' : '0.5px solid rgba(200,194,187,0.06)' }}>
                             <div onClick={() => setExpandedBookingId(expanded ? null : b.id)} style={{ display:'flex', alignItems:'center', gap:14, padding:'14px 18px', cursor:'pointer' }}>
-                              <div style={{ width:42, flexShrink:0, textAlign:'center', background:'rgba(210,175,80,0.08)', border:'0.5px solid rgba(210,175,80,0.2)', borderRadius:5, padding:'10px 4px' }}>
-                                <IconClock size={16} style={{ color: 'rgba(210,175,80,0.8)' }} />
+                              <div style={{ width:42, flexShrink:0, textAlign:'center', background: isMeeting ? 'rgba(100,150,220,0.08)' : 'rgba(210,175,80,0.08)', border: `0.5px solid ${isMeeting ? 'rgba(100,150,220,0.2)' : 'rgba(210,175,80,0.2)'}`, borderRadius:5, padding:'10px 4px' }}>
+                                {isMeeting ? <IconCalendar size={16} style={{ color: 'rgba(100,150,220,0.85)' }} /> : <IconClock size={16} style={{ color: 'rgba(210,175,80,0.8)' }} />}
                               </div>
                               <div style={{ flex:1 }}>
                                 <div style={{ fontSize:13, fontWeight:500, color:'#C8C2BB', marginBottom:2 }}>{b.address || b.shoot_package || 'Booking request'}</div>
-                                <div style={{ fontSize:11, color:'rgba(200,194,187,0.4)' }}>{b.shoot_package} {b.preferred_date ? '· ' + new Date(b.preferred_date+'T12:00:00').toLocaleDateString('en-NZ',{day:'numeric',month:'short',year:'numeric'}) : ''}</div>
+                                <div style={{ fontSize:11, color: isMeeting ? 'rgba(100,150,220,0.9)' : 'rgba(200,194,187,0.4)' }}>
+                                  {b.status === 'meeting_booked'
+                                    ? (b.proposed_date ? 'Call booked: ' + new Date(b.proposed_date+'T12:00:00').toLocaleDateString('en-NZ',{weekday:'long',day:'numeric',month:'long'}) + (b.proposed_start_time ? ' · ' + formatTime12(b.proposed_start_time) : '') : 'A discovery call has been booked') + ' — we\'ll confirm your shoot after we talk'
+                                    : b.status === 'meeting_alt_requested'
+                                    ? 'Waiting on Example Content for a new meeting time'
+                                    : `${b.shoot_package || ''} ${b.preferred_date ? '· ' + new Date(b.preferred_date+'T12:00:00').toLocaleDateString('en-NZ',{day:'numeric',month:'short',year:'numeric'}) : ''}`}
+                                </div>
                               </div>
-                              <span style={{ fontSize:9, letterSpacing:'0.08em', textTransform:'uppercase', padding:'3px 9px', borderRadius:2, background:'rgba(210,175,80,0.12)', color:'rgba(210,175,80,0.9)', border:'0.5px solid rgba(210,175,80,0.25)' }}>Pending</span>
+                              <span style={{ fontSize:9, letterSpacing:'0.08em', textTransform:'uppercase', padding:'3px 9px', borderRadius:2, background:badge.bg, color:badge.color, border:`0.5px solid ${badge.border}` }}>{badge.label}</span>
                               <span style={{ fontSize:14, color:'rgba(200,194,187,0.3)', transform: expanded ? 'rotate(180deg)' : 'none', transition:'transform 0.15s ease' }}>▾</span>
                             </div>
                             {expanded && (
@@ -2267,6 +2280,7 @@ export default function ClientPortal() {
                                   {b.deliverables && <div><span style={{color:'#C8C2BB', fontWeight:500}}>Deliverables: </span>{b.deliverables}</div>}
                                   {b.addons && <div><span style={{color:'#C8C2BB', fontWeight:500}}>Add-ons: </span>{b.addons}</div>}
                                   {b.address && <div><span style={{color:'#C8C2BB', fontWeight:500}}>Address: </span>{b.address}</div>}
+                                  {isMeeting && b.proposed_date && <div><span style={{color:'#C8C2BB', fontWeight:500}}>Meeting time: </span>{new Date(b.proposed_date+'T12:00:00').toLocaleDateString('en-NZ',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}{b.proposed_start_time ? ' · '+formatTime12(b.proposed_start_time) : ''}</div>}
                                   {b.preferred_date && <div><span style={{color:'#C8C2BB', fontWeight:500}}>Preferred date: </span>{new Date(b.preferred_date+'T12:00:00').toLocaleDateString('en-NZ',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}{b.preferred_time ? ' · '+formatTime12(b.preferred_time) : ''}</div>}
                                   {b.notes && <div style={{whiteSpace:'pre-wrap'}}><span style={{color:'#C8C2BB', fontWeight:500}}>Notes: </span>{b.notes}</div>}
                                 </div>

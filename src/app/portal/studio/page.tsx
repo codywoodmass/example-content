@@ -468,7 +468,7 @@ export default function StudioPortal() {
 
   async function loadBookings(digestUserEmail?: string, digestRole?: string) {
     const [{ data, error }, { data: projects }, { data: crs }, { data: vf }] = await Promise.all([
-      supabase.from('bookings1').select('*').in('status', ['pending', 'date_proposed', 'alt_requested', 'meeting_booked', 'confirmed']).order('created_at', { ascending: false }),
+      supabase.from('bookings1').select('*').in('status', ['pending', 'date_proposed', 'alt_requested', 'meeting_booked', 'meeting_alt_requested', 'confirmed']).order('created_at', { ascending: false }),
       supabase.from('projects1').select('*').order('created_at', { ascending: false }),
       supabase.from('change_requests').select('*').eq('status', 'pending').order('created_at', { ascending: false }),
       supabase.from('video_feedback').select('*').eq('status', 'pending').order('created_at', { ascending: false }),
@@ -827,42 +827,50 @@ export default function StudioPortal() {
   useEffect(() => { if (proposeModal) loadWeekBusyFor(proposeWeekOffset) }, [proposeModal, proposeWeekOffset])
 
   // Studio proposes a date/time — the booking stays unconfirmed (no project
-  // yet) until the client accepts it.
+  // yet) until the client accepts it. Reused for both the real shoot
+  // (status -> date_proposed, as before) and for re-proposing a meeting
+  // time (status -> meeting_booked, staying entirely inside the meeting
+  // negotiation loop — never touches date_proposed/confirmed, so it can
+  // never accidentally create a project).
   async function submitProposal() {
     if (!proposeBooking || !proposeDate) return
+    const isMeeting = proposeBooking.status === 'meeting_booked' || proposeBooking.status === 'meeting_alt_requested'
     setProposingDate(true)
     try {
       const { error } = await supabase.from('bookings1').update({
-        status: 'date_proposed',
+        status: isMeeting ? 'meeting_booked' : 'date_proposed',
         proposed_date: proposeDate,
         proposed_start_time: proposeStart,
         proposed_end_time: proposeEnd,
+        client_response_message: null,
       }).eq('id', proposeBooking.id)
       if (error) { notify('Error proposing date: ' + error.message, 'error'); return }
       await supabase.from('notifications').insert([{
         user_email: proposeBooking.client_email,
-        type: 'date_proposed',
-        title: 'A shoot time has been proposed',
-        message: 'We\'ve proposed ' + new Date(proposeDate + 'T12:00:00').toLocaleDateString('en-NZ', { weekday: 'long', day: 'numeric', month: 'long' }) + ' at ' + formatTime12(proposeStart) + ' for ' + (proposeBooking.address || proposeBooking.shoot_package || 'your shoot') + '. Please confirm or request another time.',
+        type: isMeeting ? 'meeting_booked' : 'date_proposed',
+        title: isMeeting ? 'A new meeting time has been proposed' : 'A shoot time has been proposed',
+        message: 'We\'ve proposed ' + new Date(proposeDate + 'T12:00:00').toLocaleDateString('en-NZ', { weekday: 'long', day: 'numeric', month: 'long' }) + ' at ' + formatTime12(proposeStart) + (isMeeting ? ' for a call about ' : ' for ') + (proposeBooking.address || proposeBooking.shoot_package || (isMeeting ? 'your project' : 'your shoot')) + '. Please confirm or request another time.',
         project_id: null,
         read: false,
       }])
-      try {
-        await fetch('/api/notify-date-proposed', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            clientEmail: proposeBooking.client_email,
-            clientName: proposeBooking.client_name,
-            title: proposeBooking.address || proposeBooking.shoot_package || 'your shoot',
-            date: proposeDate,
-            startTime: proposeStart,
-            endTime: proposeEnd,
-          }),
-        })
-      } catch (e) { console.error('notify-date-proposed error:', e) }
+      if (!isMeeting) {
+        try {
+          await fetch('/api/notify-date-proposed', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              clientEmail: proposeBooking.client_email,
+              clientName: proposeBooking.client_name,
+              title: proposeBooking.address || proposeBooking.shoot_package || 'your shoot',
+              date: proposeDate,
+              startTime: proposeStart,
+              endTime: proposeEnd,
+            }),
+          })
+        } catch (e) { console.error('notify-date-proposed error:', e) }
+      }
       setProposeModal(false)
-      notify('Proposed time sent to client', 'success')
+      notify(isMeeting ? 'New meeting time sent to client' : 'Proposed time sent to client', 'success')
       loadBookings()
     } finally {
       setProposingDate(false)
@@ -1517,12 +1525,13 @@ export default function StudioPortal() {
                         <span style={{ fontSize: 13, fontWeight: 500, color: '#C8C2BB' }}>{booking.address || booking.shoot_package || 'New booking'}</span>
                         <span style={{ fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '3px 9px', borderRadius: 2, background: 'rgba(200,194,187,0.1)', color: '#C8C2BB', border: '0.5px solid rgba(200,194,187,0.2)' }}>{booking.category}</span>
                         {(() => {
-                          const statusLabel: Record<string, string> = { pending: 'Pending', date_proposed: 'Awaiting client', alt_requested: 'Wants a different time', meeting_booked: 'Meeting booked', confirmed: 'Confirmed — create project' }
+                          const statusLabel: Record<string, string> = { pending: 'Pending', date_proposed: 'Awaiting client', alt_requested: 'Wants a different time', meeting_booked: 'Meeting booked', meeting_alt_requested: 'Wants a different meeting time', confirmed: 'Confirmed — create project' }
                           const statusColor: Record<string, { bg: string; color: string; border: string }> = {
                             pending: { bg: 'rgba(210,175,80,0.15)', color: 'rgba(210,175,80,0.9)', border: 'rgba(210,175,80,0.25)' },
                             date_proposed: { bg: 'rgba(100,150,220,0.15)', color: 'rgba(100,150,220,0.9)', border: 'rgba(100,150,220,0.25)' },
                             alt_requested: { bg: 'rgba(210,90,90,0.15)', color: 'rgba(210,90,90,0.9)', border: 'rgba(210,90,90,0.25)' },
                             meeting_booked: { bg: 'rgba(160,100,220,0.15)', color: 'rgba(160,100,220,0.9)', border: 'rgba(160,100,220,0.25)' },
+                            meeting_alt_requested: { bg: 'rgba(210,90,90,0.15)', color: 'rgba(210,90,90,0.9)', border: 'rgba(210,90,90,0.25)' },
                             confirmed: { bg: 'rgba(100,200,130,0.15)', color: 'rgba(100,200,130,0.9)', border: 'rgba(100,200,130,0.25)' },
                           }
                           const sc = statusColor[booking.status] || statusColor.pending
@@ -1537,6 +1546,12 @@ export default function StudioPortal() {
                       {booking.status === 'meeting_booked' && (
                         <div style={{ marginBottom: 10, padding: '10px 14px', background: 'rgba(160,100,220,0.06)', border: '0.5px solid rgba(160,100,220,0.2)', borderRadius: 5, fontSize: 12, color: 'rgba(160,100,220,0.9)' }}>
                           Meeting booked for {new Date(booking.proposed_date + 'T12:00:00').toLocaleDateString('en-NZ', { weekday: 'long', day: 'numeric', month: 'long' })} · {formatTime12(booking.proposed_start_time)}–{formatTime12(booking.proposed_end_time)} — confirm the shoot once you've spoken
+                        </div>
+                      )}
+                      {booking.status === 'meeting_alt_requested' && (
+                        <div style={{ marginBottom: 10, padding: '10px 14px', background: 'rgba(210,90,90,0.06)', border: '0.5px solid rgba(210,90,90,0.2)', borderRadius: 5, fontSize: 12, color: 'rgba(210,90,90,0.9)' }}>
+                          Client asked for a different meeting time than {new Date(booking.proposed_date + 'T12:00:00').toLocaleDateString('en-NZ', { day: 'numeric', month: 'long' })} at {formatTime12(booking.proposed_start_time)}
+                          {booking.client_response_message && <div style={{ marginTop: 6, color: 'rgba(200,194,187,0.7)', fontStyle: 'italic' }}>"{booking.client_response_message}"</div>}
                         </div>
                       )}
                       {booking.status === 'alt_requested' && (
@@ -1594,6 +1609,12 @@ export default function StudioPortal() {
                       ) : booking.status === 'meeting_booked' ? (
                         <>
                           <button onClick={() => { setSelectedBooking(booking); setShootDate(booking.preferred_date || ''); setMeetingMode(false); setScheduleMonthOffset(0); setScheduleModal(true) }} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>Confirm shoot</button>
+                          <button onClick={() => openProposeModal(booking)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Change meeting time</button>
+                          <button onClick={() => declineBooking(booking.id)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 3, border: '0.5px solid rgba(210,90,90,0.4)', color: 'rgba(210,90,90,0.8)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Decline</button>
+                        </>
+                      ) : booking.status === 'meeting_alt_requested' ? (
+                        <>
+                          <button onClick={() => openProposeModal(booking)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>Propose new meeting time</button>
                           <button onClick={() => declineBooking(booking.id)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 3, border: '0.5px solid rgba(210,90,90,0.4)', color: 'rgba(210,90,90,0.8)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Decline</button>
                         </>
                       ) : (
@@ -2242,7 +2263,7 @@ export default function StudioPortal() {
       {proposeModal && proposeBooking && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 10, padding: 28, width: 620, maxWidth: '95vw', maxHeight: '90vh', overflowY: 'auto' }}>
-            <div style={{ fontSize: 14, fontWeight: 500, color: '#fff', marginBottom: 6 }}>{proposeBooking.status === 'alt_requested' || proposeBooking.status === 'date_proposed' ? 'Propose a new time' : 'Propose a date/time'}</div>
+            <div style={{ fontSize: 14, fontWeight: 500, color: '#fff', marginBottom: 6 }}>{proposeBooking.status === 'meeting_booked' || proposeBooking.status === 'meeting_alt_requested' ? 'Propose a new meeting time' : proposeBooking.status === 'alt_requested' || proposeBooking.status === 'date_proposed' ? 'Propose a new time' : 'Propose a date/time'}</div>
             <div style={{ fontSize: 12, color: 'rgba(200,194,187,0.4)', marginBottom: 20, lineHeight: 1.6 }}>
               {(proposeBooking.address || proposeBooking.shoot_package) + ' · ' + (proposeBooking.client_name || proposeBooking.client_email)}
             </div>
