@@ -617,6 +617,41 @@ function DriveFolder({ project, clientEmail, clientName }: { project: any; clien
   )
 }
 
+// Lets a client add as many reference URLs as they need, one at a time,
+// instead of trying to cram several links into a single-line text input.
+function ReferenceLinksInput({ links, onAdd, onRemove, placeholder }: { links: string[]; onAdd: (v: string) => void; onRemove: (i: number) => void; placeholder: string }) {
+  const [draft, setDraft] = React.useState('')
+  function add() {
+    if (!draft.trim()) return
+    onAdd(draft.trim())
+    setDraft('')
+  }
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <input
+          value={draft}
+          onChange={e => setDraft(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add() } }}
+          placeholder={placeholder}
+          style={{ flex: 1, background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }}
+        />
+        <button type="button" onClick={add} disabled={!draft.trim()} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '0 14px', borderRadius: 4, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.6)', background: 'transparent', cursor: draft.trim() ? 'pointer' : 'not-allowed', fontFamily: 'inherit', opacity: draft.trim() ? 1 : 0.5, flexShrink: 0 }}>+ Add</button>
+      </div>
+      {links.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
+          {links.map((link, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.08)', borderRadius: 4, padding: '7px 10px' }}>
+              <span style={{ flex: 1, fontSize: 12, color: '#C8C2BB', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{link}</span>
+              <button type="button" onClick={() => onRemove(i)} aria-label="Remove link" style={{ background: 'transparent', border: 'none', color: 'rgba(200,194,187,0.4)', cursor: 'pointer', fontSize: 15, lineHeight: 1, padding: 0, flexShrink: 0 }}>×</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function AttachmentUploader({ attachments, uploading, onUpload, onRemove }: { attachments: { name: string; url: string; size: number }[]; uploading: boolean; onUpload: (files: FileList) => void; onRemove: (url: string) => void }) {
   return (
     <div>
@@ -673,7 +708,6 @@ export default function ClientPortal() {
   const [draftDue, setDraftDue] = useState("")
   const [preferredTime, setPreferredTime] = useState("")
   const [propertyLiveDate, setPropertyLiveDate] = useState("")
-  const [suggestedStoryline, setSuggestedStoryline] = useState("")
   const [shotList, setShotList] = useState("• \n• \n• \n• \n• ")
   const [twilightDate, setTwilightDate] = useState("")
   const [twilightTime, setTwilightTime] = useState("")
@@ -693,7 +727,12 @@ export default function ClientPortal() {
   ])
   const [dateFlexible, setDateFlexible] = useState(false)
   const [shootDuration, setShootDuration] = useState('')
-  const [referenceLinks, setReferenceLinks] = useState('')
+  // A list rather than a single free-text field — lets a client add as
+  // many reference URLs as they need instead of cramming them into one
+  // line. Joined back into a plain string wherever it's sent on.
+  const [referenceLinks, setReferenceLinks] = useState<string[]>([])
+  function addReferenceLink(url: string) { setReferenceLinks(p => [...p, url]) }
+  function removeReferenceLink(i: number) { setReferenceLinks(p => p.filter((_, idx) => idx !== i)) }
   const [budgetRange, setBudgetRange] = useState('')
 
   const [tcAccepted, setTcAccepted] = useState(false)
@@ -1068,7 +1107,7 @@ export default function ClientPortal() {
           ].map(item => {
             const active = activeView === item.id
             return (
-              <button key={item.id} onClick={() => { setMobileMenuOpen(false); setActiveView(item.id); setBookingStep(1); setSelectedCat(''); setSelectedShoot(null); setSelectedDel(null); setSelectedAddons([]); setTcAccepted(false); setPreferredDate(''); setDraftDue(''); setDeliveryDue(''); setBookingNotes(''); setAccessNotes(''); setPropertyAddress(''); setProjectType(''); setProjectTitle(''); setProjectDescription(''); setTargetAudience(''); setKeyMessage(''); setTalentDetails(''); setBriefDeliverables([{ id: '1', name: '', quantity: 1, duration: '', formats: [], notes: '' }]); setDateFlexible(false); setShootDuration(''); setReferenceLinks(''); setBudgetRange(''); setBookingAttachments([]); setTwilightDate(''); setTwilightTime('') }} style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 11, width: '100%', padding: '11px 14px 11px 17px', borderRadius: 6, fontSize: 13, letterSpacing: '0.01em', fontWeight: active ? 600 : 500, color: active ? '#fff' : 'rgba(200,194,187,0.5)', background: active ? 'rgba(61,71,86,0.4)' : 'transparent', border: active ? '0.5px solid rgba(200,194,187,0.15)' : '0.5px solid transparent', cursor: 'pointer', marginBottom: 4, textAlign: 'left', fontFamily: 'inherit' }}>
+              <button key={item.id} onClick={() => { setMobileMenuOpen(false); setActiveView(item.id); setBookingStep(1); setSelectedCat(''); setSelectedShoot(null); setSelectedDel(null); setSelectedAddons([]); setTcAccepted(false); setPreferredDate(''); setDraftDue(''); setDeliveryDue(''); setBookingNotes(''); setAccessNotes(''); setPropertyAddress(''); setProjectType(''); setProjectTitle(''); setProjectDescription(''); setTargetAudience(''); setKeyMessage(''); setTalentDetails(''); setBriefDeliverables([{ id: '1', name: '', quantity: 1, duration: '', formats: [], notes: '' }]); setDateFlexible(false); setShootDuration(''); setReferenceLinks([]); setBudgetRange(''); setBookingAttachments([]); setTwilightDate(''); setTwilightTime('') }} style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 11, width: '100%', padding: '11px 14px 11px 17px', borderRadius: 6, fontSize: 13, letterSpacing: '0.01em', fontWeight: active ? 600 : 500, color: active ? '#fff' : 'rgba(200,194,187,0.5)', background: active ? 'rgba(61,71,86,0.4)' : 'transparent', border: active ? '0.5px solid rgba(200,194,187,0.15)' : '0.5px solid transparent', cursor: 'pointer', marginBottom: 4, textAlign: 'left', fontFamily: 'inherit' }}>
                 {active && <span style={{ position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)', width: 2.5, height: 15, borderRadius: 2, background: '#C8C2BB' }} />}
                 <item.Icon size={17} style={{ flexShrink: 0, opacity: active ? 1 : 0.75 }} />
                 {item.label}
@@ -1692,7 +1731,7 @@ export default function ClientPortal() {
                   <div className="ec-grid-resp" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 20 }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                       <label style={cLbl}>Reference links / mood board / brand guidelines</label>
-                      <input value={referenceLinks} onChange={e => setReferenceLinks(e.target.value)} placeholder="Paste any links here" style={cInp} />
+                      <ReferenceLinksInput links={referenceLinks} onAdd={addReferenceLink} onRemove={removeReferenceLink} placeholder="Paste a link, then + Add" />
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                       <label style={cLbl}>Estimated budget range (optional)</label>
@@ -1824,12 +1863,8 @@ export default function ClientPortal() {
 
                   {/* Notes */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14 }}>
-                    <label style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)' }}>Brief & special requirements</label>
-                    <textarea rows={3} value={bookingNotes} onChange={e => setBookingNotes(e.target.value)} placeholder="Style references, key features, specific requirements, timeline notes..." style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', resize: 'vertical', lineHeight: 1.65 }} />
-                    <div style={{ marginTop:16 }}>
-                      <label style={{ fontSize:10, letterSpacing:'0.12em', textTransform:'uppercase', color:'rgba(200,194,187,0.4)', display:'block', marginBottom:6 }}>Suggested storyline</label>
-                      <textarea rows={3} value={suggestedStoryline} onChange={e => setSuggestedStoryline(e.target.value)} placeholder='e.g. A warm family home nestled in a quiet cul-de-sac...' style={{ background:'rgba(200,194,187,0.04)', border:'0.5px solid rgba(200,194,187,0.09)', borderRadius:4, padding:'9px 12px', fontSize:12, color:'#C8C2BB', fontFamily:'inherit', outline:'none', resize:'vertical', lineHeight:1.65, width:'100%' }} />
-                    </div>
+                    <label style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)' }}>Brief, storyline & special requirements</label>
+                    <textarea rows={4} value={bookingNotes} onChange={e => setBookingNotes(e.target.value)} placeholder="Style references, key features, specific requirements, timeline notes, or a suggested storyline — e.g. A warm family home nestled in a quiet cul-de-sac..." style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', resize: 'vertical', lineHeight: 1.65 }} />
                     <div style={{ marginTop:16 }}>
                       <label style={{ fontSize:10, letterSpacing:'0.12em', textTransform:'uppercase', color:'rgba(200,194,187,0.4)', display:'block', marginBottom:6 }}>Talent required</label>
                       <textarea rows={3} value={talentDetails} onChange={e => setTalentDetails(e.target.value)} placeholder="Describe the talent needed on shoot (e.g. homeowner walk-through, 2 lifestyle models), and whether you're providing/sourcing the talent yourself or need us to source it" style={{ background:'rgba(200,194,187,0.04)', border:'0.5px solid rgba(200,194,187,0.09)', borderRadius:4, padding:'9px 12px', fontSize:12, color:'#C8C2BB', fontFamily:'inherit', outline:'none', resize:'vertical', lineHeight:1.65, width:'100%' }} />
@@ -1840,7 +1875,7 @@ export default function ClientPortal() {
                     </div>
                     <div style={{ marginTop:16 }}>
                       <label style={{ fontSize:10, letterSpacing:'0.12em', textTransform:'uppercase', color:'rgba(200,194,187,0.4)', display:'block', marginBottom:6 }}>Reference links</label>
-                      <input value={referenceLinks} onChange={e => setReferenceLinks(e.target.value)} placeholder="Paste links to properties you'd like to use as a reference for style or music" style={{ background:'rgba(200,194,187,0.04)', border:'0.5px solid rgba(200,194,187,0.09)', borderRadius:4, padding:'9px 12px', fontSize:12, color:'#C8C2BB', fontFamily:'inherit', outline:'none', width:'100%' }} />
+                      <ReferenceLinksInput links={referenceLinks} onAdd={addReferenceLink} onRemove={removeReferenceLink} placeholder="Paste a link to a property you'd like to use as a reference, then + Add" />
                     </div>
                     {(selectedShoot?.name === 'Media Release Package' || selectedAddons.some((a: any) => a.name === 'Twilight Shoot')) && (
                       <div style={{ marginTop:16 }}>
@@ -1946,7 +1981,7 @@ export default function ClientPortal() {
                             briefDeliverables.filter(d => d.name).length ? 'Deliverables:\n' + briefDeliverables.filter(d => d.name).map(d => `- ${d.quantity}x ${d.name}${d.duration ? ' (' + d.duration + ')' : ''}${d.formats.length ? ' [' + d.formats.join(', ') + ']' : ''}${d.notes ? ' — ' + d.notes : ''}`).join('\n') : '',
                             shootDuration ? 'Estimated duration: ' + shootDuration : '',
                             dateFlexible ? 'Preferred date is flexible' : '',
-                            referenceLinks ? 'References: ' + referenceLinks : '',
+                            referenceLinks.length ? 'References: ' + referenceLinks.join(', ') : '',
                             budgetRange ? 'Budget range: ' + budgetRange : '',
                             bookingNotes ? 'Additional notes: ' + bookingNotes : '',
                           ].filter(Boolean).join('\n\n'),
@@ -1970,12 +2005,11 @@ export default function ClientPortal() {
                           property_live_date: propertyLiveDate || null,
                           address: propertyAddress,
                           notes: [
-                            bookingNotes ? 'Notes: ' + bookingNotes : '',
+                            bookingNotes ? 'Brief: ' + bookingNotes : '',
                             accessNotes ? 'Access: ' + accessNotes : '',
-                            suggestedStoryline ? 'Storyline: ' + suggestedStoryline : '',
                             talentDetails ? 'Talent required: ' + talentDetails : '',
                             shotList.replace(/[•\s]/g, '') ? 'Talent/lifestyle shot list:\n' + shotList : '',
-                            referenceLinks ? 'References: ' + referenceLinks : '',
+                            referenceLinks.length ? 'References: ' + referenceLinks.join(', ') : '',
                             (twilightDate || twilightTime) ? 'Twilight shoot requested: ' + (twilightDate ? new Date(twilightDate + 'T12:00:00').toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' }) : 'date TBC') + (twilightTime ? ' at ' + formatTime12(twilightTime) : '') : '',
                             clientPhone ? 'Phone: ' + clientPhone : '',
                           ].filter(Boolean).join('\n\n'),
@@ -2006,7 +2040,7 @@ export default function ClientPortal() {
                           { label: 'Preferred date', value: dateFlexible ? 'Flexible' : (preferredDate ? preferredDate + (preferredTime ? ' at ' + formatTime12(preferredTime) : '') : 'TBC') },
                           { label: 'Estimated duration', value: shootDuration },
                           { label: 'Budget range', value: budgetRange || 'Not specified' },
-                          { label: 'Reference links', value: referenceLinks },
+                          { label: 'Reference links', value: referenceLinks.join(', ') },
                           { label: 'Description', value: projectDescription },
                           { label: 'Additional notes', value: bookingNotes },
                           { label: 'Attachments', value: bookingAttachments.map(a => `${a.name}: ${a.url}`).join('\n') },
@@ -2046,7 +2080,7 @@ export default function ClientPortal() {
                   <div style={{ fontSize: 14, color: 'rgba(200,194,187,0.4)', lineHeight: 1.7, maxWidth: 400, margin: '0 auto 32px' }}>We've received your request and will confirm availability within 24 hours. You'll hear from the Example Content team shortly.</div>
                   <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
                     <button onClick={() => setActiveView('dashboard')} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Back to dashboard</button>
-                    <button onClick={() => { setBookingStep(1); setSelectedCat(''); setSelectedShoot(null); setSelectedDel(null); setSelectedAddons([]); setTcAccepted(false); setPreferredDate(''); setDraftDue(''); setDeliveryDue(''); setBookingNotes(''); setAccessNotes(''); setPropertyAddress(''); setProjectType(''); setProjectTitle(''); setProjectDescription(''); setTargetAudience(''); setKeyMessage(''); setTalentDetails(''); setBriefDeliverables([{ id: '1', name: '', quantity: 1, duration: '', formats: [], notes: '' }]); setDateFlexible(false); setShootDuration(''); setReferenceLinks(''); setBudgetRange(''); setBookingAttachments([]) }} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>Book another shoot</button>
+                    <button onClick={() => { setBookingStep(1); setSelectedCat(''); setSelectedShoot(null); setSelectedDel(null); setSelectedAddons([]); setTcAccepted(false); setPreferredDate(''); setDraftDue(''); setDeliveryDue(''); setBookingNotes(''); setAccessNotes(''); setPropertyAddress(''); setProjectType(''); setProjectTitle(''); setProjectDescription(''); setTargetAudience(''); setKeyMessage(''); setTalentDetails(''); setBriefDeliverables([{ id: '1', name: '', quantity: 1, duration: '', formats: [], notes: '' }]); setDateFlexible(false); setShootDuration(''); setReferenceLinks([]); setBudgetRange(''); setBookingAttachments([]) }} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>Book another shoot</button>
                   </div>
                 </div>
               )}
