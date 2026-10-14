@@ -2738,7 +2738,7 @@ export default function StudioPortal() {
       {/* PROPOSE / RE-PROPOSE DATE-TIME MODAL — real Google Calendar week view */}
       {proposeModal && proposeBooking && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 10, padding: 28, width: 620, maxWidth: '95vw', maxHeight: '90vh', overflowY: 'auto' }}>
+          <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 10, padding: 28, width: 820, maxWidth: '95vw', maxHeight: '90vh', overflowY: 'auto' }}>
             <div style={{ fontSize: 14, fontWeight: 500, color: '#fff', marginBottom: 6 }}>{proposeBooking.status === 'meeting_booked' || proposeBooking.status === 'meeting_alt_requested' ? 'Propose a new meeting time' : proposeBooking.status === 'alt_requested' || proposeBooking.status === 'date_proposed' ? 'Propose a new time' : 'Propose a date/time'}</div>
             <div style={{ fontSize: 12, color: 'rgba(200,194,187,0.4)', marginBottom: 20, lineHeight: 1.6 }}>
               {(proposeBooking.address || proposeBooking.shoot_package) + ' · ' + (proposeBooking.client_name || proposeBooking.client_email)}
@@ -2784,7 +2784,7 @@ export default function StudioPortal() {
                       const busy = weekBusy[dateStr] || []
                       const hasInternalShoot = shootDatesSet.has(dateStr)
                       return (
-                        <div key={i} onClick={() => !isPast && setProposeDate(dateStr)} style={{ borderRadius: 5, padding: '8px 6px', minHeight: 100, cursor: isPast ? 'default' : 'pointer', background: isSelected ? 'rgba(200,194,187,0.12)' : 'rgba(200,194,187,0.02)', border: isRequested ? '1.5px solid rgba(100,200,130,0.9)' : '0.5px solid ' + (isSelected ? '#C8C2BB' : 'rgba(200,194,187,0.07)'), opacity: isPast ? 0.35 : 1 }}>
+                        <div key={i} onClick={() => !isPast && setProposeDate(dateStr)} style={{ borderRadius: 5, padding: '8px 6px', minHeight: 100, minWidth: 0, overflow: 'hidden', cursor: isPast ? 'default' : 'pointer', background: isSelected ? 'rgba(200,194,187,0.12)' : 'rgba(200,194,187,0.02)', border: isRequested ? '1.5px solid rgba(100,200,130,0.9)' : '0.5px solid ' + (isSelected ? '#C8C2BB' : 'rgba(200,194,187,0.07)'), opacity: isPast ? 0.35 : 1 }}>
                           <div style={{ fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 2 }}>{dayLabels[i]}</div>
                           <div style={{ fontSize: 13, fontWeight: isSelected || isRequested ? 700 : 400, color: isSelected ? '#fff' : isRequested ? 'rgba(100,200,130,0.95)' : '#C8C2BB', marginBottom: 6 }}>{d.getDate()}</div>
                           {hasInternalShoot && (
