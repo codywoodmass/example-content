@@ -224,6 +224,7 @@ export default function StudioPortal() {
   const [dashProjects, setDashProjects] = useState<any[]>([])
   const tracker = useTimeTracking()
   const [weeklyTimeTotals, setWeeklyTimeTotals] = useState<{ person: string; hours: number }[]>([])
+  const [monthlyHours, setMonthlyHours] = useState<number | null>(null)
 
   async function loadWeeklyTimeTotals() {
     const mondayStr = localDateKey(mondayOf(new Date()))
@@ -234,6 +235,13 @@ export default function StudioPortal() {
       byPerson[p] = (byPerson[p] || 0) + row.hours
     })
     setWeeklyTimeTotals(Object.entries(byPerson).map(([person, hours]) => ({ person, hours })))
+  }
+
+  async function loadMonthlyHours() {
+    const now = new Date()
+    const monthStart = localDateKey(new Date(now.getFullYear(), now.getMonth(), 1))
+    const { data } = await supabase.from('time_entries').select('hours').gte('entry_date', monthStart)
+    setMonthlyHours((data || []).reduce((s: number, r: any) => s + r.hours, 0))
   }
   const [modalProject, setModalProject] = useState<any>(null)
   const [weekOffset, setWeekOffset] = useState(0)
@@ -466,6 +474,7 @@ export default function StudioPortal() {
   useEffect(() => { if (activeView === 'finance' && xeroStatus?.connected) loadGst() }, [activeView, xeroStatus?.connected])
   useEffect(() => { if (activeView === 'finance' && xeroStatus?.connected) loadCashflow() }, [activeView, xeroStatus?.connected])
   useEffect(() => { if (activeView === 'finance' && userRole === 'studio') loadWeeklyTarget() }, [activeView, userRole])
+  useEffect(() => { if (activeView === 'finance' && userRole === 'studio') loadMonthlyHours() }, [activeView, userRole])
   useEffect(() => {
     loadWeeklyTimeTotals()
     const id = setInterval(loadWeeklyTimeTotals, 60000)
@@ -2011,7 +2020,8 @@ export default function StudioPortal() {
               const outstandingItems = pnl.outstandingInvoices?.items || []
               const outstandingTotal = pnl.outstandingInvoices?.outstandingTotal || 0
               const overdueTotal = pnl.outstandingInvoices?.overdueTotal || 0
-              const recentPayments = pnl.recentPayments || []
+              const allPayments = pnl.recentPayments || []
+              const recentPayments = allPayments.slice(0, 6)
               const periodLabel = (p: string | null) => ({ MONTHLY: 'monthly', '1MONTHLY': 'monthly', '2MONTHLY': '2-monthly', '6MONTHLY': '6-monthly', QUARTERLY1: 'quarterly', QUARTERLY2: 'quarterly', QUARTERLY3: 'quarterly', ANNUALLY: 'annual' } as Record<string, string>)[p || ''] || (p ? p.toLowerCase() : '')
               const sectionLabel = (text: string) => (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
@@ -2231,6 +2241,32 @@ export default function StudioPortal() {
                     )
                     const clientTotal = Object.values(byClient).reduce((a, b) => a + b, 0)
                     const packageTotal = Object.values(byPackage).reduce((a, b) => a + b, 0)
+
+                    // Turnaround: shoot day to actual delivery, not the target delivery_due —
+                    // only counts projects that have genuinely been delivered.
+                    const turnarounds = dashProjects
+                      .filter((p: any) => p.shoot_date && p.delivered_at)
+                      .map((p: any) => (new Date(p.delivered_at).getTime() - new Date(p.shoot_date + 'T12:00:00').getTime()) / (1000 * 60 * 60 * 24))
+                      .filter((d: number) => d >= 0)
+                    const avgTurnaround = turnarounds.length ? turnarounds.reduce((a: number, b: number) => a + b, 0) / turnarounds.length : null
+
+                    // Repeat clients: how many distinct clients have booked more than once —
+                    // a direct read on retention, which matters more for an agency than any
+                    // single project's value.
+                    const clientProjectCounts = Object.values(dashProjects.reduce((acc: Record<string, number>, p: any) => {
+                      if (p.client) acc[p.client] = (acc[p.client] || 0) + 1
+                      return acc
+                    }, {}))
+                    const repeatRate = clientProjectCounts.length ? Math.round((clientProjectCounts.filter((c: any) => c > 1).length / clientProjectCounts.length) * 100) : null
+
+                    // Days to get paid: issue date to FullyPaidOnDate on real Xero invoices —
+                    // how long cash actually takes to land once billed.
+                    const paySpans = allPayments
+                      .filter((p: any) => p.issueDate && p.paidDate)
+                      .map((p: any) => (new Date(p.paidDate).getTime() - new Date(p.issueDate).getTime()) / (1000 * 60 * 60 * 24))
+                      .filter((d: number) => d >= 0)
+                    const avgDaysToPay = paySpans.length ? paySpans.reduce((a: number, b: number) => a + b, 0) / paySpans.length : null
+
                     return (
                       <>
                         <div className="ec-form-grid-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 14 }}>
@@ -2238,6 +2274,12 @@ export default function StudioPortal() {
                           {kpi('Booked, next 30 days', `$${Math.round(bookedWithin(30)).toLocaleString()}`, 'Confirmed shoots')}
                           {kpi('Booked, next 90 days', `$${Math.round(bookedWithin(90)).toLocaleString()}`, 'Confirmed shoots')}
                           {kpi('Break-even / month', `$${Math.round(avgMonthlyExpense).toLocaleString()}`, `Avg. costs, last ${monthlyWindow.length}mo`)}
+                        </div>
+                        <div className="ec-form-grid-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 14 }}>
+                          {kpi('Avg turnaround', avgTurnaround != null ? `${avgTurnaround.toFixed(1)}d` : '—', avgTurnaround != null ? `Shoot to delivery · ${turnarounds.length} project${turnarounds.length !== 1 ? 's' : ''}` : 'Not enough delivered projects yet')}
+                          {kpi('Repeat clients', repeatRate != null ? `${repeatRate}%` : '—', repeatRate != null ? `Of ${clientProjectCounts.length} client${clientProjectCounts.length !== 1 ? 's' : ''} booked more than once` : 'Not enough data yet')}
+                          {kpi('Avg days to get paid', avgDaysToPay != null ? `${avgDaysToPay.toFixed(1)}d` : '—', avgDaysToPay != null ? `Invoice to payment · ${paySpans.length} invoice${paySpans.length !== 1 ? 's' : ''}` : 'No paid invoices with dates yet')}
+                          {kpi('Hours logged this month', monthlyHours != null ? `${monthlyHours.toFixed(1)}h` : '—', 'Across the whole team')}
                         </div>
                         <div className="ec-form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 28, alignItems: 'start' }}>
                           {listPanel('Revenue by client', topClients, clientTotal)}

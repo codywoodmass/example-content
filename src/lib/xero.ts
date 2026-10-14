@@ -76,7 +76,14 @@ export async function getValidXeroToken(supabase: SupabaseClient): Promise<{ acc
   return { accessToken: tokens.access_token, tenantId: conn.tenant_id }
 }
 
-export async function xeroFetch(accessToken: string, tenantId: string, path: string, options: RequestInit = {}) {
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+
+// The P&L page fires a lot of these in parallel across three separate API
+// routes (pnl/gst/cashflow), each making several Xero calls of their own —
+// easy to burst past Xero's per-minute rate limit on first load. Rather than
+// surface a 429 as a broken panel, wait for the Retry-After Xero sends (or a
+// short default) and retry a couple of times before giving up for real.
+export async function xeroFetch(accessToken: string, tenantId: string, path: string, options: RequestInit = {}, retries = 2) {
   const res = await fetch(`https://api.xero.com${path}`, {
     ...options,
     headers: {
@@ -87,6 +94,11 @@ export async function xeroFetch(accessToken: string, tenantId: string, path: str
       ...(options.headers || {}),
     },
   })
+  if (res.status === 429 && retries > 0) {
+    const retryAfter = parseInt(res.headers.get('Retry-After') || '2', 10)
+    await sleep(Math.min(retryAfter, 10) * 1000)
+    return xeroFetch(accessToken, tenantId, path, options, retries - 1)
+  }
   const data = await res.json().catch(() => ({}))
   return { ok: res.ok, status: res.status, data }
 }

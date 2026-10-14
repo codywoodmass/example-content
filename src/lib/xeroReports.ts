@@ -89,21 +89,26 @@ export async function getOutstandingInvoices(accessToken: string, tenantId: stri
 // The app's own invoices1 table is meant to mirror Xero but can drift out of
 // sync or simply not be the path payments actually arrived through — pulling
 // paid invoices straight from Xero (FullyPaidOnDate) is ground truth instead.
-export async function getRecentPayments(accessToken: string, tenantId: string, limit = 6): Promise<{ items: any[]; error: string | null }> {
+export async function getRecentPayments(accessToken: string, tenantId: string, limit = 50): Promise<{ items: any[]; error: string | null }> {
   try {
     // No `order` param here — UpdatedDateUTC isn't a documented orderable
     // field for this endpoint and an invalid one can fail the whole request;
     // sorting happens client-side below instead, on a field we know exists.
+    // limit is generous (not just the handful shown in the UI) so a caller
+    // can compute an average days-to-pay over a real sample, not just the
+    // most recent few.
     const where = encodeURIComponent('Type=="ACCREC" && Status=="PAID"')
     const res = await xeroFetch(accessToken, tenantId, `/api.xro/2.0/Invoices?where=${where}`)
     if (!res.ok) return { items: [], error: res.data?.Message || `Xero returned ${res.status}` }
     const items = (res.data?.Invoices || [])
       .map((inv: any) => {
         const paidDate = parseXeroDate(inv.FullyPaidOnDate) || parseXeroDate(inv.UpdatedDateUTC)
+        const issueDate = parseXeroDate(inv.DateString || inv.Date)
         return {
           invoiceId: inv.InvoiceID,
           invoiceNumber: inv.InvoiceNumber || '',
           contact: inv.Contact?.Name || 'Unknown',
+          issueDate: issueDate ? toDateStr(issueDate) : null,
           paidDate: paidDate ? toDateStr(paidDate) : null,
           amount: inv.Total || 0,
         }
@@ -163,10 +168,18 @@ export type GstSchedule = {
   netEstimate: number | null
 }
 
-// Shared by the GST tab (full schedule + breakdown) and the cash flow forecast
-// (just needs due dates + a $ estimate to drop into the right week) — one Xero
-// round trip for Organisation + one for TaxSummary, not duplicated per caller.
+// Shared by the GST tab (full schedule + breakdown) and the cash flow
+// forecast (just needs due dates + a $ estimate to drop into the right
+// week) — both routes get loaded in parallel on the same page view, so
+// without this cache each one independently re-fetches the same
+// Organisation + TaxSummary data, doubling the Xero calls for no reason and
+// contributing to hitting the rate limit on page load.
+const gstScheduleCache = new Map<string, { data: GstSchedule; expires: number }>()
+
 export async function getGstSchedule(accessToken: string, tenantId: string): Promise<GstSchedule> {
+  const cached = gstScheduleCache.get(tenantId)
+  if (cached && cached.expires > Date.now()) return cached.data
+
   const orgRes = await xeroFetch(accessToken, tenantId, '/api.xro/2.0/Organisation')
   const org = orgRes.data?.Organisations?.[0]
   const salesTaxBasis = org?.SalesTaxBasis || null
@@ -215,7 +228,9 @@ export async function getGstSchedule(accessToken: string, tenantId: string): Pro
   const netRow = breakdown.find(r => /payable|due|refund/i.test(r.label)) || breakdown[breakdown.length - 1]
   const netEstimate = netRow ? netRow.amount : null
 
-  return { needsReconnect, salesTaxBasis, salesTaxPeriod, periods: withDue, breakdown, netEstimate }
+  const result = { needsReconnect, salesTaxBasis, salesTaxPeriod, periods: withDue, breakdown, netEstimate }
+  if (!needsReconnect) gstScheduleCache.set(tenantId, { data: result, expires: Date.now() + 30000 })
+  return result
 }
 
 // BalanceSheet's "Bank" section lists each connected bank account as a Row with
