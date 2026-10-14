@@ -103,58 +103,35 @@ const SERVICES: Service[] = [
   },
 ]
 
-// Deterministic pseudo-random in [0, 1) from a string seed — used to give
-// each tile a stagger/z-index that's consistent for a given service+slot
-// (so the gallery doesn't visibly jiggle into a new arrangement if it
-// re-renders) while still differing from tile to tile and service to
-// service, without hand-maintaining a layout array per service.
-function seededRand(seed: string): number {
-  let h = 0
-  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0
-  return (h % 10000) / 10000
-}
-
-const TILE_COUNT = 6
+const TILE_COUNT = 8
 
 function ServiceModal({ service, onClose }: { service: Service; onClose: () => void }) {
-  const cursorRef = React.useRef<HTMLDivElement>(null)
   const tiles = React.useMemo(() => {
     const pool = shuffled(tilePoolFor(service.num))
-    return Array.from({ length: TILE_COUNT }, (_, i) => {
-      const seed = `${service.num}-${i}`
-      return {
-        ...pool[i % pool.length],
-        // -16..16px vertical stagger and alternating z — a flex-wrap row
-        // of overlapping tiles that still reads as "assembled" rather
-        // than a flat grid, and reflows naturally at any screen width
-        // instead of needing a separate mobile layout.
-        translateY: Math.round((seededRand(seed) - 0.5) * 32),
-        z: i % 2 === 0 ? 1 : 2,
-      }
-    })
+    return Array.from({ length: TILE_COUNT }, (_, i) => pool[i % pool.length])
   }, [service.num])
 
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(5,6,8,0.85)', backdropFilter: 'blur(8px)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 'clamp(16px, 3vw, 40px)' }}>
       <style>{`
-        @keyframes tileFloat { 0%, 100% { transform: translateY(var(--ty, 0)); } 50% { transform: translateY(calc(var(--ty, 0) - 8px)); } }
-        /* flex-wrap instead of absolute positioning — reflows naturally
-           at any screen width (this used to need a whole separate
-           mobile-only layout to avoid overflowing/overlapping a
-           phone-width modal). The negative right/bottom margins on each
-           tile are what create the overlap; the per-tile --ty variable
-           (set inline, varies per tile/service) staggers them vertically
-           so it reads as "assembled" rather than a flat grid. */
-        .tiles-wrap { display: flex; flex-wrap: wrap; align-items: flex-start; }
+        /* Vertical-strip accordion — each tile is an equal-width flex item
+           at rest; hovering one grows its flex-basis so it expands
+           sideways into its neighbours (which shrink to compensate, same
+           flex row, no layout reflow needed) rather than popping forward
+           over everything else. min-width: 0 is load-bearing: a flex item
+           otherwise refuses to shrink below its content's intrinsic
+           width, which is exactly what made an early version of this
+           gallery overflow its container. */
+        .tiles-wrap { display: flex; gap: 4px; height: clamp(260px, 34vw, 420px); }
         .service-tile {
-          position: relative; width: clamp(130px, 22vw, 260px); flex: 0 0 auto;
-          margin: 0 -16px 20px 0; border-radius: 6px; overflow: hidden;
-          transition: transform 0.3s ease, opacity 0.3s ease;
-          animation: tileFloat 6s ease-in-out infinite;
+          position: relative; flex: 1 1 0; min-width: 0; overflow: hidden;
+          border-radius: 4px; cursor: pointer;
+          transition: flex-grow 0.5s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.4s ease;
         }
-        /* No box-shadow — against the modal's own near-black background
-           a dark drop shadow just reads as an unwanted ring/border around
-           every tile rather than a lift. */
+        .service-tile:hover { flex-grow: 4; }
+        /* Dims the rest while one tile is expanded, so the expanded one
+           reads as the clear focus rather than just "slightly wider". */
+        .tiles-wrap:hover .service-tile:not(:hover) { opacity: 0.5; }
         /* object-fit: cover alone wasn't enough — several of the source
            thumbnails have a thin letterbox/matte baked into the image
            itself, which read as an unwanted "border" around the tile.
@@ -162,20 +139,18 @@ function ServiceModal({ service, onClose }: { service: Service; onClose: () => v
            of which photo lands in a given slot. */
         .service-tile .tile-img, .service-tile .tile-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border: none; transform: scale(1.2); }
         .service-tile .tile-video { opacity: 0; transition: opacity 0.3s ease; pointer-events: none; }
-        .tiles-wrap:hover .service-tile { opacity: 0.45; }
-        /* !important here is load-bearing: each tile already carries an
-           inline z-index (style={{zIndex: t.z}}), and an inline style
-           always beats a plain class rule for the same property — without
-           !important this hover rule would never actually win, so the
-           hovered tile could still end up tucked behind a higher-z tile. */
-        .service-tile:hover { opacity: 1 !important; transform: translateY(var(--ty, 0)) scale(1.15) !important; z-index: 999 !important; }
         .service-tile:hover .tile-video { opacity: 1; }
-        .tiles-wrap { cursor: none; }
         @media (max-width: 700px) {
-          /* No cursor to move on a touch device — the floating logo
-             cursor-follow effect is desktop-only by nature. */
-          .tiles-wrap { cursor: auto; }
-          .tiles-wrap-cursor { display: none !important; }
+          /* An accordion only makes sense as one continuous row — it can't
+             wrap. On a phone-width modal there isn't room for 8 equal
+             flex columns to stay legible, so this switches to a
+             horizontally-scrollable strip of fixed-width cards instead
+             (swipe sideways), dropping the hover-grow interaction, which
+             doesn't have a touch equivalent worth faking anyway. */
+          .tiles-wrap { overflow-x: auto; height: 280px; }
+          .service-tile { flex: 0 0 150px; }
+          .service-tile:hover { flex-grow: 0; }
+          .tiles-wrap:hover .service-tile:not(:hover) { opacity: 1; }
         }
       `}</style>
       <button
@@ -193,25 +168,10 @@ function ServiceModal({ service, onClose }: { service: Service; onClose: () => v
           <p style={{ fontSize: 15, color: 'rgba(200,194,187,0.6)', lineHeight: 1.8, maxWidth: 640, margin: 0 }}>{service.longDesc}</p>
         </div>
 
-        {/* FLOATING TILES */}
-        <div
-          className="tiles-wrap"
-          onMouseMove={e => {
-            if (cursorRef.current) {
-              cursorRef.current.style.left = e.clientX + 'px'
-              cursorRef.current.style.top = e.clientY + 'px'
-              cursorRef.current.style.opacity = '1'
-            }
-          }}
-          onMouseLeave={() => { if (cursorRef.current) cursorRef.current.style.opacity = '0' }}
-          style={{ margin: 'clamp(32px, 5vw, 56px) clamp(28px, 6vw, 64px) clamp(48px, 7vw, 72px)' }}
-        >
+        {/* ACCORDION STRIP GALLERY */}
+        <div className="tiles-wrap" style={{ margin: 'clamp(32px, 5vw, 56px) clamp(28px, 6vw, 64px) clamp(48px, 7vw, 72px)' }}>
           {tiles.map((t, i) => (
-            <div
-              key={i}
-              className="service-tile"
-              style={{ ['--ty' as string]: `${t.translateY}px`, transform: `translateY(${t.translateY}px)`, zIndex: t.z, aspectRatio: '4/3', animationDelay: `${i * 0.4}s` }}
-            >
+            <div key={i} className="service-tile">
               <img className="tile-img" src={t.img} alt="" />
               {t.vimeoId && (
                 <iframe
@@ -224,9 +184,6 @@ function ServiceModal({ service, onClose }: { service: Service; onClose: () => v
             </div>
           ))}
         </div>
-      </div>
-      <div ref={cursorRef} className="tiles-wrap-cursor" style={{ position: 'fixed', top: 0, left: 0, width: 46, height: 46, marginLeft: -23, marginTop: -23, pointerEvents: 'none', zIndex: 400, opacity: 0, transition: 'opacity 0.15s ease' }}>
-        <img src="/images/EX Logo EMBLEMPALE.png" alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', filter: 'drop-shadow(0 4px 10px rgba(0,0,0,0.5))' }} />
       </div>
     </div>
   )
