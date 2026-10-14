@@ -991,7 +991,7 @@ function ProjectsPageInner() {
       </div>
 
       <div style={{ padding: '10px 28px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', background: '#10141b' }}>
-        <TimeTrackerBar projects={projects} mine={tracker.mine} others={tracker.others} now={tracker.now} busy={tracker.busy} onStart={tracker.start} onStop={tracker.stop} />
+        <TimeTrackerBar projects={projects} person={tracker.person} mine={tracker.mine} others={tracker.others} now={tracker.now} busy={tracker.busy} onStart={tracker.start} onStop={tracker.stop} />
       </div>
 
       {/* ARCHIVED — always a flat list, production stage no longer applies */}

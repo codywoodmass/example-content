@@ -1079,7 +1079,7 @@ export default function StudioPortal() {
           <div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 28px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', background: '#14181F', position: 'sticky', top: 0, zIndex: 10 }}>
               <div>
-                <TimeTrackerBar projects={dashProjects} mine={tracker.mine} others={tracker.others} now={tracker.now} busy={tracker.busy} onStart={tracker.start} onStop={tracker.stop} />
+                <TimeTrackerBar projects={dashProjects} person={tracker.person} mine={tracker.mine} others={tracker.others} now={tracker.now} busy={tracker.busy} onStart={tracker.start} onStop={tracker.stop} />
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
                 {(bookingCount + changeRequestCount) > 0 && (
