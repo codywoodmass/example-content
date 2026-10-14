@@ -1526,8 +1526,9 @@ function ProjectsPageInner() {
                 </div>
               )}
               {modalTab === 'time' && (() => {
-                const totalHours = timeEntries.reduce((s, t) => s + t.hours, 0)
-                const byPhase = TIME_PHASES.map(phase => ({ phase, hours: timeEntries.filter(t => t.phase === phase).reduce((s, t) => s + t.hours, 0) }))
+                const round2 = (n: number) => Math.round(n * 100) / 100
+                const totalHours = round2(timeEntries.reduce((s, t) => s + t.hours, 0))
+                const byPhase = TIME_PHASES.map(phase => ({ phase, hours: round2(timeEntries.filter(t => t.phase === phase).reduce((s, t) => s + t.hours, 0)) }))
                 const effectiveRate = totalHours > 0 && modalProject.amount ? modalProject.amount / totalHours : null
                 const trackingThis = tracker.mine?.project_id === modalProject.id
                 const otherTrackingThis = tracker.others.filter(t => t.project_id === modalProject.id)
@@ -1554,13 +1555,16 @@ function ProjectsPageInner() {
                         <button disabled={tracker.busy || !!tracker.mine} title={tracker.mine ? 'Stop your current timer first' : ''} onClick={() => tracker.start(modalProject.id, 'Editing')} style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, border: '0.5px solid rgba(210,90,90,0.35)', color: 'rgba(210,90,90,0.9)', background: 'rgba(210,90,90,0.08)', cursor: tracker.busy || tracker.mine ? 'not-allowed' : 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>▶ Start tracking</button>
                       )}
                     </div>
-                    <div className="ec-form-grid-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 20 }}>
-                      <div style={{ background: 'rgba(200,194,187,0.03)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 6, padding: '12px 14px' }}>
+                    <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 12, marginBottom: 20 }}>
+                      <div style={{ flex: '1 1 140px', background: 'rgba(200,194,187,0.03)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 6, padding: '12px 14px' }}>
                         <div style={{ fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>Total hours</div>
-                        <div style={{ fontSize: 18, fontWeight: 600, color: '#C8C2BB' }}>{totalHours}</div>
+                        <div style={{ fontSize: 18, fontWeight: 600, color: '#C8C2BB' }}>{totalHours}h</div>
                       </div>
-                      {byPhase.map(({ phase, hours }) => (
-                        <div key={phase} style={{ background: 'rgba(200,194,187,0.03)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 6, padding: '12px 14px' }}>
+                      {/* Only phases that actually have time logged — showing every
+                          phase at 0h regardless of whether it's used on this project
+                          was just noise. */}
+                      {byPhase.filter(({ hours }) => hours > 0).map(({ phase, hours }) => (
+                        <div key={phase} style={{ flex: '1 1 140px', background: 'rgba(200,194,187,0.03)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 6, padding: '12px 14px' }}>
                           <div style={{ fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>{phase}</div>
                           <div style={{ fontSize: 18, fontWeight: 600, color: '#C8C2BB' }}>{hours}h</div>
                         </div>
@@ -1569,22 +1573,22 @@ function ProjectsPageInner() {
                     {effectiveRate != null && (
                       <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', marginBottom: 20 }}>Effective hourly rate: <span style={{ color: '#C8C2BB', fontWeight: 500 }}>${effectiveRate.toFixed(0)}/hr</span> (${modalProject.amount?.toLocaleString()} ÷ {totalHours}h)</div>
                     )}
-                    <div style={{ display: 'grid', gridTemplateColumns: '120px 90px 1fr 1fr 2fr 70px', gap: 8, alignItems: 'center', marginBottom: 14, padding: '10px 12px', background: 'rgba(200,194,187,0.03)', borderRadius: 6, border: '0.5px solid rgba(200,194,187,0.08)' }}>
-                      <select value={newTimeEntry.phase} onChange={e => setNewTimeEntry(p => ({ ...p, phase: e.target.value }))} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '7px 8px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }}>
+                    <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 8, marginBottom: 14, padding: '10px 12px', background: 'rgba(200,194,187,0.03)', borderRadius: 6, border: '0.5px solid rgba(200,194,187,0.08)' }}>
+                      <select value={newTimeEntry.phase} onChange={e => setNewTimeEntry(p => ({ ...p, phase: e.target.value }))} style={{ flex: '1 1 100px', minWidth: 0, background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '7px 8px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }}>
                         {TIME_PHASES.map(ph => <option key={ph} value={ph}>{ph}</option>)}
                       </select>
-                      <input type="number" min="0" step="0.25" placeholder="Hours" value={newTimeEntry.hours} onChange={e => setNewTimeEntry(p => ({ ...p, hours: e.target.value }))} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '7px 8px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }} />
+                      <input type="number" min="0" step="0.25" placeholder="Hours" value={newTimeEntry.hours} onChange={e => setNewTimeEntry(p => ({ ...p, hours: e.target.value }))} style={{ flex: '0 1 70px', minWidth: 0, background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '7px 8px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }} />
                       {teamOptions.length > 0 ? (
-                        <select value={newTimeEntry.person} onChange={e => setNewTimeEntry(p => ({ ...p, person: e.target.value }))} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '7px 8px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }}>
+                        <select value={newTimeEntry.person} onChange={e => setNewTimeEntry(p => ({ ...p, person: e.target.value }))} style={{ flex: '1 1 100px', minWidth: 0, background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '7px 8px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }}>
                           <option value="">Who?</option>
                           {teamOptions.map(t => <option key={t.name} value={t.name}>{t.name}</option>)}
                         </select>
                       ) : (
-                        <input placeholder="Who?" value={newTimeEntry.person} onChange={e => setNewTimeEntry(p => ({ ...p, person: e.target.value }))} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '7px 8px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }} />
+                        <input placeholder="Who?" value={newTimeEntry.person} onChange={e => setNewTimeEntry(p => ({ ...p, person: e.target.value }))} style={{ flex: '1 1 100px', minWidth: 0, background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '7px 8px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }} />
                       )}
-                      <input type="date" value={newTimeEntry.entry_date} onChange={e => setNewTimeEntry(p => ({ ...p, entry_date: e.target.value }))} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '7px 8px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }} />
-                      <input placeholder="Note (optional)" value={newTimeEntry.note} onChange={e => setNewTimeEntry(p => ({ ...p, note: e.target.value }))} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '7px 8px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }} />
-                      <button onClick={addTimeEntry} disabled={addingTimeEntry || !newTimeEntry.hours} style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 10px', borderRadius: 4, background: newTimeEntry.hours ? '#C8C2BB' : 'rgba(200,194,187,0.1)', color: newTimeEntry.hours ? '#111' : 'rgba(200,194,187,0.3)', border: 'none', cursor: newTimeEntry.hours ? 'pointer' : 'not-allowed', fontFamily: 'inherit', fontWeight: 500 }}>+ Log</button>
+                      <input type="date" value={newTimeEntry.entry_date} onChange={e => setNewTimeEntry(p => ({ ...p, entry_date: e.target.value }))} style={{ flex: '1 1 130px', minWidth: 0, background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '7px 8px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }} />
+                      <input placeholder="Note (optional)" value={newTimeEntry.note} onChange={e => setNewTimeEntry(p => ({ ...p, note: e.target.value }))} style={{ flex: '2 1 140px', minWidth: 0, background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '7px 8px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }} />
+                      <button onClick={addTimeEntry} disabled={addingTimeEntry || !newTimeEntry.hours} style={{ flexShrink: 0, fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 4, background: newTimeEntry.hours ? '#C8C2BB' : 'rgba(200,194,187,0.1)', color: newTimeEntry.hours ? '#111' : 'rgba(200,194,187,0.3)', border: 'none', cursor: newTimeEntry.hours ? 'pointer' : 'not-allowed', fontFamily: 'inherit', fontWeight: 500 }}>+ Log</button>
                     </div>
                     {timeEntries.length === 0 ? (
                       <div style={{ padding: '20px 14px', textAlign: 'center', fontSize: 12, color: 'rgba(200,194,187,0.25)' }}>No time logged yet</div>
