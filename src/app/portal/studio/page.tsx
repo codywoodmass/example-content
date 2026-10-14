@@ -2118,7 +2118,7 @@ export default function StudioPortal() {
                       ))}
                     </div>
                   </div>
-                  <div className="ec-form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 28 }}>
+                  <div className="ec-form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 28, alignItems: 'start' }}>
                     {pnl.monthly && pnl.monthly.length > 0 && (() => {
                       const monthlyWindow = pnl.monthly.slice(-pnlMonths)
                       return (
@@ -2373,7 +2373,7 @@ export default function StudioPortal() {
                   )}
 
                   {sectionLabel('Invoicing')}
-                  <div className="ec-form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                  <div className="ec-form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, alignItems: 'start' }}>
                     <div style={s.panel}>
                       <div style={{ padding: '14px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
