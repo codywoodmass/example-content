@@ -2320,17 +2320,6 @@ export default function StudioPortal() {
                           })}
                           <div style={{ padding: '8px 18px', fontSize: 9.5, color: 'rgba(200,194,187,0.25)' }}>Period dates assume a standard filing stagger — confirm against myIR.</div>
                         </div>
-                        <div style={s.panel}>
-                          <div style={{ padding: '14px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)' }}><span style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>Most recent period — Xero figures</span></div>
-                          {(gst.breakdown || []).length === 0 ? (
-                            <div style={{ padding: '14px 18px', fontSize: 12, color: 'rgba(200,194,187,0.25)' }}>{gst.needsReconnect ? 'Reconnect Xero to see this' : 'No data for this period'}</div>
-                          ) : gst.breakdown.map((row: any, i: number) => (
-                            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.06)' }}>
-                              <div style={{ fontSize: 12, color: '#C8C2BB' }}>{row.label}</div>
-                              <div style={{ fontSize: 13, fontWeight: 500, color: row.amount < 0 ? 'rgba(210,90,90,0.85)' : '#C8C2BB' }}>${row.amount.toLocaleString()}</div>
-                            </div>
-                          ))}
-                        </div>
                       </div>
                     </div>
                   )}
