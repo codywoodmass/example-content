@@ -2219,16 +2219,16 @@ export default function StudioPortal() {
                     }
                     const monthlyWindow = (pnl.monthly || []).slice(-pnlMonths)
                     const avgMonthlyExpense = monthlyWindow.length ? monthlyWindow.reduce((s: number, m: any) => s + (m.revenue - m.net), 0) / monthlyWindow.length : 0
-                    const byClient: Record<string, number> = {}
                     const byPackage: Record<string, number> = {}
                     dashProjects.forEach((p: any) => {
                       if (!p.amount) return
-                      if (p.client) byClient[p.client] = (byClient[p.client] || 0) + p.amount
                       const m = /^PACKAGE:\s*(.+)$/m.exec(p.deliverables || '')
                       const pkg = m ? m[1].trim() : null
                       if (pkg) byPackage[pkg] = (byPackage[pkg] || 0) + p.amount
                     })
-                    const topClients = Object.entries(byClient).sort((a, b) => b[1] - a[1]).slice(0, 5)
+                    // Real Xero invoices, not the portal's own booked/quoted amount — what
+                    // was actually billed can drift from what was originally quoted.
+                    const topClients: [string, number][] = (pnl.revenueByClient || []).slice(0, 5).map((r: any) => [r.label, r.amount])
                     const topPackages = Object.entries(byPackage).sort((a, b) => b[1] - a[1]).slice(0, 5)
                     const kpi = (label: string, value: string, sub: string) => (
                       <div style={kpiCard('rgba(25,30,40,0.6)', 'rgba(200,194,187,0.12)')}>
@@ -2251,7 +2251,7 @@ export default function StudioPortal() {
                         ))}
                       </div>
                     )
-                    const clientTotal = Object.values(byClient).reduce((a, b) => a + b, 0)
+                    const clientTotal = (pnl.revenueByClient || []).reduce((s: number, r: any) => s + r.amount, 0)
                     const packageTotal = Object.values(byPackage).reduce((a, b) => a + b, 0)
 
                     // Turnaround: shoot day to actual delivery, not the target delivery_due —
@@ -2294,7 +2294,7 @@ export default function StudioPortal() {
                           {kpi('Hours logged this month', monthlyHours != null ? `${monthlyHours.toFixed(1)}h` : '—', 'Across the whole team')}
                         </div>
                         <div className="ec-form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 28, alignItems: 'start' }}>
-                          {listPanel('Revenue by client', topClients, clientTotal)}
+                          {listPanel('Revenue by client (Xero, YTD)', topClients, clientTotal)}
                           {listPanel('Revenue by package', topPackages, packageTotal)}
                         </div>
                       </>
@@ -2340,12 +2340,6 @@ export default function StudioPortal() {
                     <div style={{ ...s.panel, padding: '24px 18px', textAlign: 'center', fontSize: 12, color: 'rgba(200,194,187,0.3)', marginBottom: 28 }}>Loading GST info...</div>
                   ) : (
                     <div style={{ marginBottom: 28 }}>
-                      {gst.needsReconnect && (
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, background: 'rgba(210,175,80,0.08)', border: '0.5px solid rgba(210,175,80,0.25)', borderRadius: 7, padding: '12px 16px', marginBottom: 14 }}>
-                          <div style={{ fontSize: 12, color: 'rgba(210,175,80,0.9)' }}>Reconnect Xero to pull in real GST figures below — this connection predates the GST reporting scope.</div>
-                          <button onClick={() => connectXero()} style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 4, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>Reconnect →</button>
-                        </div>
-                      )}
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                         <div style={s.panel}>
                           <div style={{ padding: '14px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -2398,13 +2392,39 @@ export default function StudioPortal() {
                         return d >= start && d <= end
                       }).reduce((s: number, p: any) => s + p.amount, 0)
                     })
+
+                    // Recurring costs — rent, wages, subscriptions, insurance etc — mostly
+                    // never pass through Xero's Bills/ACCPAY module at all (paid by direct
+                    // debit/payroll, coded straight to an expense account on bank
+                    // reconciliation), which is exactly why "expected out" didn't line up
+                    // when it only counted outstanding bills. A trailing 6-month average of
+                    // real Xero P&L expenses — independent of the Trends 3/6/12mo toggle, so
+                    // this baseline doesn't shift just because someone clicked that elsewhere
+                    // — turned into a weekly figure is a much closer approximation of what
+                    // actually goes out most weeks.
+                    const baselineWindow = (pnl.monthly || []).slice(-6)
+                    const avgMonthlyRevenue = baselineWindow.length ? baselineWindow.reduce((s: number, m: any) => s + m.revenue, 0) / baselineWindow.length : 0
+                    const avgMonthlyExpense = baselineWindow.length ? baselineWindow.reduce((s: number, m: any) => s + (m.revenue - m.net), 0) / baselineWindow.length : 0
+                    const WEEKS_PER_MONTH = 4.345
+                    const weeklyRecurringExpense = avgMonthlyExpense / WEEKS_PER_MONTH
+
+                    // GST at NZ's 15% rate on net (revenue − expenses) for the filing
+                    // period that's due, rather than a figure parsed out of a Xero report
+                    // whose exact layout for this org was never confirmed — mechanically
+                    // grounded in the same P&L data as everything else on this page.
+                    const GST_PERIOD_MONTHS_MAP: Record<string, number> = { MONTHLY: 1, '1MONTHLY': 1, '2MONTHLY': 2, '6MONTHLY': 6, QUARTERLY1: 3, QUARTERLY2: 3, QUARTERLY3: 3, ANNUALLY: 12 }
+                    const gstPeriodMonths = (gst?.salesTaxPeriod && GST_PERIOD_MONTHS_MAP[gst.salesTaxPeriod]) || 2
+                    const gstForPeriod = 0.15 * gstPeriodMonths * (avgMonthlyRevenue - avgMonthlyExpense)
+
                     let running = cashflow.hasBalance ? (weeks[0]?.opening ?? 0) : 0
                     const merged = weeks.map((w: any, i: number) => {
                       const booked = bookedByWeek[i] || 0
+                      const expectedOut = w.expectedOut + weeklyRecurringExpense
+                      const gstAmount = w.gstPeriodDue ? gstForPeriod : 0
                       const opening = running
-                      const closing = opening + w.expectedIn + booked - w.expectedOut - w.gstAmount
+                      const closing = opening + w.expectedIn + booked - expectedOut - gstAmount
                       running = closing
-                      return { ...w, booked, opening, closing }
+                      return { ...w, booked, expectedOut, gstAmount, opening, closing }
                     })
                     return (
                     <div style={{ marginBottom: 28 }}>
@@ -2418,7 +2438,7 @@ export default function StudioPortal() {
                         <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 860 }}>
                           <thead>
                             <tr>
-                              {['Week', cashflow.hasBalance ? 'Opening' : null, 'Invoiced in (Xero)', 'Booked (not yet invoiced)', 'Expected out', 'GST', cashflow.hasBalance ? 'Closing' : null].filter(Boolean).map(h => (
+                              {['Week', cashflow.hasBalance ? 'Opening' : null, 'Invoiced in (Xero)', 'Booked (not yet invoiced)', 'Expected out', 'GST (15%)', cashflow.hasBalance ? 'Closing' : null].filter(Boolean).map(h => (
                                 <th key={h as string} style={{ fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.3)', padding: '10px 14px', textAlign: h === 'Week' ? 'left' : 'right', borderBottom: '0.5px solid rgba(200,194,187,0.09)', fontWeight: 400, whiteSpace: 'nowrap' }}>{h}</th>
                               ))}
                             </tr>
@@ -2431,14 +2451,14 @@ export default function StudioPortal() {
                                 <td style={{ padding: '9px 14px', borderBottom: '0.5px solid rgba(200,194,187,0.06)', fontSize: 12, color: 'rgba(100,200,130,0.85)', textAlign: 'right' }}>{w.expectedIn ? '+$' + Math.round(w.expectedIn).toLocaleString() : '—'}</td>
                                 <td style={{ padding: '9px 14px', borderBottom: '0.5px solid rgba(200,194,187,0.06)', fontSize: 12, color: w.booked ? 'rgba(100,150,220,0.85)' : 'rgba(200,194,187,0.25)', textAlign: 'right' }}>{w.booked ? '+$' + Math.round(w.booked).toLocaleString() : '—'}</td>
                                 <td style={{ padding: '9px 14px', borderBottom: '0.5px solid rgba(200,194,187,0.06)', fontSize: 12, color: 'rgba(210,90,90,0.85)', textAlign: 'right' }}>{w.expectedOut ? '−$' + Math.round(w.expectedOut).toLocaleString() : '—'}</td>
-                                <td style={{ padding: '9px 14px', borderBottom: '0.5px solid rgba(200,194,187,0.06)', fontSize: 12, color: w.gstAmount ? 'rgba(210,175,80,0.85)' : 'rgba(200,194,187,0.25)', textAlign: 'right' }}>{w.gstAmount ? (w.gstAmount > 0 ? '−' : '+') + '$' + Math.round(Math.abs(w.gstAmount)).toLocaleString() + (w.gstEstimated ? ' (est.)' : '') : '—'}</td>
+                                <td style={{ padding: '9px 14px', borderBottom: '0.5px solid rgba(200,194,187,0.06)', fontSize: 12, color: w.gstAmount ? 'rgba(210,175,80,0.85)' : 'rgba(200,194,187,0.25)', textAlign: 'right' }}>{w.gstAmount ? (w.gstAmount > 0 ? '−' : '+') + '$' + Math.round(Math.abs(w.gstAmount)).toLocaleString() + ' (est.)' : '—'}</td>
                                 {cashflow.hasBalance && <td style={{ padding: '9px 14px', borderBottom: '0.5px solid rgba(200,194,187,0.06)', fontSize: 12, fontWeight: 500, color: w.closing < 0 ? 'rgba(210,90,90,0.95)' : '#fff', textAlign: 'right' }}>${Math.round(w.closing).toLocaleString()}</td>}
                               </tr>
                             ))}
                           </tbody>
                         </table>
                         <div style={{ padding: '10px 14px', fontSize: 9.5, color: 'rgba(200,194,187,0.25)', borderTop: '0.5px solid rgba(200,194,187,0.06)' }}>
-                          "Invoiced in" is real outstanding Xero invoices, assumed paid on their due date. "Booked" is confirmed portal work with no invoice yet (by delivery/shoot date) — money not yet billed, so its timing is a rougher guess. GST is estimated from the last filed period. Doesn't include payroll or income tax, which aren't tracked here. Treat as a guide, not a guarantee.
+                          "Invoiced in" is real outstanding Xero invoices, assumed paid on their due date. "Booked" is confirmed portal work with no invoice yet (by delivery/shoot date) — money not yet billed, so its timing is a rougher guess. "Expected out" is outstanding Xero bills plus a weekly estimate (trailing 6mo average ÷ 4.345) for recurring costs like rent, wages and subscriptions, which mostly don't pass through Xero's Bills module at all. GST is 15% of (revenue − expenses) for the period that's due, from the same P&L figures. Doesn't include income tax, which isn't tracked here. Treat as a guide, not a guarantee.
                         </div>
                       </div>
                     </div>

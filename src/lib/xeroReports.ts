@@ -32,26 +32,6 @@ export function parseSection(section: any) {
   return { items, total }
 }
 
-// Walks any Xero "Reports" response generically (Header/Section/Row/SummaryRow is
-// a shape shared across every report type) and surfaces whatever Xero itself
-// labels each summary/row line as, rather than assuming specific row labels for a
-// report whose exact layout hasn't been seen firsthand.
-export function walkReportRows(rows: any[]): { label: string; amount: number }[] {
-  const out: { label: string; amount: number }[] = []
-  const walk = (list: any[]) => {
-    for (const row of list || []) {
-      if (row.RowType === 'SummaryRow' || row.RowType === 'Row') {
-        const label = row.Cells?.[0]?.Value
-        const amount = cellValue(row.Cells, row.Cells.length - 1)
-        if (label && typeof amount === 'number') out.push({ label, amount })
-      }
-      if (row.Rows) walk(row.Rows)
-    }
-  }
-  walk(rows)
-  return out
-}
-
 // Pulls real outstanding invoices/bills straight from Xero (AUTHORISED = sent/
 // received and awaiting payment in Xero's terms) rather than relying only on our
 // own invoices1 tracking, which can drift out of sync if a client pays directly.
@@ -122,6 +102,36 @@ export async function getRecentPayments(accessToken: string, tenantId: string, l
   }
 }
 
+// Revenue by client straight from Xero's real invoices rather than the
+// portal's own projects1.amount — the portal's figure is what was booked/
+// quoted, which can drift from what was actually invoiced (different amount
+// negotiated, project cancelled after booking, etc). Date-filtered
+// client-side rather than via Xero's `where` clause, whose date-comparison
+// syntax (DateTime(y,m,d) function calls, not ISO strings) is easy to get
+// subtly wrong — fetching all non-draft invoices and filtering here is more
+// robust for what's normally a modest invoice volume.
+export async function getRevenueByClient(accessToken: string, tenantId: string, fromDate: string, toDate: string): Promise<{ label: string; amount: number }[]> {
+  try {
+    const where = encodeURIComponent('Type=="ACCREC"&&Status!="DRAFT"&&Status!="DELETED"&&Status!="VOIDED"')
+    const res = await xeroFetch(accessToken, tenantId, `/api.xro/2.0/Invoices?where=${where}`)
+    if (!res.ok) return []
+    const byClient: Record<string, number> = {}
+    for (const inv of res.data?.Invoices || []) {
+      const d = parseXeroDate(inv.DateString || inv.Date)
+      if (!d) continue
+      const dateStr = toDateStr(d)
+      if (dateStr < fromDate || dateStr > toDate) continue
+      const name = inv.Contact?.Name || 'Unknown'
+      // SubTotal (ex-GST) — GST is a pass-through liability, not revenue.
+      byClient[name] = (byClient[name] || 0) + (inv.SubTotal || 0)
+    }
+    return Object.entries(byClient).map(([label, amount]) => ({ label, amount })).sort((a, b) => b.amount - a.amount)
+  } catch (e) {
+    console.error('Xero revenue-by-client fetch error:', e)
+    return []
+  }
+}
+
 // IRD only offers 1-, 2- and 6-monthly GST filing for NZ orgs; this maps Xero's
 // SalesTaxPeriod values to a period length in months.
 export const GST_PERIOD_MONTHS: Record<string, number> = {
@@ -160,20 +170,22 @@ export function buildGstPeriods(periodMonths: number, count: number) {
 
 export type GstPeriod = { start: string; end: string; dueDate: string; daysUntilDue: number; status: 'upcoming' | 'overdue' | 'filing_window' | 'filed' }
 export type GstSchedule = {
-  needsReconnect: boolean
   salesTaxBasis: string | null
   salesTaxPeriod: string | null
   periods: GstPeriod[]
-  breakdown: { label: string; amount: number }[]
-  netEstimate: number | null
 }
 
-// Shared by the GST tab (full schedule + breakdown) and the cash flow
-// forecast (just needs due dates + a $ estimate to drop into the right
-// week) — both routes get loaded in parallel on the same page view, so
-// without this cache each one independently re-fetches the same
-// Organisation + TaxSummary data, doubling the Xero calls for no reason and
-// contributing to hitting the rate limit on page load.
+// Shared by the GST tab and the cash flow forecast (both need the filing
+// period due dates) — both routes get loaded in parallel on the same page
+// view, so without this cache each one independently re-fetches the same
+// Organisation data, doubling the Xero call for no reason and contributing
+// to hitting the rate limit on page load.
+//
+// This used to also fetch a TaxSummary report per call for a $ breakdown and
+// a "net GST owed" estimate, but that figure is now computed mechanically
+// from P&L revenue/expenses at NZ's 15% rate instead (see the cash flow
+// forecast) — more reliable than parsing a report whose exact row layout
+// for this org was never confirmed, and one fewer Xero call per load.
 const gstScheduleCache = new Map<string, { data: GstSchedule; expires: number }>()
 
 export async function getGstSchedule(accessToken: string, tenantId: string): Promise<GstSchedule> {
@@ -210,26 +222,8 @@ export async function getGstSchedule(accessToken: string, tenantId: string): Pro
     }
   })
 
-  // Only the most recently completed period's figures are worth a live Xero
-  // call — older ones in the list are just schedule context.
-  const mostRecentCompleted = [...periods].reverse().find(p => p.end <= now)
-  let breakdown: { label: string; amount: number }[] = []
-  let needsReconnect = false
-  if (mostRecentCompleted) {
-    const res = await xeroFetch(accessToken, tenantId, `/api.xro/2.0/Reports/TaxSummary?fromDate=${toDateStr(mostRecentCompleted.start)}&toDate=${toDateStr(mostRecentCompleted.end)}`)
-    if (res.ok) breakdown = walkReportRows(res.data?.Reports?.[0]?.Rows || [])
-    else if (res.status === 403 || res.status === 401) needsReconnect = true
-  }
-
-  // Best-effort pick of a single "what we owe/get back" figure: Xero's own
-  // label is trusted over guessing which row is semantically "the" total —
-  // prefer one that says payable/due/refund, else fall back to whichever
-  // summary line came last (reports conventionally put the grand total there).
-  const netRow = breakdown.find(r => /payable|due|refund/i.test(r.label)) || breakdown[breakdown.length - 1]
-  const netEstimate = netRow ? netRow.amount : null
-
-  const result = { needsReconnect, salesTaxBasis, salesTaxPeriod, periods: withDue, breakdown, netEstimate }
-  if (!needsReconnect) gstScheduleCache.set(tenantId, { data: result, expires: Date.now() + 30000 })
+  const result = { salesTaxBasis, salesTaxPeriod, periods: withDue }
+  gstScheduleCache.set(tenantId, { data: result, expires: Date.now() + 30000 })
   return result
 }
 

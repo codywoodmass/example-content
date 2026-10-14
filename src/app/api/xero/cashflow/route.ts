@@ -38,30 +38,29 @@ export async function GET(req: NextRequest) {
     items.filter(it => it.dueDate && new Date(it.dueDate + 'T12:00:00') >= start && new Date(it.dueDate + 'T12:00:00') <= end)
       .reduce((s, it) => s + it.amountDue, 0)
 
-  let running = bank.balance ?? 0
+  // Opening balance for week 0 is the only one that matters from here — the
+  // client folds in portal bookings and a recurring-expense/GST estimate
+  // (computed from the P&L data it already has loaded) on top of this and
+  // recomputes the running balance itself, same pattern as the "Booked"
+  // column. GST's $ amount isn't computed here at all any more: there's no
+  // "was this filed" or reliable net-liability signal from Xero's public
+  // API, so client-side 15%-of-(revenue−expenses) against real P&L figures
+  // is more honest than a figure parsed out of a report whose layout for
+  // this org was never confirmed. This just flags which week a due date falls in.
   const weekRows = weeks.map(w => {
     const expectedIn = sumDueInRange(ar.items, w.start, w.end)
     const expectedOut = sumDueInRange(ap.items, w.start, w.end)
-    const gstPeriod = gst.periods.find(p => {
+    const gstPeriodDue = gst.periods.some(p => {
       const d = new Date(p.dueDate + 'T12:00:00')
       return d >= w.start && d <= w.end
     })
-    // The actual liability for a period that hasn't ended yet isn't known — this
-    // reuses the most recently filed period's net figure as a rough stand-in,
-    // flagged via gstEstimated rather than presented as a real number.
-    const gstAmount = gstPeriod ? (gst.netEstimate || 0) : 0
-    const opening = running
-    const closing = opening + expectedIn - expectedOut - gstAmount
-    running = closing
     return {
       weekStart: toDateStr(w.start),
       weekEnd: toDateStr(w.end),
-      opening,
+      opening: bank.balance ?? 0,
       expectedIn,
       expectedOut,
-      gstAmount,
-      gstEstimated: !!gstPeriod,
-      closing,
+      gstPeriodDue,
     }
   })
 

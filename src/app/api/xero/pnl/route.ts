@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireStudioUser, getValidXeroToken, xeroFetch } from '@/lib/xero'
-import { toDateStr, cellValue, parseSection, getOutstandingInvoices, getRecentPayments } from '@/lib/xeroReports'
+import { toDateStr, cellValue, parseSection, getOutstandingInvoices, getRecentPayments, getRevenueByClient } from '@/lib/xeroReports'
 
 // Xero's ProfitAndLoss report defaults to the CURRENT MONTH when called with no
 // date params, not the financial year to date as its own UI report implies — an
@@ -132,6 +132,7 @@ export async function GET(req: NextRequest) {
 
   const fyStart = await getFinancialYearStart(token.accessToken, token.tenantId)
   const todayStr = toDateStr(new Date())
+  const revenueByClientPromise = getRevenueByClient(token.accessToken, token.tenantId, fyStart, todayStr)
   const { ok, status, data } = await xeroFetch(token.accessToken, token.tenantId, `/api.xro/2.0/Reports/ProfitAndLoss?fromDate=${fyStart}&toDate=${todayStr}`)
   if (!ok) return NextResponse.json({ connected: true, error: data?.Message || 'Xero report request failed' }, { status })
 
@@ -161,7 +162,7 @@ export async function GET(req: NextRequest) {
   }
   if (!netProfit) netProfit = revenue.total - expenses.total
 
-  const [monthly, cashFlow, outstandingInvoices, recentPayments] = await Promise.all([monthlyPromise, cashFlowPromise, outstandingPromise, recentPaymentsPromise])
+  const [monthly, cashFlow, outstandingInvoices, recentPayments, revenueByClient] = await Promise.all([monthlyPromise, cashFlowPromise, outstandingPromise, recentPaymentsPromise, revenueByClientPromise])
 
   return NextResponse.json({
     connected: true,
@@ -176,5 +177,6 @@ export async function GET(req: NextRequest) {
     outstandingInvoices,
     recentPayments: recentPayments.items,
     recentPaymentsError: recentPayments.error,
+    revenueByClient,
   })
 }
