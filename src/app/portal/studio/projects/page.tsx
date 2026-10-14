@@ -755,8 +755,18 @@ function ProjectsPageInner() {
       try {
         const res = await xeroAuthedFetch('/api/xero/invoice', { method: 'POST', body: JSON.stringify({ invoiceId: invoice.id }) })
         const xeroData = await res.json()
-        if (!res.ok && xeroData.error !== 'Xero is not connected') notify('Xero sync failed: ' + xeroData.error, 'error')
-      } catch (e) { console.warn('Xero sync error:', e) }
+        // "Xero is not connected" used to be swallowed entirely here — meaning
+        // a project could get marked as sent-to-invoice with zero indication
+        // it never actually reached Xero as a draft. Now flagged either way,
+        // just with a softer tone when Xero being disconnected is the reason.
+        if (!res.ok) {
+          if (xeroData.error === 'Xero is not connected') notify('Saved locally — Xero isn\'t connected, so no draft invoice was created there', 'error')
+          else notify('Xero sync failed: ' + xeroData.error, 'error')
+        }
+      } catch (e) {
+        console.warn('Xero sync error:', e)
+        notify('Could not reach Xero to sync this invoice — it was saved locally only', 'error')
+      }
     } finally {
       setSendingInvoice(false)
     }

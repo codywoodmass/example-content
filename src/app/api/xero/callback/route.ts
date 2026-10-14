@@ -29,12 +29,28 @@ export async function GET(req: NextRequest) {
     headers: { Authorization: `Bearer ${tokens.access_token}` },
   })
   const connections = await connRes.json()
-  const tenant = Array.isArray(connections) ? connections[0] : null
-  if (!tenant) return NextResponse.redirect(new URL('/portal/studio?xero=error&detail=' + encodeURIComponent('no Xero organisation connected'), req.url))
+  const connectionsList: any[] = Array.isArray(connections) ? connections : []
 
   const authedSupabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
     global: { headers: { Authorization: `Bearer ${pending.access_token}` } },
   })
+
+  // Read the previously connected org (if any) *before* wiping it, and
+  // prefer re-matching it over just taking connections[0]. If this Xero
+  // login has access to more than one organisation (e.g. an old/unused org
+  // from earlier testing that was never revoked), Xero's connections list
+  // isn't guaranteed to put the intended one first — blindly taking [0] on
+  // every reconnect (this app has needed several, for scope upgrades) risks
+  // silently landing on a different org each time, with everything still
+  // *looking* connected. Sticking to the same tenant on reconnect avoids
+  // that; a genuinely first-time connect still falls back to [0] since
+  // there's nothing to pin to yet.
+  const { data: existingConn } = await authedSupabase.from('xero_connection').select('tenant_id').order('connected_at', { ascending: false }).limit(1).maybeSingle()
+  const tenant = (existingConn && connectionsList.find(c => c.tenantId === existingConn.tenant_id)) || connectionsList[0]
+  if (!tenant) return NextResponse.redirect(new URL('/portal/studio?xero=error&detail=' + encodeURIComponent('no Xero organisation connected'), req.url))
+  if (connectionsList.length > 1) {
+    console.warn('Xero login has multiple connected organisations:', connectionsList.map(c => c.tenantName).join(', '), '— selected:', tenant.tenantName)
+  }
 
   // Single business, single connection — clear any previous row before storing the new one.
   await authedSupabase.from('xero_connection').delete().neq('tenant_id', '')

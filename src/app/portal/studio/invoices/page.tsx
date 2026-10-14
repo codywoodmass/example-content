@@ -21,11 +21,22 @@ type Invoice = {
   xero_invoice_id: string | null
 }
 
+// Every call site treats this as fire-and-forget (never awaits or checks the
+// return value), so a failed Xero sync had no way to ever surface — a line
+// item could get edited here with the change never actually reaching the
+// draft invoice sitting in Xero, and nothing would say so.
 async function syncXero(invoiceId: string) {
   try {
     const res = await xeroAuthedFetch('/api/xero/invoice', { method: 'POST', body: JSON.stringify({ invoiceId }) })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      if (data.error !== 'Xero is not connected') notify('Xero sync failed: ' + (data.error || 'unknown error'), 'error')
+    }
     return res.ok
-  } catch (e) { return false }
+  } catch (e) {
+    notify('Could not reach Xero to sync this invoice', 'error')
+    return false
+  }
 }
 
 const STATUS_COLORS: Record<string, { color: string; bg: string }> = {
