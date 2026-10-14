@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { NextRequest, NextResponse } from 'next/server'
+import { getWeatherForAddress } from '@/lib/weather'
 
 export const maxDuration = 60
 
@@ -21,37 +22,7 @@ async function getCoordinates(address: string) {
   }
 }
 
-async function getWeather(date: string, address: string) {
-  try {
-    const geoRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(address.split(',').pop()?.trim() || 'New Zealand')}&count=1&country=NZ`)
-    const geoData = await geoRes.json()
-    if (!geoData.results || geoData.results.length === 0) return null
-
-    const { latitude, longitude } = geoData.results[0]
-
-    const weatherRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,weathercode&timezone=Pacific/Auckland&start_date=${date}&end_date=${date}`)
-    const weatherData = await weatherRes.json()
-
-    if (!weatherData.daily || !weatherData.daily.time || weatherData.daily.time.length === 0) return null
-
-    const weatherCodes: Record<number, string> = {
-      0: 'Clear sky', 1: 'Mainly clear', 2: 'Partly cloudy', 3: 'Overcast',
-      45: 'Fog', 48: 'Fog', 51: 'Light drizzle', 53: 'Drizzle', 55: 'Heavy drizzle',
-      61: 'Light rain', 63: 'Rain', 65: 'Heavy rain', 71: 'Light snow', 73: 'Snow',
-      80: 'Light showers', 81: 'Showers', 82: 'Heavy showers', 95: 'Thunderstorm',
-    }
-
-    return {
-      maxTemp: weatherData.daily.temperature_2m_max[0],
-      minTemp: weatherData.daily.temperature_2m_min[0],
-      rainChance: weatherData.daily.precipitation_probability_max[0],
-      condition: weatherCodes[weatherData.daily.weathercode[0]] || 'Unknown',
-    }
-  } catch (e) {
-    console.error('Weather fetch error:', e)
-    return null
-  }
-}
+const getWeather = getWeatherForAddress
 
 export async function POST(req: NextRequest) {
   try {

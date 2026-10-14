@@ -90,10 +90,15 @@ export async function POST(req: NextRequest) {
       { email: 'cody@examplecontent.co.nz', displayName: 'Example Content' },
       ...(validClientEmail ? [{ email: validClientEmail, displayName: 'Client' }] : []),
     ],
+    // No email override here on purpose — that's now handled by the
+    // shoot-reminders cron (studio digest at ~6am NZT same day, client
+    // reminder with weather the day before) instead of Google's native
+    // per-event reminder, which fired 24h before the event's own start
+    // time (i.e. a different, unpredictable hour every day) rather than a
+    // fixed daily time.
     reminders: {
       useDefault: false,
       overrides: [
-        { method: 'email', minutes: 24 * 60 },
         { method: 'popup', minutes: 60 },
       ],
     },
