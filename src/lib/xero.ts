@@ -12,7 +12,7 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 // scopes are silently rejected with invalid_scope by Xero's /authorize endpoint for
 // newer apps, failing the whole request before any login screen (Xero doesn't say
 // which scope was bad) — confirmed by bisection testing.
-export const XERO_SCOPES = 'openid profile email accounting.invoices accounting.reports.profitandloss.read accounting.reports.banksummary.read accounting.contacts offline_access'
+export const XERO_SCOPES = 'openid profile email accounting.invoices accounting.reports.profitandloss.read accounting.reports.banksummary.read accounting.reports.taxsummary.read accounting.reports.balancesheet.read accounting.contacts offline_access'
 
 export function xeroAuthorizeUrl(state: string, codeChallenge: string, scopeOverride?: string) {
   const params = new URLSearchParams({

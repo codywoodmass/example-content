@@ -10,6 +10,9 @@ import { notify, confirmDialog, ToastHost, ConfirmHost } from '@/lib/notify'
 import { useRouter } from 'next/navigation'
 import LoadingScreen from '@/components/public/LoadingScreen'
 import LabeledNotes from '@/components/studio/LabeledNotes'
+import { useTimeTracking, mondayOf } from '@/lib/timeTracking'
+import TimeTrackerBar from '@/components/studio/TimeTrackerBar'
+import RingProgress from '@/components/studio/RingProgress'
 
 function StudioDriveFolder({ driveUrl }: { driveUrl: string }) {
   const [files, setFiles] = React.useState<any[]>([])
@@ -219,6 +222,19 @@ export default function StudioPortal() {
   const [videoFeedbackList, setVideoFeedbackList] = useState<any[]>([])
   const [respondingToCR, setRespondingToCR] = useState<any>(null)
   const [dashProjects, setDashProjects] = useState<any[]>([])
+  const tracker = useTimeTracking()
+  const [weeklyTimeTotals, setWeeklyTimeTotals] = useState<{ person: string; hours: number }[]>([])
+
+  async function loadWeeklyTimeTotals() {
+    const mondayStr = localDateKey(mondayOf(new Date()))
+    const { data } = await supabase.from('time_entries').select('person, hours').gte('entry_date', mondayStr)
+    const byPerson: Record<string, number> = {}
+    ;(data || []).forEach((row: any) => {
+      const p = row.person || 'Unassigned'
+      byPerson[p] = (byPerson[p] || 0) + row.hours
+    })
+    setWeeklyTimeTotals(Object.entries(byPerson).map(([person, hours]) => ({ person, hours })))
+  }
   const [modalProject, setModalProject] = useState<any>(null)
   const [weekOffset, setWeekOffset] = useState(0)
   const [weatherByDate, setWeatherByDate] = useState<Record<string, { akl: any; wko: any }>>({})
@@ -325,6 +341,14 @@ export default function StudioPortal() {
   const [pnlLoading, setPnlLoading] = useState(false)
   const [recentInvoices, setRecentInvoices] = useState<any[]>([])
   const [pnlMonths, setPnlMonths] = useState(6)
+  const [gst, setGst] = useState<any>(null)
+  const [gstLoading, setGstLoading] = useState(false)
+  const [cashflow, setCashflow] = useState<any>(null)
+  const [cashflowLoading, setCashflowLoading] = useState(false)
+  const [weeklyTarget, setWeeklyTarget] = useState<number | null>(null)
+  const [weeklyTargetDraft, setWeeklyTargetDraft] = useState('')
+  const [editingTarget, setEditingTarget] = useState(false)
+  const [savingTarget, setSavingTarget] = useState(false)
 
   async function loadXeroStatus() {
     const res = await xeroAuthedFetch('/api/xero/status')
@@ -345,6 +369,47 @@ export default function StudioPortal() {
       setPnl(data)
     } finally {
       setPnlLoading(false)
+    }
+  }
+
+  async function loadGst() {
+    setGstLoading(true)
+    try {
+      const res = await xeroAuthedFetch('/api/xero/gst')
+      const data = await res.json()
+      setGst(data)
+    } finally {
+      setGstLoading(false)
+    }
+  }
+
+  async function loadCashflow() {
+    setCashflowLoading(true)
+    try {
+      const res = await xeroAuthedFetch('/api/xero/cashflow')
+      const data = await res.json()
+      setCashflow(data)
+    } finally {
+      setCashflowLoading(false)
+    }
+  }
+
+  async function loadWeeklyTarget() {
+    const { data } = await supabase.from('studio_settings').select('value').eq('key', 'revenue_target_weekly').maybeSingle()
+    if (data?.value != null) setWeeklyTarget(Number(data.value))
+  }
+
+  async function saveWeeklyTarget() {
+    const n = parseFloat(weeklyTargetDraft)
+    if (!Number.isFinite(n) || n < 0) { notify('Enter a valid weekly target', 'error'); return }
+    setSavingTarget(true)
+    try {
+      const { error } = await supabase.from('studio_settings').upsert({ key: 'revenue_target_weekly', value: n, updated_at: new Date().toISOString() })
+      if (error) { notify('Error saving target: ' + error.message, 'error'); return }
+      setWeeklyTarget(n)
+      setEditingTarget(false)
+    } finally {
+      setSavingTarget(false)
     }
   }
 
@@ -404,6 +469,14 @@ export default function StudioPortal() {
     }
   }, [])
   useEffect(() => { if (activeView === 'finance' && xeroStatus?.connected) loadPnl(pnlMonths) }, [activeView, xeroStatus?.connected, pnlMonths])
+  useEffect(() => { if (activeView === 'finance' && xeroStatus?.connected) loadGst() }, [activeView, xeroStatus?.connected])
+  useEffect(() => { if (activeView === 'finance' && xeroStatus?.connected) loadCashflow() }, [activeView, xeroStatus?.connected])
+  useEffect(() => { if (activeView === 'finance' && userRole === 'studio') loadWeeklyTarget() }, [activeView, userRole])
+  useEffect(() => {
+    loadWeeklyTimeTotals()
+    const id = setInterval(loadWeeklyTimeTotals, 60000)
+    return () => clearInterval(id)
+  }, [])
 
   const [briefData, setBriefData] = useState<Record<number, any>>({})
   const [briefLoading, setBriefLoading] = useState<Record<number, boolean>>({})
@@ -1006,6 +1079,7 @@ export default function StudioPortal() {
           <div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 28px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', background: '#14181F', position: 'sticky', top: 0, zIndex: 10 }}>
               <div>
+                <TimeTrackerBar projects={dashProjects} mine={tracker.mine} others={tracker.others} now={tracker.now} busy={tracker.busy} onStart={tracker.start} onStop={tracker.stop} />
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
                 {(bookingCount + changeRequestCount) > 0 && (
@@ -1061,7 +1135,7 @@ export default function StudioPortal() {
                     const in14 = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000)
                     const recentBookings = [...dashProjects].filter(p => p.from_booking).sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0,5)
                     const nearDelivery = [...dashProjects].filter(p => p.delivery_due && new Date(p.delivery_due) >= now && new Date(p.delivery_due) <= in14).sort((a,b) => new Date(a.delivery_due).getTime() - new Date(b.delivery_due).getTime()).slice(0,5)
-                    const postProd = [...dashProjects].filter(p => p.stage === 'Post-Production' || p.stage === 'Revisions').slice(0,5)
+                    const awaitingShoot = [...dashProjects].filter(p => p.stage === 'Pre-Production' && p.shoot_date).sort((a,b) => new Date(a.shoot_date).getTime() - new Date(b.shoot_date).getTime()).slice(0,5)
 
                     function ProjectRow({ p, last }: { p: any; last: boolean }) {
                       const sc = SC[p.stage] || {color:'#C8C2BB',bg:'rgba(200,194,187,0.1)'}
@@ -1086,7 +1160,7 @@ export default function StudioPortal() {
                         {[
                           { label: 'Recent bookings', projects: recentBookings, color: 'rgba(100,150,220,0.9)' },
                           { label: 'Approaching delivery', projects: nearDelivery, color: 'rgba(220,120,60,0.9)' },
-                          { label: 'Post-production', projects: postProd, color: 'rgba(210,90,90,0.9)' },
+                          { label: 'Awaiting shoot', projects: awaitingShoot, color: 'rgba(210,90,90,0.9)' },
                         ].map(({ label, projects, color }) => (
                           <div key={label}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
@@ -1134,6 +1208,35 @@ export default function StudioPortal() {
                   )}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                  {(() => {
+                    const liveFor = (person: string) => tracker.timers.find(t => t.person === person)
+                    const people = Array.from(new Set([...weeklyTimeTotals.map(w => w.person), ...tracker.timers.map(t => t.person)]))
+                    const WEEK_REF_HOURS = 40
+                    const RING_COLORS = ['rgba(100,200,130,0.85)', 'rgba(100,150,220,0.85)', 'rgba(210,175,80,0.85)']
+                    if (people.length === 0) return null
+                    return (
+                      <div>
+                        <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 14 }}>Time tracking — this week</div>
+                        <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, padding: '18px 16px', display: 'flex', justifyContent: 'space-around', flexWrap: 'wrap' as const, gap: 16 }}>
+                          {people.map((person, i) => {
+                            const stored = weeklyTimeTotals.find(w => w.person === person)?.hours || 0
+                            const live = liveFor(person)
+                            const liveHours = live ? (tracker.now - new Date(live.started_at).getTime()) / 3600000 : 0
+                            const total = stored + liveHours
+                            return (
+                              <div key={person} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                                <div style={{ position: 'relative' }}>
+                                  <RingProgress pct={(total / WEEK_REF_HOURS) * 100} color={RING_COLORS[i % RING_COLORS.length]} label={`${total.toFixed(1)}h`} sublabel={`of ${WEEK_REF_HOURS}h`} />
+                                  {live && <span style={{ position: 'absolute', top: -2, right: -2, width: 9, height: 9, borderRadius: '50%', background: 'rgba(100,200,130,0.9)', boxShadow: '0 0 6px rgba(100,200,130,0.8)', border: '2px solid #1A1F28' }} />}
+                                </div>
+                                <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.55)', textAlign: 'center' as const }}>{person}{live && <span style={{ color: 'rgba(100,200,130,0.8)', display: 'block', fontSize: 9 }}>tracking now</span>}</div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )
+                  })()}
                   {userRole === 'studio' && (
                     <div>
                       <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 14 }}>Booking requests</div>
@@ -1204,23 +1307,42 @@ export default function StudioPortal() {
                   const monday = new Date(today); monday.setDate(today.getDate() - dow + weekOffset * 7)
                   const days = Array.from({ length: 7 }, (_, i) => { const d = new Date(monday); d.setDate(monday.getDate() + i); return d })
                   const hasAnyData = days.some(d => weatherByDate[localDateKey(d)])
-                  const COL_W = 64
+                  const CARD_W = 118
 
-                  const RegionRow = ({ label, icon, pick }: { label: string; icon: string; pick: (w: any) => any }) => (
-                    <div style={{ display: 'grid', gridTemplateColumns: `56px repeat(7, ${COL_W}px)`, alignItems: 'center' }}>
-                      <div style={{ fontSize: 10, color: 'rgba(200,194,187,0.5)' }}>{icon} {label}</div>
+                  const Thermo = ({ color }: { color: string }) => (
+                    <svg width="9" height="15" viewBox="0 0 9 15" style={{ flexShrink: 0 }}>
+                      <rect x="3" y="1" width="3" height="8" rx="1.5" fill="none" stroke={color} strokeWidth="1" />
+                      <circle cx="4.5" cy="11.5" r="2.5" fill={color} />
+                      <rect x="3.5" y="4" width="2" height="6" fill={color} />
+                    </svg>
+                  )
+
+                  const RegionCards = ({ pick }: { pick: (w: any) => any }) => (
+                    <div style={{ display: 'flex', gap: 8, minWidth: CARD_W * 7 + 6 * 8 }}>
                       {days.map(d => {
                         const key = localDateKey(d)
                         const w = pick(weatherByDate[key])
+                        const isToday = key === localDateKey(today)
+                        const dayLabel = isToday ? 'Today' : d.toLocaleDateString('en-NZ', { weekday: 'short' })
                         return (
-                          <div key={key} style={{ textAlign: 'center', padding: '4px 2px', borderLeft: '0.5px solid rgba(200,194,187,0.06)' }}>
+                          <div key={key} style={{ flex: `0 0 ${CARD_W}px`, textAlign: 'center', padding: '12px 8px', borderRadius: 8, background: isToday ? 'rgba(100,150,220,0.12)' : 'rgba(200,194,187,0.03)', border: '0.5px solid ' + (isToday ? 'rgba(100,150,220,0.3)' : 'rgba(200,194,187,0.07)') }}>
+                            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: isToday ? 'rgba(130,170,230,0.95)' : 'rgba(200,194,187,0.6)' }}>{dayLabel}</div>
+                            <div style={{ fontSize: 9, color: 'rgba(200,194,187,0.3)', marginBottom: 8 }}>{d.getDate()} {d.toLocaleDateString('en-NZ', { month: 'short' }).toUpperCase()}</div>
                             {w ? (
                               <>
-                                <div style={{ fontSize: 10, color: '#C8C2BB' }}>{weatherIcon(w.code)} {Math.round(w.max)}/{Math.round(w.min)}°</div>
-                                <div style={{ fontSize: 9, color: w.rain >= 50 ? 'rgba(100,150,220,0.85)' : 'rgba(200,194,187,0.35)' }}>💧{w.rain}% 💨{Math.round(w.wind)}</div>
+                                <div style={{ fontSize: 26, marginBottom: 8, lineHeight: 1 }}>{weatherIcon(w.code)}</div>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginBottom: 4 }}>
+                                  <Thermo color="rgba(220,90,90,0.9)" />
+                                  <span style={{ fontSize: 13, color: '#C8C2BB', fontWeight: 500 }}>{Math.round(w.max)}°</span>
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginBottom: 8 }}>
+                                  <Thermo color="rgba(100,150,220,0.9)" />
+                                  <span style={{ fontSize: 13, color: 'rgba(200,194,187,0.65)', fontWeight: 500 }}>{Math.round(w.min)}°</span>
+                                </div>
+                                <div style={{ fontSize: 9.5, color: w.rain >= 50 ? 'rgba(100,150,220,0.85)' : 'rgba(200,194,187,0.3)' }}>💧 {w.rain}% · 💨 {Math.round(w.wind)}</div>
                               </>
                             ) : (
-                              <div style={{ fontSize: 9, color: 'rgba(200,194,187,0.15)', padding: '6px 0' }}>—</div>
+                              <div style={{ fontSize: 10, color: 'rgba(200,194,187,0.15)', padding: '28px 0' }}>—</div>
                             )}
                           </div>
                         )
@@ -1231,19 +1353,19 @@ export default function StudioPortal() {
                   return (
                     <div style={{ marginBottom: 28 }}>
                       <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 10 }}>Weather — week ahead</div>
-                      <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, padding: '10px 12px', overflowX: 'auto' }}>
+                      <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, padding: 14, overflowX: 'auto' }}>
                         {!hasAnyData ? (
                           <div style={{ padding: '6px 0', fontSize: 12, color: 'rgba(200,194,187,0.25)', textAlign: 'center' }}>Forecast unavailable for this week</div>
                         ) : (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 56 + COL_W * 7 }}>
-                            <div style={{ display: 'grid', gridTemplateColumns: `56px repeat(7, ${COL_W}px)` }}>
-                              <div />
-                              {days.map(d => (
-                                <div key={localDateKey(d)} style={{ textAlign: 'center', fontSize: 8.5, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)' }}>{d.toLocaleDateString('en-NZ', { weekday: 'short' })} {d.getDate()}</div>
-                              ))}
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+                            <div>
+                              <div style={{ fontSize: 10, color: 'rgba(200,194,187,0.5)', marginBottom: 8 }}>🏙️ Auckland</div>
+                              <RegionCards pick={(w: any) => w?.akl} />
                             </div>
-                            <RegionRow label="AKL" icon="🏙️" pick={(w: any) => w?.akl} />
-                            <RegionRow label="WKO" icon="🚜" pick={(w: any) => w?.wko} />
+                            <div>
+                              <div style={{ fontSize: 10, color: 'rgba(200,194,187,0.5)', marginBottom: 8 }}>🚜 Waikato</div>
+                              <RegionCards pick={(w: any) => w?.wko} />
+                            </div>
                           </div>
                         )}
                       </div>
@@ -1854,7 +1976,6 @@ export default function StudioPortal() {
               <button onClick={() => setActiveView('dashboard')} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>← Dashboard</button>
             </div>
             <div style={{ padding: 28, textAlign: 'center', paddingTop: 80 }}>
-              <div style={{ fontSize: 40, marginBottom: 16, opacity: 0.3 }}>🔒</div>
               <div style={{ fontSize: 14, color: 'rgba(200,194,187,0.4)' }}>You don't have access to financial information.</div>
             </div>
           </div>
@@ -1863,7 +1984,6 @@ export default function StudioPortal() {
           <div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 28px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', background: '#14181F' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div style={{ width: 34, height: 34, borderRadius: 8, background: 'rgba(100,200,130,0.1)', border: '0.5px solid rgba(100,200,130,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15 }}>💰</div>
                 <div>
                   <div style={{ fontSize: 14, fontWeight: 500, color: '#fff' }}>P&L Overview</div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>
@@ -1881,7 +2001,6 @@ export default function StudioPortal() {
               <div style={{ padding: 28, textAlign: 'center', paddingTop: 80, color: 'rgba(200,194,187,0.4)', fontSize: 13 }}>Checking Xero connection...</div>
             ) : !xeroStatus?.connected ? (
               <div style={{ padding: 28, textAlign: 'center', paddingTop: 80 }}>
-                <div style={{ fontSize: 40, marginBottom: 16, opacity: 0.3 }}>📊</div>
                 <div style={{ fontSize: 14, color: 'rgba(200,194,187,0.4)', marginBottom: 16 }}>Connect Xero to see your real P&L here</div>
                 <button onClick={() => connectXero()} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '9px 20px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>Connect Xero →</button>
               </div>
@@ -1899,22 +2018,21 @@ export default function StudioPortal() {
               const outstandingTotal = pnl.outstandingInvoices?.outstandingTotal || 0
               const overdueTotal = pnl.outstandingInvoices?.overdueTotal || 0
               const recentPayments = recentInvoices.filter((i: any) => i.status === 'paid').sort((a: any, b: any) => new Date(b.paid_at || b.created_at).getTime() - new Date(a.paid_at || a.created_at).getTime()).slice(0, 6)
-              const sectionLabel = (icon: string, text: string) => (
+              const periodLabel = (p: string | null) => ({ MONTHLY: 'monthly', '1MONTHLY': 'monthly', '2MONTHLY': '2-monthly', '6MONTHLY': '6-monthly', QUARTERLY1: 'quarterly', QUARTERLY2: 'quarterly', QUARTERLY3: 'quarterly', ANNUALLY: 'annual' } as Record<string, string>)[p || ''] || (p ? p.toLowerCase() : '')
+              const sectionLabel = (text: string) => (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                  <span style={{ fontSize: 12 }}>{icon}</span>
                   <span style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase' as const, color: 'rgba(200,194,187,0.35)' }}>{text}</span>
                 </div>
               )
 
               return (
                 <div style={{ padding: 28 }}>
-                  {sectionLabel('📌', 'Overview')}
+                  {sectionLabel('Overview')}
                   <div className="ec-form-grid-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 28 }}>
                     <div style={kpiCard('rgba(30,50,38,0.6)', 'rgba(100,200,130,0.2)')}>
                       {glow('rgba(100,200,130,0.5)')}
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
                         <span style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)' }}>YTD Revenue</span>
-                        <span style={{ fontSize: 14 }}>📈</span>
                       </div>
                       <div style={{ fontSize: 24, fontWeight: 600, color: '#fff' }}>${(pnl.revenueTotal || 0).toLocaleString()}</div>
                     </div>
@@ -1922,7 +2040,6 @@ export default function StudioPortal() {
                       {glow('rgba(210,90,90,0.5)')}
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
                         <span style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)' }}>YTD Expenses</span>
-                        <span style={{ fontSize: 14 }}>📉</span>
                       </div>
                       <div style={{ fontSize: 24, fontWeight: 600, color: '#fff' }}>${(pnl.expensesTotal || 0).toLocaleString()}</div>
                     </div>
@@ -1930,7 +2047,6 @@ export default function StudioPortal() {
                       {glow('rgba(100,150,220,0.5)')}
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
                         <span style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)' }}>Net Profit YTD</span>
-                        <span style={{ fontSize: 14 }}>💎</span>
                       </div>
                       <div style={{ fontSize: 24, fontWeight: 600, color: '#fff' }}>${(pnl.netProfit || 0).toLocaleString()}</div>
                       <div style={{ fontSize: 10, color: 'rgba(100,150,220,0.7)', marginTop: 4 }}>{margin}% margin</div>
@@ -1939,16 +2055,61 @@ export default function StudioPortal() {
                       {glow('rgba(210,175,80,0.5)')}
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
                         <span style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(210,175,80,0.6)' }}>Forecasted Pipeline</span>
-                        <span style={{ fontSize: 14 }}>⏳</span>
                       </div>
                       <div style={{ fontSize: 24, fontWeight: 600, color: 'rgba(210,175,80,0.95)' }}>${pipelineTotal.toLocaleString()}</div>
                       <div style={{ fontSize: 10, color: 'rgba(200,194,187,0.3)', marginTop: 4 }}>{unbilled.length} not yet invoiced</div>
                     </div>
                   </div>
 
+                  {(() => {
+                    const monthlyAll = pnl.monthly || []
+                    const thisMonth = monthlyAll[monthlyAll.length - 1]
+                    const monthToDate = thisMonth?.revenue || 0
+                    const monthlyTarget = weeklyTarget != null ? weeklyTarget * 4.345 : null
+                    const now = new Date()
+                    const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
+                    const daysLeft = daysInMonth - now.getDate()
+                    const weeksLeft = Math.max(daysLeft / 7, 1 / 7)
+                    const pctAchieved = monthlyTarget ? Math.round((monthToDate / monthlyTarget) * 100) : null
+                    const remaining = monthlyTarget != null ? Math.max(0, monthlyTarget - monthToDate) : null
+                    const requiredWeekly = remaining != null ? remaining / weeksLeft : null
+                    return (
+                      <div style={{ ...s.panel, padding: '16px 20px', marginBottom: 24 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: weeklyTarget != null && !editingTarget ? 12 : 0 }}>
+                          <span style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>Monthly revenue target</span>
+                          {editingTarget ? (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <span style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>$</span>
+                              <input autoFocus type="number" min="0" step="50" value={weeklyTargetDraft} onChange={e => setWeeklyTargetDraft(e.target.value)} placeholder="Weekly target" style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '6px 8px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: 100 }} />
+                              <span style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>/ week</span>
+                              <button disabled={savingTarget} onClick={saveWeeklyTarget} style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '6px 12px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: savingTarget ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>{savingTarget ? 'Saving...' : 'Save'}</button>
+                              <button onClick={() => setEditingTarget(false)} style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '6px 12px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.15)', color: 'rgba(200,194,187,0.4)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+                            </div>
+                          ) : (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                              {weeklyTarget != null && <span style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>${weeklyTarget.toLocaleString()} / week · ~${Math.round(monthlyTarget || 0).toLocaleString()} / month</span>}
+                              <button onClick={() => { setWeeklyTargetDraft(weeklyTarget != null ? String(weeklyTarget) : ''); setEditingTarget(true) }} style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '5px 10px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.15)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>{weeklyTarget != null ? 'Edit' : '+ Set target'}</button>
+                            </div>
+                          )}
+                        </div>
+                        {weeklyTarget != null && !editingTarget && (
+                          <>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+                              <span style={{ fontSize: 18, fontWeight: 600, color: '#fff' }}>${Math.round(monthToDate).toLocaleString()} <span style={{ fontSize: 12, fontWeight: 400, color: 'rgba(200,194,187,0.35)' }}>of ${Math.round(monthlyTarget || 0).toLocaleString()}</span></span>
+                              <span style={{ fontSize: 13, fontWeight: 500, color: (pctAchieved || 0) >= 100 ? 'rgba(100,200,130,0.9)' : 'rgba(200,194,187,0.6)' }}>{pctAchieved}%</span>
+                            </div>
+                            <div style={{ height: 5, background: 'rgba(200,194,187,0.06)', borderRadius: 3, marginBottom: 8 }}>
+                              <div style={{ height: '100%', width: `${Math.min(100, pctAchieved || 0)}%`, background: (pctAchieved || 0) >= 100 ? 'rgba(100,200,130,0.7)' : 'rgba(100,150,220,0.6)', borderRadius: 3 }} />
+                            </div>
+                            <div style={{ fontSize: 10.5, color: 'rgba(200,194,187,0.3)' }}>{daysLeft > 0 ? `Need ~$${Math.round(requiredWeekly || 0).toLocaleString()}/week for the rest of this month to hit target` : 'Month complete'}</div>
+                          </>
+                        )}
+                      </div>
+                    )
+                  })()}
+
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ fontSize: 12 }}>📊</span>
                       <span style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)' }}>Trends</span>
                     </div>
                     <div style={{ display: 'flex', gap: 3, background: 'rgba(200,194,187,0.05)', border: '0.5px solid rgba(200,194,187,0.1)', borderRadius: 6, padding: 3 }}>
@@ -1958,13 +2119,29 @@ export default function StudioPortal() {
                     </div>
                   </div>
                   <div className="ec-form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 28 }}>
-                    {pnl.monthly && pnl.monthly.length > 0 && (
+                    {pnl.monthly && pnl.monthly.length > 0 && (() => {
+                      const monthlyWindow = pnl.monthly.slice(-pnlMonths)
+                      return (
                       <div style={s.panel}>
-                        <div style={{ padding: '14px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)' }}><span style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>Monthly income</span></div>
+                        <div style={{ padding: '14px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>Monthly income</span>
+                            {(() => {
+                              const n = pnl.monthly.length
+                              const thisM = pnl.monthly[n - 1], lastM = pnl.monthly[n - 2], lastYearM = n >= 13 ? pnl.monthly[0] : null
+                              const last3 = pnl.monthly.slice(-3)
+                              const avg3 = last3.length ? last3.reduce((s: number, m: any) => s + m.revenue, 0) / last3.length : 0
+                              const pct = (a: number, b: number) => b ? Math.round(((a - b) / b) * 100) : null
+                              const vsLast = lastM ? pct(thisM.revenue, lastM.revenue) : null
+                              const vsYear = lastYearM ? pct(thisM.revenue, lastYearM.revenue) : null
+                              return <span style={{ fontSize: 9.5, color: 'rgba(200,194,187,0.3)' }}>3mo avg ${Math.round(avg3).toLocaleString()}{vsLast !== null && <> · {vsLast >= 0 ? '+' : ''}{vsLast}% vs last mo</>}{vsYear !== null && <> · {vsYear >= 0 ? '+' : ''}{vsYear}% vs last yr</>}</span>
+                            })()}
+                          </div>
+                        </div>
                         <div style={{ padding: '20px 20px 16px', display: 'flex', alignItems: 'flex-end', gap: 10, height: 160, borderBottom: '0.5px solid rgba(200,194,187,0.06)', margin: '0 4px' }}>
                           {(() => {
-                            const max = Math.max(...pnl.monthly.map((m: any) => m.revenue), 1)
-                            return pnl.monthly.map((m: any) => (
+                            const max = Math.max(...monthlyWindow.map((m: any) => m.revenue), 1)
+                            return monthlyWindow.map((m: any) => (
                               <div key={m.label} title={`$${m.revenue.toLocaleString()}`} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, height: '100%', justifyContent: 'flex-end' }}>
                                 <div style={{ fontSize: 9, color: 'rgba(200,194,187,0.5)', whiteSpace: 'nowrap' }}>${m.revenue >= 1000 ? Math.round(m.revenue / 1000) + 'k' : m.revenue.toLocaleString()}</div>
                                 <div style={{ width: '100%', maxWidth: 34, height: `${Math.max(3, (m.revenue / max) * 100)}%`, background: m.net >= 0 ? 'linear-gradient(180deg, rgba(100,200,130,0.75), rgba(100,200,130,0.35))' : 'linear-gradient(180deg, rgba(210,90,90,0.75), rgba(210,90,90,0.35))', borderRadius: '4px 4px 0 0' }} />
@@ -1973,12 +2150,13 @@ export default function StudioPortal() {
                           })()}
                         </div>
                         <div style={{ display: 'flex', gap: 10, padding: '10px 20px 4px' }}>
-                          {pnl.monthly.map((m: any) => (
+                          {monthlyWindow.map((m: any) => (
                             <div key={m.label} style={{ flex: 1, textAlign: 'center', fontSize: 9, color: 'rgba(200,194,187,0.3)', letterSpacing: '0.03em', textTransform: 'uppercase' as const, whiteSpace: 'nowrap' as const }}>{m.label.split(' ')[0]}</div>
                           ))}
                         </div>
                       </div>
-                    )}
+                      )
+                    })()}
                     {pnl.cashFlow && pnl.cashFlow.length > 0 && (
                       <div style={s.panel}>
                         <div style={{ padding: '14px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -2010,8 +2188,69 @@ export default function StudioPortal() {
                     )}
                   </div>
 
-                  {sectionLabel('🧾', 'Xero P&L breakdown')}
-                  <div className="ec-form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+                  {sectionLabel('Performance')}
+                  {(() => {
+                    const shotProjects = dashProjects.filter((p: any) => p.amount && p.shoot_date)
+                    const avgPerShoot = shotProjects.length ? shotProjects.reduce((s: number, p: any) => s + p.amount, 0) / shotProjects.length : 0
+                    const now = new Date()
+                    const bookedWithin = (days: number) => {
+                      const end = new Date(now.getTime() + days * 24 * 60 * 60 * 1000)
+                      return dashProjects.filter((p: any) => p.amount && p.shoot_date && new Date(p.shoot_date + 'T12:00:00') >= now && new Date(p.shoot_date + 'T12:00:00') <= end).reduce((s: number, p: any) => s + p.amount, 0)
+                    }
+                    const monthlyWindow = (pnl.monthly || []).slice(-pnlMonths)
+                    const avgMonthlyExpense = monthlyWindow.length ? monthlyWindow.reduce((s: number, m: any) => s + (m.revenue - m.net), 0) / monthlyWindow.length : 0
+                    const byClient: Record<string, number> = {}
+                    const byPackage: Record<string, number> = {}
+                    dashProjects.forEach((p: any) => {
+                      if (!p.amount) return
+                      if (p.client) byClient[p.client] = (byClient[p.client] || 0) + p.amount
+                      const m = /^PACKAGE:\s*(.+)$/m.exec(p.deliverables || '')
+                      const pkg = m ? m[1].trim() : null
+                      if (pkg) byPackage[pkg] = (byPackage[pkg] || 0) + p.amount
+                    })
+                    const topClients = Object.entries(byClient).sort((a, b) => b[1] - a[1]).slice(0, 5)
+                    const topPackages = Object.entries(byPackage).sort((a, b) => b[1] - a[1]).slice(0, 5)
+                    const kpi = (label: string, value: string, sub: string) => (
+                      <div style={kpiCard('rgba(25,30,40,0.6)', 'rgba(200,194,187,0.12)')}>
+                        {glow('rgba(200,194,187,0.3)')}
+                        <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)', marginBottom: 10 }}>{label}</div>
+                        <div style={{ fontSize: 22, fontWeight: 600, color: '#fff' }}>{value}</div>
+                        <div style={{ fontSize: 10, color: 'rgba(200,194,187,0.3)', marginTop: 4 }}>{sub}</div>
+                      </div>
+                    )
+                    const listPanel = (title: string, rows: [string, number][], total: number) => (
+                      <div style={s.panel}>
+                        <div style={{ padding: '14px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)' }}><span style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>{title}</span></div>
+                        {rows.length === 0 ? (
+                          <div style={{ padding: '14px 18px', fontSize: 12, color: 'rgba(200,194,187,0.25)' }}>Not enough data yet</div>
+                        ) : rows.map(([label, amount]) => (
+                          <div key={label} style={{ padding: '10px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.06)' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}><div style={{ fontSize: 12, color: '#C8C2BB' }}>{label}</div><div style={{ fontSize: 13, fontWeight: 500, color: '#C8C2BB' }}>${amount.toLocaleString()}</div></div>
+                            <div style={{ height: 3, background: 'rgba(200,194,187,0.06)', borderRadius: 2 }}><div style={{ height: '100%', width: `${total ? Math.min(100, (amount / total) * 100) : 0}%`, background: 'rgba(100,150,220,0.5)', borderRadius: 2 }} /></div>
+                          </div>
+                        ))}
+                      </div>
+                    )
+                    const clientTotal = Object.values(byClient).reduce((a, b) => a + b, 0)
+                    const packageTotal = Object.values(byPackage).reduce((a, b) => a + b, 0)
+                    return (
+                      <>
+                        <div className="ec-form-grid-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 14 }}>
+                          {kpi('Avg revenue / shoot', `$${Math.round(avgPerShoot).toLocaleString()}`, `${shotProjects.length} shoot${shotProjects.length !== 1 ? 's' : ''} on record`)}
+                          {kpi('Booked, next 30 days', `$${Math.round(bookedWithin(30)).toLocaleString()}`, 'Confirmed shoots')}
+                          {kpi('Booked, next 90 days', `$${Math.round(bookedWithin(90)).toLocaleString()}`, 'Confirmed shoots')}
+                          {kpi('Break-even / month', `$${Math.round(avgMonthlyExpense).toLocaleString()}`, `Avg. costs, last ${monthlyWindow.length}mo`)}
+                        </div>
+                        <div className="ec-form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 28, alignItems: 'start' }}>
+                          {listPanel('Revenue by client', topClients, clientTotal)}
+                          {listPanel('Revenue by package', topPackages, packageTotal)}
+                        </div>
+                      </>
+                    )
+                  })()}
+
+                  {sectionLabel('Xero P&L breakdown')}
+                  <div className="ec-form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14, alignItems: 'start' }}>
                     <div style={s.panel}>
                       <div style={{ padding: '14px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)' }}><span style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>Revenue</span></div>
                       {(pnl.revenueBreakdown || []).map((row: any) => (
@@ -2044,7 +2283,96 @@ export default function StudioPortal() {
                     <div style={{ fontSize: 30, fontWeight: 600, color: 'rgba(100,200,130,0.9)' }}>${(pnl.netProfit || 0).toLocaleString()}</div>
                   </div>
 
-                  {sectionLabel('💳', 'Invoicing')}
+                  {sectionLabel('GST')}
+                  {gstLoading || !gst ? (
+                    <div style={{ ...s.panel, padding: '24px 18px', textAlign: 'center', fontSize: 12, color: 'rgba(200,194,187,0.3)', marginBottom: 28 }}>Loading GST info...</div>
+                  ) : (
+                    <div style={{ marginBottom: 28 }}>
+                      {gst.needsReconnect && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, background: 'rgba(210,175,80,0.08)', border: '0.5px solid rgba(210,175,80,0.25)', borderRadius: 7, padding: '12px 16px', marginBottom: 14 }}>
+                          <div style={{ fontSize: 12, color: 'rgba(210,175,80,0.9)' }}>Reconnect Xero to pull in real GST figures below — this connection predates the GST reporting scope.</div>
+                          <button onClick={() => connectXero()} style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 4, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>Reconnect →</button>
+                        </div>
+                      )}
+                      <div className="ec-form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, alignItems: 'start' }}>
+                        <div style={s.panel}>
+                          <div style={{ padding: '14px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>Filing schedule</span>
+                            <span style={{ fontSize: 10, color: 'rgba(200,194,187,0.35)' }}>{gst.salesTaxBasis ? gst.salesTaxBasis.toLowerCase() + ' basis' : ''}{gst.salesTaxPeriod ? ` · ${periodLabel(gst.salesTaxPeriod)}` : ''}</span>
+                          </div>
+                          {(gst.periods || []).map((p: any) => {
+                            const urgent = p.status !== 'upcoming' && p.daysUntilDue <= 7
+                            return (
+                              <div key={p.end} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.06)' }}>
+                                <div>
+                                  <div style={{ fontSize: 12, color: '#C8C2BB' }}>{new Date(p.start + 'T12:00:00').toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' })} – {new Date(p.end + 'T12:00:00').toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' })}</div>
+                                  <div style={{ fontSize: 10, color: 'rgba(200,194,187,0.35)', marginTop: 2 }}>{p.status === 'upcoming' ? 'In progress' : p.status === 'overdue' ? 'Overdue' : 'Filing window'}</div>
+                                </div>
+                                <div style={{ textAlign: 'right' }}>
+                                  <div style={{ fontSize: 12, color: urgent ? 'rgba(210,90,90,0.9)' : 'rgba(200,194,187,0.6)' }}>Due {new Date(p.dueDate + 'T12:00:00').toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' })}</div>
+                                  <div style={{ fontSize: 10, color: urgent ? 'rgba(210,90,90,0.7)' : 'rgba(200,194,187,0.3)', marginTop: 2 }}>{p.status === 'upcoming' ? `${p.daysUntilDue}d` : p.daysUntilDue >= 0 ? `${p.daysUntilDue}d left` : `${Math.abs(p.daysUntilDue)}d overdue`}</div>
+                                </div>
+                              </div>
+                            )
+                          })}
+                          <div style={{ padding: '8px 18px', fontSize: 9.5, color: 'rgba(200,194,187,0.25)' }}>Period dates assume a standard filing stagger — confirm against myIR.</div>
+                        </div>
+                        <div style={s.panel}>
+                          <div style={{ padding: '14px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)' }}><span style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>Most recent period — Xero figures</span></div>
+                          {(gst.breakdown || []).length === 0 ? (
+                            <div style={{ padding: '14px 18px', fontSize: 12, color: 'rgba(200,194,187,0.25)' }}>{gst.needsReconnect ? 'Reconnect Xero to see this' : 'No data for this period'}</div>
+                          ) : gst.breakdown.map((row: any, i: number) => (
+                            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.06)' }}>
+                              <div style={{ fontSize: 12, color: '#C8C2BB' }}>{row.label}</div>
+                              <div style={{ fontSize: 13, fontWeight: 500, color: row.amount < 0 ? 'rgba(210,90,90,0.85)' : '#C8C2BB' }}>${row.amount.toLocaleString()}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {sectionLabel('Cash flow forecast')}
+                  {cashflowLoading || !cashflow ? (
+                    <div style={{ ...s.panel, padding: '24px 18px', textAlign: 'center', fontSize: 12, color: 'rgba(200,194,187,0.3)', marginBottom: 28 }}>Loading cash flow forecast...</div>
+                  ) : (
+                    <div style={{ marginBottom: 28 }}>
+                      {cashflow.needsReconnect && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, background: 'rgba(210,175,80,0.08)', border: '0.5px solid rgba(210,175,80,0.25)', borderRadius: 7, padding: '12px 16px', marginBottom: 14 }}>
+                          <div style={{ fontSize: 12, color: 'rgba(210,175,80,0.9)' }}>Reconnect Xero to include your real bank balance — without it this only shows projected money in/out, not running balances.</div>
+                          <button onClick={() => connectXero()} style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 4, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>Reconnect →</button>
+                        </div>
+                      )}
+                      <div style={{ ...s.panel, overflowX: 'auto' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 760 }}>
+                          <thead>
+                            <tr>
+                              {['Week', cashflow.hasBalance ? 'Opening' : null, 'Expected in', 'Expected out', 'GST', cashflow.hasBalance ? 'Closing' : null].filter(Boolean).map(h => (
+                                <th key={h as string} style={{ fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.3)', padding: '10px 14px', textAlign: h === 'Week' ? 'left' : 'right', borderBottom: '0.5px solid rgba(200,194,187,0.09)', fontWeight: 400, whiteSpace: 'nowrap' }}>{h}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(cashflow.weeks || []).map((w: any, i: number) => (
+                              <tr key={w.weekStart}>
+                                <td style={{ padding: '9px 14px', borderBottom: '0.5px solid rgba(200,194,187,0.06)', fontSize: 12, color: 'rgba(200,194,187,0.6)', whiteSpace: 'nowrap' }}>{new Date(w.weekStart + 'T12:00:00').toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' })}{i === 0 ? ' (this wk)' : ''}</td>
+                                {cashflow.hasBalance && <td style={{ padding: '9px 14px', borderBottom: '0.5px solid rgba(200,194,187,0.06)', fontSize: 12, color: '#C8C2BB', textAlign: 'right' }}>${Math.round(w.opening).toLocaleString()}</td>}
+                                <td style={{ padding: '9px 14px', borderBottom: '0.5px solid rgba(200,194,187,0.06)', fontSize: 12, color: 'rgba(100,200,130,0.85)', textAlign: 'right' }}>{w.expectedIn ? '+$' + Math.round(w.expectedIn).toLocaleString() : '—'}</td>
+                                <td style={{ padding: '9px 14px', borderBottom: '0.5px solid rgba(200,194,187,0.06)', fontSize: 12, color: 'rgba(210,90,90,0.85)', textAlign: 'right' }}>{w.expectedOut ? '−$' + Math.round(w.expectedOut).toLocaleString() : '—'}</td>
+                                <td style={{ padding: '9px 14px', borderBottom: '0.5px solid rgba(200,194,187,0.06)', fontSize: 12, color: w.gstAmount ? 'rgba(210,175,80,0.85)' : 'rgba(200,194,187,0.25)', textAlign: 'right' }}>{w.gstAmount ? (w.gstAmount > 0 ? '−' : '+') + '$' + Math.round(Math.abs(w.gstAmount)).toLocaleString() + (w.gstEstimated ? ' (est.)' : '') : '—'}</td>
+                                {cashflow.hasBalance && <td style={{ padding: '9px 14px', borderBottom: '0.5px solid rgba(200,194,187,0.06)', fontSize: 12, fontWeight: 500, color: w.closing < 0 ? 'rgba(210,90,90,0.95)' : '#fff', textAlign: 'right' }}>${Math.round(w.closing).toLocaleString()}</td>}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                        <div style={{ padding: '10px 14px', fontSize: 9.5, color: 'rgba(200,194,187,0.25)', borderTop: '0.5px solid rgba(200,194,187,0.06)' }}>
+                          Assumes invoices and bills are paid on their due date, and GST is estimated from the last filed period — not payroll or income tax, which aren't tracked here. Treat as a guide, not a guarantee.
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {sectionLabel('Invoicing')}
                   <div className="ec-form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                     <div style={s.panel}>
                       <div style={{ padding: '14px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)' }}>

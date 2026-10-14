@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireStudioUser, getValidXeroToken, xeroFetch } from '@/lib/xero'
-
-const toDateStr = (d: Date) => d.toISOString().split('T')[0]
+import { toDateStr, cellValue, parseSection, getOutstandingInvoices } from '@/lib/xeroReports'
 
 // Xero's ProfitAndLoss report defaults to the CURRENT MONTH when called with no
 // date params, not the financial year to date as its own UI report implies — an
@@ -29,24 +28,6 @@ async function getFinancialYearStart(accessToken: string, tenantId: string): Pro
   return `${year}-04-01`
 }
 
-function cellValue(cells: any[], idx: number) {
-  const v = cells?.[idx]?.Value
-  const n = parseFloat(v)
-  return Number.isFinite(n) ? n : v
-}
-
-function parseSection(section: any) {
-  const items: { label: string; amount: number }[] = []
-  let total = 0
-  for (const row of section.Rows || []) {
-    const label = row.Cells?.[0]?.Value
-    const amount = cellValue(row.Cells, row.Cells.length - 1)
-    if (row.RowType === 'Row' && typeof amount === 'number') items.push({ label, amount })
-    if (row.RowType === 'SummaryRow' && typeof amount === 'number') total = amount
-  }
-  return { items, total }
-}
-
 // A multi-period report has one column per month instead of one YTD column — each
 // row's Cells run [label, period1, period2, ...]. Pulls the revenue and net profit
 // totals out of that shape into a simple per-month series for the monthly chart.
@@ -56,16 +37,23 @@ function parseMonthly(reportRows: any[]) {
     const d = new Date(c.Value)
     return Number.isNaN(d.getTime()) ? c.Value : d.toLocaleDateString('en-NZ', { month: 'short', year: 'numeric' })
   })
-  const toNumbers = (cells: any[]) => cells.slice(1).map((c: any) => { const n = parseFloat(c?.Value); return Number.isFinite(n) ? n : 0 })
+  const toNumbers = (cells: any[]) => cells.slice(1).map((c: any) => { const raw = typeof c?.Value === 'string' ? c.Value.replace(/,/g, '') : c?.Value; const n = parseFloat(raw); return Number.isFinite(n) ? n : 0 })
 
   let revenueByPeriod: number[] = []
   let netByPeriod: number[] = []
   for (const row of reportRows) {
     if (row.RowType === 'Section') {
       const title = (row.Title || '').toLowerCase()
+      // A P&L can have more than one income-ish section (e.g. "Trading Income"
+      // plus a separate "Other Income" for interest etc) — sum every match
+      // instead of letting the last one found overwrite the rest, which was
+      // previously collapsing revenue down to whichever tiny section came last.
       if (title.includes('income') || title.includes('revenue') || title.includes('trading')) {
         const summaryRow = (row.Rows || []).find((r: any) => r.RowType === 'SummaryRow')
-        if (summaryRow) revenueByPeriod = toNumbers(summaryRow.Cells)
+        if (summaryRow) {
+          const nums = toNumbers(summaryRow.Cells)
+          revenueByPeriod = revenueByPeriod.length ? revenueByPeriod.map((v, i) => v + (nums[i] || 0)) : nums
+        }
       }
     }
     if (row.RowType === 'Row') {
@@ -113,48 +101,6 @@ async function getCashFlow(accessToken: string, tenantId: string, monthCount: nu
   }))
 }
 
-// Xero stores dates as either a plain ISO string or the legacy /Date(ms+tz)/ format
-// depending on the field — handle both rather than assume one.
-function parseXeroDate(value: string | undefined): Date | null {
-  if (!value) return null
-  const msMatch = value.match(/\/Date\((\d+)/)
-  if (msMatch) return new Date(parseInt(msMatch[1], 10))
-  const d = new Date(value)
-  return Number.isNaN(d.getTime()) ? null : d
-}
-
-// Pulls real outstanding/overdue invoices straight from Xero (AUTHORISED = sent
-// and awaiting payment in Xero's terms) rather than relying only on our own
-// invoices1 tracking, which can drift out of sync if a client pays directly.
-async function getOutstandingInvoices(accessToken: string, tenantId: string) {
-  try {
-    const where = encodeURIComponent('Type=="ACCREC" && Status=="AUTHORISED"')
-    const res = await xeroFetch(accessToken, tenantId, `/api.xro/2.0/Invoices?where=${where}&order=DueDate ASC`)
-    if (!res.ok) return { items: [], outstandingTotal: 0, overdueTotal: 0 }
-    const now = new Date()
-    const items = (res.data?.Invoices || [])
-      .filter((inv: any) => (inv.AmountDue || 0) > 0)
-      .map((inv: any) => {
-        const dueDate = parseXeroDate(inv.DueDateString || inv.DueDate)
-        return {
-          invoiceId: inv.InvoiceID,
-          invoiceNumber: inv.InvoiceNumber || '',
-          contact: inv.Contact?.Name || 'Unknown',
-          dueDate: dueDate ? toDateStr(dueDate) : null,
-          amountDue: inv.AmountDue || 0,
-          overdue: !!dueDate && dueDate < now,
-        }
-      })
-      .sort((a: any, b: any) => (a.dueDate || '9999').localeCompare(b.dueDate || '9999'))
-    const outstandingTotal = items.reduce((sum: number, i: any) => sum + i.amountDue, 0)
-    const overdueTotal = items.filter((i: any) => i.overdue).reduce((sum: number, i: any) => sum + i.amountDue, 0)
-    return { items, outstandingTotal, overdueTotal }
-  } catch (e) {
-    console.error('Xero invoices fetch error:', e)
-    return { items: [], outstandingTotal: 0, overdueTotal: 0 }
-  }
-}
-
 export async function GET(req: NextRequest) {
   const auth = await requireStudioUser(req)
   if (!auth.ok) return auth.response
@@ -170,7 +116,11 @@ export async function GET(req: NextRequest) {
   // of waiting on the main YTD report — this alone roughly halves wall-clock time
   // since cash flow's 6 Xero calls were previously the slowest link in a fully
   // sequential chain.
-  const monthlyPromise = xeroFetch(token.accessToken, token.tenantId, `/api.xro/2.0/Reports/ProfitAndLoss?periods=${months - 1}&timeframe=MONTH`)
+  // Always pull 13 months (this month + 12 trailing) regardless of the chart's
+  // selected window — it's one Xero call either way, and the extra history lets
+  // the client compute "same month last year" and "vs last month" without a
+  // second round trip. The chart itself slices back down to `months`.
+  const monthlyPromise = xeroFetch(token.accessToken, token.tenantId, `/api.xro/2.0/Reports/ProfitAndLoss?periods=12&timeframe=MONTH`)
     .then(res => res.ok ? parseMonthly(res.data?.Reports?.[0]?.Rows || []) : [])
     .catch((e) => { console.error('Xero monthly P&L error:', e); return [] })
   const cashFlowPromise = getCashFlow(token.accessToken, token.tenantId, months)

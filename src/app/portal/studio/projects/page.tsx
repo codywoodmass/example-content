@@ -10,6 +10,8 @@ import { formatTime12 } from '@/lib/time'
 import { stageLabel } from '@/lib/stages'
 import { parseLabeledNotes } from '@/lib/parseNotes'
 import LabeledNotes from '@/components/studio/LabeledNotes'
+import { useTimeTracking, elapsedLabel } from '@/lib/timeTracking'
+import TimeTrackerBar from '@/components/studio/TimeTrackerBar'
 
 function formatDate(dateStr: string | null | undefined): string {
   if (!dateStr) return '—'
@@ -23,6 +25,8 @@ function formatDate(dateStr: string | null | undefined): string {
 }
 
 type ShootDate = { id: string; date: string; start_time: string; end_time: string; notes: string }
+type TimeEntry = { id: string; project_id: string; phase: string; hours: number; person: string | null; entry_date: string; note: string | null; created_at: string; started_at: string | null; ended_at: string | null }
+const TIME_PHASES = ['Pre-Production', 'Shooting', 'Editing']
 
 function briefTemplate(title: string): string {
   const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -122,7 +126,7 @@ function ProjectsPageInner() {
   const searchParams = useSearchParams()
   const [modalProject, setModalProject] = useState<Project | null>(null)
   const [modalEditing, setModalEditing] = useState(false)
-  const [modalTab, setModalTab] = useState<'overview' | 'notes' | 'brief'>('overview')
+  const [modalTab, setModalTab] = useState<'overview' | 'notes' | 'brief' | 'time'>('overview')
   useEffect(() => { setModalTab('overview') }, [modalProject?.id])
   const [modalSaving, setModalSaving] = useState(false)
   const [modalSaved, setModalSaved] = useState(false)
@@ -254,12 +258,73 @@ function ProjectsPageInner() {
 
   const [modalFullscreen, setModalFullscreen] = useState(false)
   const [projectFeedback, setProjectFeedback] = useState<any[]>([])
+  const tracker = useTimeTracking()
 
   useEffect(() => {
     if (!modalProject?.id) { setProjectFeedback([]); return }
     supabase.from('video_feedback').select('*').eq('project_id', modalProject.id).order('created_at', { ascending: false })
       .then(({ data }) => setProjectFeedback(data || []))
   }, [modalProject?.id])
+
+  const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([])
+  const [teamOptions, setTeamOptions] = useState<{ name: string }[]>([])
+  const [newTimeEntry, setNewTimeEntry] = useState<{ phase: string; hours: string; person: string; entry_date: string; note: string }>({ phase: 'Editing', hours: '', person: '', entry_date: new Date().toISOString().split('T')[0], note: '' })
+  const [addingTimeEntry, setAddingTimeEntry] = useState(false)
+
+  useEffect(() => {
+    supabase.from('team1').select('name').eq('active', true).order('created_at', { ascending: true })
+      .then(({ data }) => setTeamOptions(data || []))
+  }, [])
+
+  const reloadTimeEntries = useCallback((projectId: string) => {
+    supabase.from('time_entries').select('*').eq('project_id', projectId).order('entry_date', { ascending: false })
+      .then(({ data }) => setTimeEntries(data || []))
+  }, [])
+
+  useEffect(() => {
+    if (!modalProject?.id) { setTimeEntries([]); return }
+    reloadTimeEntries(modalProject.id)
+  }, [modalProject?.id, reloadTimeEntries])
+
+  // Reloads the modal's time log right after the live timer for this same
+  // project stops, so the newly-recorded entry shows up without needing to
+  // close and reopen the project.
+  const prevMineRef = useRef<string | null>(null)
+  useEffect(() => {
+    const wasTrackingThisProject = prevMineRef.current
+    prevMineRef.current = tracker.mine?.project_id || null
+    if (wasTrackingThisProject && !tracker.mine && modalProject?.id === wasTrackingThisProject) {
+      reloadTimeEntries(modalProject.id)
+    }
+  }, [tracker.mine, modalProject?.id, reloadTimeEntries])
+
+  async function addTimeEntry() {
+    if (!modalProject?.id) return
+    const hours = parseFloat(newTimeEntry.hours)
+    if (!Number.isFinite(hours) || hours <= 0) { notify('Enter a valid number of hours', 'error'); return }
+    setAddingTimeEntry(true)
+    try {
+      const { data, error } = await supabase.from('time_entries').insert([{
+        project_id: modalProject.id,
+        phase: newTimeEntry.phase,
+        hours,
+        person: newTimeEntry.person || null,
+        entry_date: newTimeEntry.entry_date,
+        note: newTimeEntry.note || null,
+      }]).select().single()
+      if (error) { notify('Error logging time: ' + error.message, 'error'); return }
+      setTimeEntries(p => [data, ...p])
+      setNewTimeEntry(p => ({ ...p, hours: '', note: '' }))
+    } finally {
+      setAddingTimeEntry(false)
+    }
+  }
+
+  async function deleteTimeEntry(id: string) {
+    if (!(await confirmDialog('Delete this time entry?'))) return
+    await supabase.from('time_entries').delete().eq('id', id)
+    setTimeEntries(p => p.filter(t => t.id !== id))
+  }
 
   async function resolveFeedback(id: string) {
     await supabase.from('video_feedback').update({ status: 'resolved' }).eq('id', id)
@@ -774,11 +839,16 @@ function ProjectsPageInner() {
             ))}</tr>
           </thead>
           <tbody>
-            {list.map((project, i) => (
-              <tr key={project.id} onClick={() => { setModalProject(project); setModalEditing(false) }} style={{ cursor: 'pointer', background: i % 2 === 0 ? 'transparent' : 'rgba(200,194,187,0.02)' }}>
+            {list.map((project, i) => {
+              const activeTimer = tracker.timers.find(t => t.project_id === project.id)
+              return (
+              <tr key={project.id} onClick={() => { setModalProject(project); setModalEditing(false) }} style={{ cursor: 'pointer', background: activeTimer ? 'rgba(100,200,130,0.05)' : i % 2 === 0 ? 'transparent' : 'rgba(200,194,187,0.02)' }}>
                 <td style={{ padding: '12px 16px', borderBottom: '0.5px solid rgba(200,194,187,0.05)' }}>
-                  <div style={{ fontSize: 13, fontWeight: 500, color: '#C8C2BB' }}>{project.title}</div>
-                  {project.from_booking && <span style={{ fontSize: 9, color: 'rgba(100,150,220,0.7)' }}>From booking</span>}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                    {activeTimer && <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'rgba(100,200,130,0.9)', boxShadow: '0 0 5px rgba(100,200,130,0.7)', flexShrink: 0 }} />}
+                    <div style={{ fontSize: 13, fontWeight: 500, color: '#C8C2BB' }}>{project.title}</div>
+                  </div>
+                  {activeTimer ? <span style={{ fontSize: 9, color: 'rgba(100,200,130,0.75)' }}>{activeTimer.person} tracking · {elapsedLabel(activeTimer.started_at, tracker.now)}</span> : project.from_booking && <span style={{ fontSize: 9, color: 'rgba(100,150,220,0.7)' }}>From booking</span>}
                 </td>
                 <td style={{ padding: '12px 16px', borderBottom: '0.5px solid rgba(200,194,187,0.05)', fontSize: 12, color: 'rgba(200,194,187,0.5)' }}>{project.client}</td>
                 <td style={{ padding: '12px 16px', borderBottom: '0.5px solid rgba(200,194,187,0.05)' }}><span style={{ fontSize: 10, padding: '3px 8px', borderRadius: 2, background: 'rgba(200,194,187,0.08)', color: 'rgba(200,194,187,0.5)', border: '0.5px solid rgba(200,194,187,0.1)' }}>{project.category}</span></td>
@@ -795,7 +865,8 @@ function ProjectsPageInner() {
                   </div>
                 </td>
               </tr>
-            ))}
+              )
+            })}
             {list.length === 0 && (
               <tr><td colSpan={8} style={{ padding: '40px 16px', textAlign: 'center', color: 'rgba(200,194,187,0.25)', fontSize: 12 }}>No projects yet — create one above</td></tr>
             )}
@@ -841,15 +912,22 @@ function ProjectsPageInner() {
   }
 
   function ProjectCard({ project }: { project: Project }) {
+    const activeTimer = tracker.timers.find(t => t.project_id === project.id)
     return (
       <div
         onMouseDown={e => startCardDrag(e, project)}
-        style={{ background: '#1A1F28', border: `0.5px solid ${dragId === project.id ? '#C8C2BB' : 'rgba(200,194,187,0.09)'}`, borderRadius: 6, padding: '14px 16px', cursor: 'pointer', opacity: dragId === project.id ? 0.5 : 1, transition: 'all 0.15s', userSelect: 'none', WebkitUserSelect: 'none' }}
+        style={{ background: activeTimer ? 'rgba(100,200,130,0.05)' : '#1A1F28', border: `0.5px solid ${activeTimer ? 'rgba(100,200,130,0.4)' : dragId === project.id ? '#C8C2BB' : 'rgba(200,194,187,0.09)'}`, borderRadius: 6, padding: '14px 16px', cursor: 'pointer', opacity: dragId === project.id ? 0.5 : 1, transition: 'all 0.15s', userSelect: 'none', WebkitUserSelect: 'none', boxShadow: activeTimer ? '0 0 0 1px rgba(100,200,130,0.15)' : 'none' }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
           <div style={{ fontSize: 13, fontWeight: 500, color: '#C8C2BB', lineHeight: 1.3, flex: 1, paddingRight: 8 }}>{project.title}</div>
           {project.from_booking && <span style={{ fontSize: 8, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '2px 6px', background: 'rgba(100,150,220,0.15)', color: 'rgba(100,150,220,0.8)', border: '0.5px solid rgba(100,150,220,0.2)', borderRadius: 2, flexShrink: 0 }}>Booking</span>}
         </div>
+        {activeTimer && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'rgba(100,200,130,0.9)', boxShadow: '0 0 5px rgba(100,200,130,0.7)', flexShrink: 0 }} />
+            <span style={{ fontSize: 10, color: 'rgba(100,200,130,0.85)' }}>{activeTimer.person} tracking · {elapsedLabel(activeTimer.started_at, tracker.now)}</span>
+          </div>
+        )}
         <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', marginBottom: 10 }}>{project.client}</div>
         <div draggable={false} onMouseDown={e => startProgressDrag(e, project)} onClick={e => e.stopPropagation()} style={{ height: 6, background: 'rgba(200,194,187,0.07)', borderRadius: 2, marginBottom: 10, cursor: 'ew-resize' }}>
           <div style={{ height: '100%', width: `${project.progress}%`, background: project.progress === 100 ? 'rgba(100,200,130,0.7)' : '#C8C2BB', opacity: 0.6, borderRadius: 2, pointerEvents: 'none' }} />
@@ -910,6 +988,10 @@ function ProjectsPageInner() {
           )}
           <button onClick={() => setShowNewModal(true)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 16px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>+ New project</button>
         </div>
+      </div>
+
+      <div style={{ padding: '10px 28px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', background: '#10141b' }}>
+        <TimeTrackerBar projects={projects} mine={tracker.mine} others={tracker.others} now={tracker.now} busy={tracker.busy} onStart={tracker.start} onStop={tracker.stop} />
       </div>
 
       {/* ARCHIVED — always a flat list, production stage no longer applies */}
@@ -1163,7 +1245,7 @@ function ProjectsPageInner() {
                 )
               })()}
               <div style={{ display: 'flex', gap: 4, marginBottom: 20, borderBottom: '0.5px solid rgba(200,194,187,0.09)' }}>
-                {[{ id: 'overview', label: 'Overview' }, { id: 'notes', label: 'Notes & Files' }, { id: 'brief', label: 'Brief' }].map(tab => (
+                {[{ id: 'overview', label: 'Overview' }, { id: 'notes', label: 'Notes & Files' }, { id: 'brief', label: 'Brief' }, { id: 'time', label: 'Time' }].map(tab => (
                   <button key={tab.id} onClick={() => setModalTab(tab.id as any)} style={{ fontSize: 12, padding: '10px 14px', background: 'transparent', border: 'none', borderBottom: `2px solid ${modalTab === tab.id ? '#C8C2BB' : 'transparent'}`, color: modalTab === tab.id ? '#C8C2BB' : 'rgba(200,194,187,0.35)', cursor: 'pointer', fontFamily: 'inherit', marginBottom: -1 }}>{tab.label}</button>
                 ))}
               </div>
@@ -1433,6 +1515,91 @@ function ProjectsPageInner() {
                   </div>
                 </div>
               )}
+              {modalTab === 'time' && (() => {
+                const totalHours = timeEntries.reduce((s, t) => s + t.hours, 0)
+                const byPhase = TIME_PHASES.map(phase => ({ phase, hours: timeEntries.filter(t => t.phase === phase).reduce((s, t) => s + t.hours, 0) }))
+                const effectiveRate = totalHours > 0 && modalProject.amount ? modalProject.amount / totalHours : null
+                const trackingThis = tracker.mine?.project_id === modalProject.id
+                const otherTrackingThis = tracker.others.filter(t => t.project_id === modalProject.id)
+                return (
+                  <div style={{ marginBottom: 20 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 16, padding: '12px 14px', borderRadius: 6, background: trackingThis ? 'rgba(100,200,130,0.08)' : 'rgba(200,194,187,0.03)', border: `0.5px solid ${trackingThis ? 'rgba(100,200,130,0.25)' : 'rgba(200,194,187,0.09)'}` }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        {trackingThis ? (
+                          <>
+                            <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'rgba(100,200,130,0.9)', boxShadow: '0 0 6px rgba(100,200,130,0.7)' }} />
+                            <span style={{ fontSize: 12, color: '#C8C2BB' }}>Tracking since {new Date(tracker.mine!.started_at).toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit' })} · {elapsedLabel(tracker.mine!.started_at, tracker.now)}</span>
+                          </>
+                        ) : otherTrackingThis.length > 0 ? (
+                          otherTrackingThis.map(t => (
+                            <span key={t.id} style={{ fontSize: 12, color: 'rgba(200,194,187,0.5)' }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: 'rgba(100,150,220,0.8)', display: 'inline-block', marginRight: 8 }} />{t.person} is tracking this now · {elapsedLabel(t.started_at, tracker.now)}</span>
+                          ))
+                        ) : (
+                          <span style={{ fontSize: 12, color: 'rgba(200,194,187,0.35)' }}>Not currently being tracked</span>
+                        )}
+                      </div>
+                      {trackingThis ? (
+                        <button disabled={tracker.busy} onClick={tracker.stop} style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, border: 'none', background: '#C8C2BB', color: '#111', cursor: tracker.busy ? 'not-allowed' : 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>Stop tracking</button>
+                      ) : (
+                        <button disabled={tracker.busy || !!tracker.mine} title={tracker.mine ? 'Stop your current timer first' : ''} onClick={() => tracker.start(modalProject.id, 'Editing')} style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, border: '0.5px solid rgba(100,200,130,0.35)', color: 'rgba(100,200,130,0.9)', background: 'rgba(100,200,130,0.08)', cursor: tracker.busy || tracker.mine ? 'not-allowed' : 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>▶ Start tracking</button>
+                      )}
+                    </div>
+                    <div className="ec-form-grid-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 20 }}>
+                      <div style={{ background: 'rgba(200,194,187,0.03)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 6, padding: '12px 14px' }}>
+                        <div style={{ fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>Total hours</div>
+                        <div style={{ fontSize: 18, fontWeight: 600, color: '#C8C2BB' }}>{totalHours}</div>
+                      </div>
+                      {byPhase.map(({ phase, hours }) => (
+                        <div key={phase} style={{ background: 'rgba(200,194,187,0.03)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 6, padding: '12px 14px' }}>
+                          <div style={{ fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>{phase}</div>
+                          <div style={{ fontSize: 18, fontWeight: 600, color: '#C8C2BB' }}>{hours}h</div>
+                        </div>
+                      ))}
+                    </div>
+                    {effectiveRate != null && (
+                      <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', marginBottom: 20 }}>Effective hourly rate: <span style={{ color: '#C8C2BB', fontWeight: 500 }}>${effectiveRate.toFixed(0)}/hr</span> (${modalProject.amount?.toLocaleString()} ÷ {totalHours}h)</div>
+                    )}
+                    <div style={{ display: 'grid', gridTemplateColumns: '120px 90px 1fr 1fr 2fr 70px', gap: 8, alignItems: 'center', marginBottom: 14, padding: '10px 12px', background: 'rgba(200,194,187,0.03)', borderRadius: 6, border: '0.5px solid rgba(200,194,187,0.08)' }}>
+                      <select value={newTimeEntry.phase} onChange={e => setNewTimeEntry(p => ({ ...p, phase: e.target.value }))} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '7px 8px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }}>
+                        {TIME_PHASES.map(ph => <option key={ph} value={ph}>{ph}</option>)}
+                      </select>
+                      <input type="number" min="0" step="0.25" placeholder="Hours" value={newTimeEntry.hours} onChange={e => setNewTimeEntry(p => ({ ...p, hours: e.target.value }))} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '7px 8px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }} />
+                      {teamOptions.length > 0 ? (
+                        <select value={newTimeEntry.person} onChange={e => setNewTimeEntry(p => ({ ...p, person: e.target.value }))} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '7px 8px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }}>
+                          <option value="">Who?</option>
+                          {teamOptions.map(t => <option key={t.name} value={t.name}>{t.name}</option>)}
+                        </select>
+                      ) : (
+                        <input placeholder="Who?" value={newTimeEntry.person} onChange={e => setNewTimeEntry(p => ({ ...p, person: e.target.value }))} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '7px 8px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }} />
+                      )}
+                      <input type="date" value={newTimeEntry.entry_date} onChange={e => setNewTimeEntry(p => ({ ...p, entry_date: e.target.value }))} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '7px 8px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }} />
+                      <input placeholder="Note (optional)" value={newTimeEntry.note} onChange={e => setNewTimeEntry(p => ({ ...p, note: e.target.value }))} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '7px 8px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }} />
+                      <button onClick={addTimeEntry} disabled={addingTimeEntry || !newTimeEntry.hours} style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 10px', borderRadius: 4, background: newTimeEntry.hours ? '#C8C2BB' : 'rgba(200,194,187,0.1)', color: newTimeEntry.hours ? '#111' : 'rgba(200,194,187,0.3)', border: 'none', cursor: newTimeEntry.hours ? 'pointer' : 'not-allowed', fontFamily: 'inherit', fontWeight: 500 }}>+ Log</button>
+                    </div>
+                    {timeEntries.length === 0 ? (
+                      <div style={{ padding: '20px 14px', textAlign: 'center', fontSize: 12, color: 'rgba(200,194,187,0.25)' }}>No time logged yet</div>
+                    ) : (
+                      <div style={{ background: 'rgba(200,194,187,0.02)', border: '0.5px solid rgba(200,194,187,0.08)', borderRadius: 6, overflow: 'hidden' }}>
+                        {timeEntries.map((t, i) => (
+                          <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderBottom: i < timeEntries.length - 1 ? '0.5px solid rgba(200,194,187,0.06)' : 'none' }}>
+                            <span style={{ fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)', width: 100, flexShrink: 0 }}>{t.phase}</span>
+                            <span style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB', width: 44, flexShrink: 0 }}>{t.hours}h</span>
+                            <span style={{ fontSize: 11, color: 'rgba(200,194,187,0.5)', width: 80, flexShrink: 0 }}>{t.person || '—'}</span>
+                            <span style={{ fontSize: 11, color: 'rgba(200,194,187,0.35)', width: 110, flexShrink: 0 }}>
+                              {new Date(t.entry_date + 'T12:00:00').toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' })}
+                              {t.started_at && t.ended_at && (
+                                <span style={{ marginLeft: 6, color: 'rgba(200,194,187,0.25)' }}>{new Date(t.started_at).toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit' })}–{new Date(t.ended_at).toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit' })}</span>
+                              )}
+                            </span>
+                            <span style={{ fontSize: 11, color: 'rgba(200,194,187,0.35)', flex: 1 }}>{t.note || ''}</span>
+                            <button onClick={() => deleteTimeEntry(t.id)} style={{ fontSize: 14, color: 'rgba(200,194,187,0.25)', background: 'transparent', border: 'none', cursor: 'pointer', lineHeight: 1 }}>×</button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )
+              })()}
               {modalProject.stage === 'Completed' && (
                 <div style={{ marginBottom: 16, padding: '14px 16px', background: 'rgba(100,200,130,0.04)', border: '0.5px solid rgba(100,200,130,0.15)', borderRadius: 6, display: 'flex', gap: 24, flexWrap: 'wrap' as const }}>
                   {modalProject.delivered_at && (
