@@ -284,11 +284,12 @@ const RECENT_WORK = [
 // the instant the homepage loads.
 function CarouselItem({ proj }: { proj: typeof RECENT_WORK[number] }) {
   const [hovered, setHovered] = React.useState(false)
+  const hasVideo = !('noVideo' in proj && proj.noVideo)
   return (
-    <div className="carousel-item" onMouseEnter={() => setHovered(true)}>
+    <div className={`carousel-item${hasVideo ? ' has-video' : ''}`} onMouseEnter={() => setHovered(true)}>
       <div className="vid-thumb">
         <div className="vid-thumb-img" style={{ backgroundImage: proj.thumb ? `url(${proj.thumb})` : `url(https://vumbnail.com/${proj.id}_large.jpg), url(https://vumbnail.com/${proj.id}.jpg)`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
-        {hovered && !('noVideo' in proj && proj.noVideo) && (
+        {hovered && hasVideo && (
           <iframe
             src={`https://player.vimeo.com/video/${proj.id}?background=1&autoplay=1&loop=1&muted=1&title=0&byline=0&portrait=0&controls=0&badge=0&autopause=0`}
             allow="autoplay; fullscreen"
@@ -390,9 +391,16 @@ function RecentWorkCarousel() {
         .carousel-wrap:hover .carousel-cursor { opacity: 1; }
         .vid-thumb { position: relative; padding-top: 56.25%; border-radius: 3px; overflow: hidden; margin-bottom: 16px; background: #1a1f28; }
         .vid-thumb iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none; opacity: 0; transition: opacity 0.4s ease; }
-        .carousel-item:hover .vid-thumb iframe { opacity: 1; }
-        .vid-thumb-img { position: absolute; inset: 0; background: #1a1f28; transition: opacity 0.4s ease; }
-        .carousel-item:hover .vid-thumb-img { opacity: 0; }
+        .carousel-item.has-video:hover .vid-thumb iframe { opacity: 1; }
+        .vid-thumb-img { position: absolute; inset: 0; background: #1a1f28; transition: opacity 0.3s ease; }
+        /* Only fades for items that actually have a video to reveal — a
+           photo-only tile (noVideo) has no iframe at all, so the blanket
+           version of this rule just faded the only visible image to
+           nothing and left it blank until the mouse moved away. Scoped to
+           .has-video, and delayed so the thumbnail stays up long enough to
+           cover the Vimeo iframe's own load time instead of both being
+           blank for a moment right as hover starts. */
+        .carousel-item.has-video:hover .vid-thumb-img { transition-delay: 0.35s; opacity: 0; }
       `}</style>
 
       <div
