@@ -736,6 +736,7 @@ export default function ClientPortal() {
   const [budgetRange, setBudgetRange] = useState('')
 
   const [tcAccepted, setTcAccepted] = useState(false)
+  const [submittingBooking, setSubmittingBooking] = useState(false)
   const [clientProjects, setClientProjects] = useState<any[]>([])
   const [clientBookings, setClientBookings] = useState<any[]>([])
   const [clientBriefs, setClientBriefs] = useState<any[]>([])
@@ -2012,7 +2013,8 @@ export default function ClientPortal() {
                   <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 16, borderTop: '0.5px solid rgba(200,194,187,0.09)' }}>
                     <button onClick={() => setBookingStep(selectedCat === 'commercial' ? 2 : 5)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>← Back</button>
                     <button onClick={async () => {
-                      if (!tcAccepted) return
+                      if (!tcAccepted || submittingBooking) return
+                      setSubmittingBooking(true)
                       try {
                         const { data: newBooking } = await supabase.from('bookings1').insert([selectedCat === 'commercial' ? {
                           client_id: user?.id,
@@ -2128,8 +2130,9 @@ export default function ClientPortal() {
                           }),
                         })
                       } catch (e) { console.error('Notify-booking error:', e) }
+                      setSubmittingBooking(false)
                       setBookingStep(7)
-                    }} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, background: tcAccepted ? '#C8C2BB' : 'rgba(200,194,187,0.1)', color: tcAccepted ? '#111' : 'rgba(200,194,187,0.2)', border: 'none', cursor: tcAccepted ? 'pointer' : 'not-allowed', fontWeight: 500, fontFamily: 'inherit' }}>{selectedCat === 'commercial' ? 'Submit request →' : 'Submit booking request →'}</button>
+                    }} disabled={!tcAccepted || submittingBooking} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, background: tcAccepted && !submittingBooking ? '#C8C2BB' : 'rgba(200,194,187,0.1)', color: tcAccepted && !submittingBooking ? '#111' : 'rgba(200,194,187,0.2)', border: 'none', cursor: tcAccepted && !submittingBooking ? 'pointer' : 'not-allowed', fontWeight: 500, fontFamily: 'inherit' }}>{submittingBooking ? 'Submitting...' : selectedCat === 'commercial' ? 'Submit request →' : 'Submit booking request →'}</button>
                   </div>
                 </div>
               )}
