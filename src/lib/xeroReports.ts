@@ -86,6 +86,33 @@ export async function getOutstandingInvoices(accessToken: string, tenantId: stri
   }
 }
 
+// The app's own invoices1 table is meant to mirror Xero but can drift out of
+// sync or simply not be the path payments actually arrived through — pulling
+// paid invoices straight from Xero (FullyPaidOnDate) is ground truth instead.
+export async function getRecentPayments(accessToken: string, tenantId: string, limit = 6) {
+  try {
+    const where = encodeURIComponent('Type=="ACCREC" && Status=="PAID"')
+    const res = await xeroFetch(accessToken, tenantId, `/api.xro/2.0/Invoices?where=${where}&order=UpdatedDateUTC DESC`)
+    if (!res.ok) return []
+    return (res.data?.Invoices || [])
+      .map((inv: any) => {
+        const paidDate = parseXeroDate(inv.FullyPaidOnDate) || parseXeroDate(inv.UpdatedDateUTC)
+        return {
+          invoiceId: inv.InvoiceID,
+          invoiceNumber: inv.InvoiceNumber || '',
+          contact: inv.Contact?.Name || 'Unknown',
+          paidDate: paidDate ? toDateStr(paidDate) : null,
+          amount: inv.Total || 0,
+        }
+      })
+      .sort((a: any, b: any) => (b.paidDate || '').localeCompare(a.paidDate || ''))
+      .slice(0, limit)
+  } catch (e) {
+    console.error('Xero recent payments fetch error:', e)
+    return []
+  }
+}
+
 // IRD only offers 1-, 2- and 6-monthly GST filing for NZ orgs; this maps Xero's
 // SalesTaxPeriod values to a period length in months.
 export const GST_PERIOD_MONTHS: Record<string, number> = {
@@ -122,7 +149,7 @@ export function buildGstPeriods(periodMonths: number, count: number) {
   return periods
 }
 
-export type GstPeriod = { start: string; end: string; dueDate: string; daysUntilDue: number; status: 'upcoming' | 'overdue' | 'filing_window' }
+export type GstPeriod = { start: string; end: string; dueDate: string; daysUntilDue: number; status: 'upcoming' | 'overdue' | 'filing_window' | 'filed' }
 export type GstSchedule = {
   needsReconnect: boolean
   salesTaxBasis: string | null
@@ -144,16 +171,25 @@ export async function getGstSchedule(accessToken: string, tenantId: string): Pro
 
   const periods = buildGstPeriods(periodMonths, 4)
   const now = new Date()
+  // There's no "was this actually filed" signal available from Xero's public
+  // API, so a past due date can't honestly be called overdue purely because
+  // time has passed — a functioning business has filed its older periods by
+  // the time a newer one rolls around. Only the single most recently ended
+  // period (the one that could plausibly still be outstanding) gets flagged;
+  // anything further back is shown as settled history instead of a false alarm.
+  const mostRecentPastEnd = Math.max(...periods.filter(p => p.end <= now).map(p => p.end.getTime()), -Infinity)
 
   const withDue: GstPeriod[] = periods.map(p => {
     const due = gstDueDateFor(p.end)
     const daysUntilDue = Math.round((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+    const isMostRecentPast = p.end <= now && p.end.getTime() === mostRecentPastEnd
+    const status: GstPeriod['status'] = p.end > now ? 'upcoming' : !isMostRecentPast ? 'filed' : daysUntilDue < 0 ? 'overdue' : 'filing_window'
     return {
       start: toDateStr(p.start),
       end: toDateStr(p.end),
       dueDate: toDateStr(due),
       daysUntilDue,
-      status: p.end > now ? 'upcoming' : daysUntilDue < 0 ? 'overdue' : 'filing_window',
+      status,
     }
   })
 

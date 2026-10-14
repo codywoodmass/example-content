@@ -339,7 +339,6 @@ export default function StudioPortal() {
   const [xeroStatus, setXeroStatus] = useState<{ connected: boolean; tenantName?: string } | null>(null)
   const [pnl, setPnl] = useState<any>(null)
   const [pnlLoading, setPnlLoading] = useState(false)
-  const [recentInvoices, setRecentInvoices] = useState<any[]>([])
   const [pnlMonths, setPnlMonths] = useState(6)
   const [gst, setGst] = useState<any>(null)
   const [gstLoading, setGstLoading] = useState(false)
@@ -354,11 +353,6 @@ export default function StudioPortal() {
     const res = await xeroAuthedFetch('/api/xero/status')
     const data = await res.json()
     setXeroStatus(data)
-  }
-
-  async function loadInvoiceSummary() {
-    const { data } = await supabase.from('invoices1').select('*').order('created_at', { ascending: false }).limit(50)
-    setRecentInvoices(data || [])
   }
 
   async function loadPnl(months = pnlMonths) {
@@ -428,7 +422,7 @@ export default function StudioPortal() {
     setPnl(null)
   }
 
-  useEffect(() => { if (activeView === 'finance' && userRole === 'studio') { loadXeroStatus(); loadInvoiceSummary() } }, [activeView, userRole])
+  useEffect(() => { if (activeView === 'finance' && userRole === 'studio') loadXeroStatus() }, [activeView, userRole])
 
   // Week-ahead forecast for Auckland and Waikato (Hamilton), shown on the
   // studio dashboard's weekly schedule so a gap in the day can be checked
@@ -2017,7 +2011,7 @@ export default function StudioPortal() {
               const outstandingItems = pnl.outstandingInvoices?.items || []
               const outstandingTotal = pnl.outstandingInvoices?.outstandingTotal || 0
               const overdueTotal = pnl.outstandingInvoices?.overdueTotal || 0
-              const recentPayments = recentInvoices.filter((i: any) => i.status === 'paid').sort((a: any, b: any) => new Date(b.paid_at || b.created_at).getTime() - new Date(a.paid_at || a.created_at).getTime()).slice(0, 6)
+              const recentPayments = pnl.recentPayments || []
               const periodLabel = (p: string | null) => ({ MONTHLY: 'monthly', '1MONTHLY': 'monthly', '2MONTHLY': '2-monthly', '6MONTHLY': '6-monthly', QUARTERLY1: 'quarterly', QUARTERLY2: 'quarterly', QUARTERLY3: 'quarterly', ANNUALLY: 'annual' } as Record<string, string>)[p || ''] || (p ? p.toLowerCase() : '')
               const sectionLabel = (text: string) => (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
@@ -2156,8 +2150,10 @@ export default function StudioPortal() {
                         </div>
                       </div>
                       )
-                    })()}
-                    {pnl.cashFlow && pnl.cashFlow.length > 0 && (
+                    })() || (
+                      <div style={{ ...s.panel, padding: '24px 18px', textAlign: 'center', fontSize: 12, color: 'rgba(200,194,187,0.3)' }}>Monthly income chart unavailable</div>
+                    )}
+                    {pnl.cashFlow && pnl.cashFlow.length > 0 ? (
                       <div style={s.panel}>
                         <div style={{ padding: '14px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <span style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>Cash in & out</span>
@@ -2185,6 +2181,8 @@ export default function StudioPortal() {
                           ))}
                         </div>
                       </div>
+                    ) : (
+                      <div style={{ ...s.panel, padding: '24px 18px', textAlign: 'center', fontSize: 12, color: 'rgba(200,194,187,0.3)' }}>Cash flow chart unavailable</div>
                     )}
                   </div>
 
@@ -2301,16 +2299,21 @@ export default function StudioPortal() {
                             <span style={{ fontSize: 10, color: 'rgba(200,194,187,0.35)' }}>{gst.salesTaxBasis ? gst.salesTaxBasis.toLowerCase() + ' basis' : ''}{gst.salesTaxPeriod ? ` · ${periodLabel(gst.salesTaxPeriod)}` : ''}</span>
                           </div>
                           {(gst.periods || []).map((p: any) => {
-                            const urgent = p.status !== 'upcoming' && p.daysUntilDue <= 7
+                            // Xero's public API has no "was this filed" signal, so a past due
+                            // date alone can't honestly be called overdue — only the single
+                            // most recent past period (status 'overdue') gets flagged; anything
+                            // older is shown as settled history ('filed'), not a false alarm.
+                            const urgent = p.status === 'overdue'
+                            const statusLabel = p.status === 'upcoming' ? 'In progress' : p.status === 'overdue' ? 'Check it\'s filed' : p.status === 'filing_window' ? 'Filing window' : 'Filed'
                             return (
                               <div key={p.end} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.06)' }}>
                                 <div>
                                   <div style={{ fontSize: 12, color: '#C8C2BB' }}>{new Date(p.start + 'T12:00:00').toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' })} – {new Date(p.end + 'T12:00:00').toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' })}</div>
-                                  <div style={{ fontSize: 10, color: 'rgba(200,194,187,0.35)', marginTop: 2 }}>{p.status === 'upcoming' ? 'In progress' : p.status === 'overdue' ? 'Overdue' : 'Filing window'}</div>
+                                  <div style={{ fontSize: 10, color: urgent ? 'rgba(210,175,80,0.8)' : 'rgba(200,194,187,0.35)', marginTop: 2 }}>{statusLabel}</div>
                                 </div>
                                 <div style={{ textAlign: 'right' }}>
-                                  <div style={{ fontSize: 12, color: urgent ? 'rgba(210,90,90,0.9)' : 'rgba(200,194,187,0.6)' }}>Due {new Date(p.dueDate + 'T12:00:00').toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' })}</div>
-                                  <div style={{ fontSize: 10, color: urgent ? 'rgba(210,90,90,0.7)' : 'rgba(200,194,187,0.3)', marginTop: 2 }}>{p.status === 'upcoming' ? `${p.daysUntilDue}d` : p.daysUntilDue >= 0 ? `${p.daysUntilDue}d left` : `${Math.abs(p.daysUntilDue)}d overdue`}</div>
+                                  <div style={{ fontSize: 12, color: urgent ? 'rgba(210,175,80,0.9)' : 'rgba(200,194,187,0.6)' }}>Due {new Date(p.dueDate + 'T12:00:00').toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' })}</div>
+                                  <div style={{ fontSize: 10, color: urgent ? 'rgba(210,175,80,0.7)' : 'rgba(200,194,187,0.3)', marginTop: 2 }}>{p.status === 'upcoming' ? `${p.daysUntilDue}d` : p.status === 'filed' ? 'Past period' : p.daysUntilDue >= 0 ? `${p.daysUntilDue}d left` : `${Math.abs(p.daysUntilDue)}d past due`}</div>
                                 </div>
                               </div>
                             )
@@ -2335,7 +2338,32 @@ export default function StudioPortal() {
                   {sectionLabel('Cash flow forecast')}
                   {cashflowLoading || !cashflow ? (
                     <div style={{ ...s.panel, padding: '24px 18px', textAlign: 'center', fontSize: 12, color: 'rgba(200,194,187,0.3)', marginBottom: 28 }}>Loading cash flow forecast...</div>
-                  ) : (
+                  ) : (() => {
+                    const weeks = cashflow.weeks || []
+                    // Xero only knows about money once it's been invoiced — a confirmed
+                    // booking sitting in the portal with no invoice yet is real future
+                    // cash Xero can't see at all. Bucketed by delivery date (falling back
+                    // to shoot date) so it lands in the week it would plausibly get billed.
+                    const unbilled = dashProjects.filter((p: any) => p.amount && !p.invoice_id)
+                    const bookedByWeek = weeks.map((w: any) => {
+                      const start = new Date(w.weekStart + 'T00:00:00')
+                      const end = new Date(w.weekEnd + 'T23:59:59')
+                      return unbilled.filter((p: any) => {
+                        const dateStr = p.delivery_due || p.shoot_date
+                        if (!dateStr) return false
+                        const d = new Date(dateStr + 'T12:00:00')
+                        return d >= start && d <= end
+                      }).reduce((s: number, p: any) => s + p.amount, 0)
+                    })
+                    let running = cashflow.hasBalance ? (weeks[0]?.opening ?? 0) : 0
+                    const merged = weeks.map((w: any, i: number) => {
+                      const booked = bookedByWeek[i] || 0
+                      const opening = running
+                      const closing = opening + w.expectedIn + booked - w.expectedOut - w.gstAmount
+                      running = closing
+                      return { ...w, booked, opening, closing }
+                    })
+                    return (
                     <div style={{ marginBottom: 28 }}>
                       {cashflow.needsReconnect && (
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, background: 'rgba(210,175,80,0.08)', border: '0.5px solid rgba(210,175,80,0.25)', borderRadius: 7, padding: '12px 16px', marginBottom: 14 }}>
@@ -2344,20 +2372,21 @@ export default function StudioPortal() {
                         </div>
                       )}
                       <div style={{ ...s.panel, overflowX: 'auto' }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 760 }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 860 }}>
                           <thead>
                             <tr>
-                              {['Week', cashflow.hasBalance ? 'Opening' : null, 'Expected in', 'Expected out', 'GST', cashflow.hasBalance ? 'Closing' : null].filter(Boolean).map(h => (
+                              {['Week', cashflow.hasBalance ? 'Opening' : null, 'Invoiced in (Xero)', 'Booked (not yet invoiced)', 'Expected out', 'GST', cashflow.hasBalance ? 'Closing' : null].filter(Boolean).map(h => (
                                 <th key={h as string} style={{ fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.3)', padding: '10px 14px', textAlign: h === 'Week' ? 'left' : 'right', borderBottom: '0.5px solid rgba(200,194,187,0.09)', fontWeight: 400, whiteSpace: 'nowrap' }}>{h}</th>
                               ))}
                             </tr>
                           </thead>
                           <tbody>
-                            {(cashflow.weeks || []).map((w: any, i: number) => (
+                            {merged.map((w: any, i: number) => (
                               <tr key={w.weekStart}>
                                 <td style={{ padding: '9px 14px', borderBottom: '0.5px solid rgba(200,194,187,0.06)', fontSize: 12, color: 'rgba(200,194,187,0.6)', whiteSpace: 'nowrap' }}>{new Date(w.weekStart + 'T12:00:00').toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' })}{i === 0 ? ' (this wk)' : ''}</td>
                                 {cashflow.hasBalance && <td style={{ padding: '9px 14px', borderBottom: '0.5px solid rgba(200,194,187,0.06)', fontSize: 12, color: '#C8C2BB', textAlign: 'right' }}>${Math.round(w.opening).toLocaleString()}</td>}
                                 <td style={{ padding: '9px 14px', borderBottom: '0.5px solid rgba(200,194,187,0.06)', fontSize: 12, color: 'rgba(100,200,130,0.85)', textAlign: 'right' }}>{w.expectedIn ? '+$' + Math.round(w.expectedIn).toLocaleString() : '—'}</td>
+                                <td style={{ padding: '9px 14px', borderBottom: '0.5px solid rgba(200,194,187,0.06)', fontSize: 12, color: w.booked ? 'rgba(100,150,220,0.85)' : 'rgba(200,194,187,0.25)', textAlign: 'right' }}>{w.booked ? '+$' + Math.round(w.booked).toLocaleString() : '—'}</td>
                                 <td style={{ padding: '9px 14px', borderBottom: '0.5px solid rgba(200,194,187,0.06)', fontSize: 12, color: 'rgba(210,90,90,0.85)', textAlign: 'right' }}>{w.expectedOut ? '−$' + Math.round(w.expectedOut).toLocaleString() : '—'}</td>
                                 <td style={{ padding: '9px 14px', borderBottom: '0.5px solid rgba(200,194,187,0.06)', fontSize: 12, color: w.gstAmount ? 'rgba(210,175,80,0.85)' : 'rgba(200,194,187,0.25)', textAlign: 'right' }}>{w.gstAmount ? (w.gstAmount > 0 ? '−' : '+') + '$' + Math.round(Math.abs(w.gstAmount)).toLocaleString() + (w.gstEstimated ? ' (est.)' : '') : '—'}</td>
                                 {cashflow.hasBalance && <td style={{ padding: '9px 14px', borderBottom: '0.5px solid rgba(200,194,187,0.06)', fontSize: 12, fontWeight: 500, color: w.closing < 0 ? 'rgba(210,90,90,0.95)' : '#fff', textAlign: 'right' }}>${Math.round(w.closing).toLocaleString()}</td>}
@@ -2366,11 +2395,12 @@ export default function StudioPortal() {
                           </tbody>
                         </table>
                         <div style={{ padding: '10px 14px', fontSize: 9.5, color: 'rgba(200,194,187,0.25)', borderTop: '0.5px solid rgba(200,194,187,0.06)' }}>
-                          Assumes invoices and bills are paid on their due date, and GST is estimated from the last filed period — not payroll or income tax, which aren't tracked here. Treat as a guide, not a guarantee.
+                          "Invoiced in" is real outstanding Xero invoices, assumed paid on their due date. "Booked" is confirmed portal work with no invoice yet (by delivery/shoot date) — money not yet billed, so its timing is a rougher guess. GST is estimated from the last filed period. Doesn't include payroll or income tax, which aren't tracked here. Treat as a guide, not a guarantee.
                         </div>
                       </div>
                     </div>
-                  )}
+                    )
+                  })()}
 
                   {sectionLabel('Invoicing')}
                   <div className="ec-form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, alignItems: 'start' }}>
@@ -2398,15 +2428,15 @@ export default function StudioPortal() {
                     <div style={s.panel}>
                       <div style={{ padding: '14px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)' }}><span style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>Recent payments</span></div>
                       {recentPayments.length === 0 ? (
-                        <div style={{ padding: '14px 18px', fontSize: 12, color: 'rgba(200,194,187,0.25)' }}>No payments recorded yet</div>
+                        <div style={{ padding: '14px 18px', fontSize: 12, color: 'rgba(200,194,187,0.25)' }}>No payments recorded in Xero yet</div>
                       ) : recentPayments.map((inv: any) => (
-                        <div key={inv.id} onClick={() => router.push('/portal/studio/invoices')} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.06)', cursor: 'pointer' }}>
-                          <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(100,200,130,0.12)', color: 'rgba(100,200,130,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 600, flexShrink: 0 }}>{(inv.client_name || inv.client_email || '?').charAt(0).toUpperCase()}</div>
+                        <div key={inv.invoiceId} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.06)' }}>
+                          <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(100,200,130,0.12)', color: 'rgba(100,200,130,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 600, flexShrink: 0 }}>{(inv.contact || '?').charAt(0).toUpperCase()}</div>
                           <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 12, color: '#C8C2BB', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{inv.client_name || inv.client_email}</div>
-                            <div style={{ fontSize: 10, color: 'rgba(200,194,187,0.35)' }}>Paid {inv.paid_at ? new Date(inv.paid_at).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' }) : '—'}</div>
+                            <div style={{ fontSize: 12, color: '#C8C2BB', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{inv.contact}{inv.invoiceNumber ? ' · ' + inv.invoiceNumber : ''}</div>
+                            <div style={{ fontSize: 10, color: 'rgba(200,194,187,0.35)' }}>Paid {inv.paidDate ? new Date(inv.paidDate).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' }) : '—'}</div>
                           </div>
-                          <div style={{ fontSize: 13, fontWeight: 500, color: 'rgba(100,200,130,0.85)', whiteSpace: 'nowrap' }}>${(inv.total || 0).toLocaleString()}</div>
+                          <div style={{ fontSize: 13, fontWeight: 500, color: 'rgba(100,200,130,0.85)', whiteSpace: 'nowrap' }}>${(inv.amount || 0).toLocaleString()}</div>
                         </div>
                       ))}
                     </div>

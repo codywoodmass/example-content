@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireStudioUser, getValidXeroToken, xeroFetch } from '@/lib/xero'
-import { toDateStr, cellValue, parseSection, getOutstandingInvoices } from '@/lib/xeroReports'
+import { toDateStr, cellValue, parseSection, getOutstandingInvoices, getRecentPayments } from '@/lib/xeroReports'
 
 // Xero's ProfitAndLoss report defaults to the CURRENT MONTH when called with no
 // date params, not the financial year to date as its own UI report implies — an
@@ -116,16 +116,19 @@ export async function GET(req: NextRequest) {
   // of waiting on the main YTD report — this alone roughly halves wall-clock time
   // since cash flow's 6 Xero calls were previously the slowest link in a fully
   // sequential chain.
-  // Always pull 13 months (this month + 12 trailing) regardless of the chart's
-  // selected window — it's one Xero call either way, and the extra history lets
-  // the client compute "same month last year" and "vs last month" without a
-  // second round trip. The chart itself slices back down to `months`.
-  const monthlyPromise = xeroFetch(token.accessToken, token.tenantId, `/api.xro/2.0/Reports/ProfitAndLoss?periods=12&timeframe=MONTH`)
+  // Xero's ProfitAndLoss report only accepts periods 1-11 for timeframe=MONTH —
+  // periods=12 (tried briefly, for a clean 13-month "same month last year"
+  // lookback) gets rejected outright by Xero, which silently emptied this
+  // whole panel. 11 is the real ceiling, giving 12 data points (this month +
+  // 11 trailing) — one short of a full year-ago comparison, which the client
+  // already guards for (n >= 13) rather than showing a wrong number.
+  const monthlyPromise = xeroFetch(token.accessToken, token.tenantId, `/api.xro/2.0/Reports/ProfitAndLoss?periods=11&timeframe=MONTH`)
     .then(res => res.ok ? parseMonthly(res.data?.Reports?.[0]?.Rows || []) : [])
     .catch((e) => { console.error('Xero monthly P&L error:', e); return [] })
   const cashFlowPromise = getCashFlow(token.accessToken, token.tenantId, months)
     .catch((e) => { console.error('Xero cash flow error:', e); return [] })
   const outstandingPromise = getOutstandingInvoices(token.accessToken, token.tenantId)
+  const recentPaymentsPromise = getRecentPayments(token.accessToken, token.tenantId)
 
   const fyStart = await getFinancialYearStart(token.accessToken, token.tenantId)
   const todayStr = toDateStr(new Date())
@@ -158,7 +161,7 @@ export async function GET(req: NextRequest) {
   }
   if (!netProfit) netProfit = revenue.total - expenses.total
 
-  const [monthly, cashFlow, outstandingInvoices] = await Promise.all([monthlyPromise, cashFlowPromise, outstandingPromise])
+  const [monthly, cashFlow, outstandingInvoices, recentPayments] = await Promise.all([monthlyPromise, cashFlowPromise, outstandingPromise, recentPaymentsPromise])
 
   return NextResponse.json({
     connected: true,
@@ -171,5 +174,6 @@ export async function GET(req: NextRequest) {
     monthly,
     cashFlow,
     outstandingInvoices,
+    recentPayments,
   })
 }
