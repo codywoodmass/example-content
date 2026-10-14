@@ -842,13 +842,13 @@ function ProjectsPageInner() {
             {list.map((project, i) => {
               const activeTimer = tracker.timers.find(t => t.project_id === project.id)
               return (
-              <tr key={project.id} onClick={() => { setModalProject(project); setModalEditing(false) }} style={{ cursor: 'pointer', background: activeTimer ? 'rgba(100,200,130,0.05)' : i % 2 === 0 ? 'transparent' : 'rgba(200,194,187,0.02)' }}>
+              <tr key={project.id} onClick={() => { setModalProject(project); setModalEditing(false) }} style={{ cursor: 'pointer', background: activeTimer ? 'rgba(210,90,90,0.05)' : i % 2 === 0 ? 'transparent' : 'rgba(200,194,187,0.02)' }}>
                 <td style={{ padding: '12px 16px', borderBottom: '0.5px solid rgba(200,194,187,0.05)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                    {activeTimer && <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'rgba(100,200,130,0.9)', boxShadow: '0 0 5px rgba(100,200,130,0.7)', flexShrink: 0 }} />}
+                    {activeTimer && <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'rgba(210,90,90,0.9)', boxShadow: '0 0 5px rgba(210,90,90,0.7)', flexShrink: 0 }} />}
                     <div style={{ fontSize: 13, fontWeight: 500, color: '#C8C2BB' }}>{project.title}</div>
                   </div>
-                  {activeTimer ? <span style={{ fontSize: 9, color: 'rgba(100,200,130,0.75)' }}>{activeTimer.person} tracking · {elapsedLabel(activeTimer.started_at, tracker.now)}</span> : project.from_booking && <span style={{ fontSize: 9, color: 'rgba(100,150,220,0.7)' }}>From booking</span>}
+                  {activeTimer ? <span style={{ fontSize: 9, color: 'rgba(210,90,90,0.8)' }}>{activeTimer.person} tracking · {elapsedLabel(activeTimer.started_at, tracker.now)}</span> : project.from_booking && <span style={{ fontSize: 9, color: 'rgba(100,150,220,0.7)' }}>From booking</span>}
                 </td>
                 <td style={{ padding: '12px 16px', borderBottom: '0.5px solid rgba(200,194,187,0.05)', fontSize: 12, color: 'rgba(200,194,187,0.5)' }}>{project.client}</td>
                 <td style={{ padding: '12px 16px', borderBottom: '0.5px solid rgba(200,194,187,0.05)' }}><span style={{ fontSize: 10, padding: '3px 8px', borderRadius: 2, background: 'rgba(200,194,187,0.08)', color: 'rgba(200,194,187,0.5)', border: '0.5px solid rgba(200,194,187,0.1)' }}>{project.category}</span></td>
@@ -916,7 +916,7 @@ function ProjectsPageInner() {
     return (
       <div
         onMouseDown={e => startCardDrag(e, project)}
-        style={{ background: activeTimer ? 'rgba(100,200,130,0.05)' : '#1A1F28', border: `0.5px solid ${activeTimer ? 'rgba(100,200,130,0.4)' : dragId === project.id ? '#C8C2BB' : 'rgba(200,194,187,0.09)'}`, borderRadius: 6, padding: '14px 16px', cursor: 'pointer', opacity: dragId === project.id ? 0.5 : 1, transition: 'all 0.15s', userSelect: 'none', WebkitUserSelect: 'none', boxShadow: activeTimer ? '0 0 0 1px rgba(100,200,130,0.15)' : 'none' }}
+        style={{ background: activeTimer ? 'rgba(210,90,90,0.05)' : '#1A1F28', border: `0.5px solid ${activeTimer ? 'rgba(210,90,90,0.4)' : dragId === project.id ? '#C8C2BB' : 'rgba(200,194,187,0.09)'}`, borderRadius: 6, padding: '14px 16px', cursor: 'pointer', opacity: dragId === project.id ? 0.5 : 1, transition: 'all 0.15s', userSelect: 'none', WebkitUserSelect: 'none', boxShadow: activeTimer ? '0 0 0 1px rgba(210,90,90,0.15)' : 'none' }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
           <div style={{ fontSize: 13, fontWeight: 500, color: '#C8C2BB', lineHeight: 1.3, flex: 1, paddingRight: 8 }}>{project.title}</div>
@@ -924,8 +924,8 @@ function ProjectsPageInner() {
         </div>
         {activeTimer && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-            <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'rgba(100,200,130,0.9)', boxShadow: '0 0 5px rgba(100,200,130,0.7)', flexShrink: 0 }} />
-            <span style={{ fontSize: 10, color: 'rgba(100,200,130,0.85)' }}>{activeTimer.person} tracking · {elapsedLabel(activeTimer.started_at, tracker.now)}</span>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'rgba(210,90,90,0.9)', boxShadow: '0 0 5px rgba(210,90,90,0.7)', flexShrink: 0 }} />
+            <span style={{ fontSize: 10, color: 'rgba(210,90,90,0.85)' }}>{activeTimer.person} tracking · {elapsedLabel(activeTimer.started_at, tracker.now)}</span>
           </div>
         )}
         <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', marginBottom: 10 }}>{project.client}</div>
@@ -1523,16 +1523,16 @@ function ProjectsPageInner() {
                 const otherTrackingThis = tracker.others.filter(t => t.project_id === modalProject.id)
                 return (
                   <div style={{ marginBottom: 20 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 16, padding: '12px 14px', borderRadius: 6, background: trackingThis ? 'rgba(100,200,130,0.08)' : 'rgba(200,194,187,0.03)', border: `0.5px solid ${trackingThis ? 'rgba(100,200,130,0.25)' : 'rgba(200,194,187,0.09)'}` }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 16, padding: '12px 14px', borderRadius: 6, background: trackingThis ? 'rgba(210,90,90,0.08)' : 'rgba(200,194,187,0.03)', border: `0.5px solid ${trackingThis ? 'rgba(210,90,90,0.25)' : 'rgba(200,194,187,0.09)'}` }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         {trackingThis ? (
                           <>
-                            <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'rgba(100,200,130,0.9)', boxShadow: '0 0 6px rgba(100,200,130,0.7)' }} />
+                            <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'rgba(210,90,90,0.9)', boxShadow: '0 0 6px rgba(210,90,90,0.7)' }} />
                             <span style={{ fontSize: 12, color: '#C8C2BB' }}>Tracking since {new Date(tracker.mine!.started_at).toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit' })} · {elapsedLabel(tracker.mine!.started_at, tracker.now)}</span>
                           </>
                         ) : otherTrackingThis.length > 0 ? (
                           otherTrackingThis.map(t => (
-                            <span key={t.id} style={{ fontSize: 12, color: 'rgba(200,194,187,0.5)' }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: 'rgba(100,150,220,0.8)', display: 'inline-block', marginRight: 8 }} />{t.person} is tracking this now · {elapsedLabel(t.started_at, tracker.now)}</span>
+                            <span key={t.id} style={{ fontSize: 12, color: 'rgba(200,194,187,0.5)' }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: 'rgba(210,90,90,0.8)', display: 'inline-block', marginRight: 8 }} />{t.person} is tracking this now · {elapsedLabel(t.started_at, tracker.now)}</span>
                           ))
                         ) : (
                           <span style={{ fontSize: 12, color: 'rgba(200,194,187,0.35)' }}>Not currently being tracked</span>
@@ -1541,7 +1541,7 @@ function ProjectsPageInner() {
                       {trackingThis ? (
                         <button disabled={tracker.busy} onClick={tracker.stop} style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, border: 'none', background: '#C8C2BB', color: '#111', cursor: tracker.busy ? 'not-allowed' : 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>Stop tracking</button>
                       ) : (
-                        <button disabled={tracker.busy || !!tracker.mine} title={tracker.mine ? 'Stop your current timer first' : ''} onClick={() => tracker.start(modalProject.id, 'Editing')} style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, border: '0.5px solid rgba(100,200,130,0.35)', color: 'rgba(100,200,130,0.9)', background: 'rgba(100,200,130,0.08)', cursor: tracker.busy || tracker.mine ? 'not-allowed' : 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>▶ Start tracking</button>
+                        <button disabled={tracker.busy || !!tracker.mine} title={tracker.mine ? 'Stop your current timer first' : ''} onClick={() => tracker.start(modalProject.id, 'Editing')} style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, border: '0.5px solid rgba(210,90,90,0.35)', color: 'rgba(210,90,90,0.9)', background: 'rgba(210,90,90,0.08)', cursor: tracker.busy || tracker.mine ? 'not-allowed' : 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>▶ Start tracking</button>
                       )}
                     </div>
                     <div className="ec-form-grid-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 20 }}>

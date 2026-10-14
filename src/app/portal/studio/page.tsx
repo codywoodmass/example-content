@@ -1227,9 +1227,9 @@ export default function StudioPortal() {
                               <div key={person} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
                                 <div style={{ position: 'relative' }}>
                                   <RingProgress pct={(total / WEEK_REF_HOURS) * 100} color={RING_COLORS[i % RING_COLORS.length]} label={`${total.toFixed(1)}h`} sublabel={`of ${WEEK_REF_HOURS}h`} />
-                                  {live && <span style={{ position: 'absolute', top: -2, right: -2, width: 9, height: 9, borderRadius: '50%', background: 'rgba(100,200,130,0.9)', boxShadow: '0 0 6px rgba(100,200,130,0.8)', border: '2px solid #1A1F28' }} />}
+                                  {live && <span style={{ position: 'absolute', top: -2, right: -2, width: 9, height: 9, borderRadius: '50%', background: 'rgba(210,90,90,0.9)', boxShadow: '0 0 6px rgba(210,90,90,0.8)', border: '2px solid #1A1F28' }} />}
                                 </div>
-                                <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.55)', textAlign: 'center' as const }}>{person}{live && <span style={{ color: 'rgba(100,200,130,0.8)', display: 'block', fontSize: 9 }}>tracking now</span>}</div>
+                                <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.55)', textAlign: 'center' as const }}>{person}{live && <span style={{ color: 'rgba(210,90,90,0.85)', display: 'block', fontSize: 9 }}>tracking now</span>}</div>
                               </div>
                             )
                           })}
