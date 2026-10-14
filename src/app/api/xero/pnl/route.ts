@@ -174,6 +174,7 @@ export async function GET(req: NextRequest) {
     monthly,
     cashFlow,
     outstandingInvoices,
-    recentPayments,
+    recentPayments: recentPayments.items,
+    recentPaymentsError: recentPayments.error,
   })
 }

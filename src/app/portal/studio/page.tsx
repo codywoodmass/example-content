@@ -2248,7 +2248,7 @@ export default function StudioPortal() {
                   })()}
 
                   {sectionLabel('Xero P&L breakdown')}
-                  <div className="ec-form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14, alignItems: 'start' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginBottom: 14 }}>
                     <div style={s.panel}>
                       <div style={{ padding: '14px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)' }}><span style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>Revenue</span></div>
                       {(pnl.revenueBreakdown || []).map((row: any) => (
@@ -2292,7 +2292,7 @@ export default function StudioPortal() {
                           <button onClick={() => connectXero()} style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 4, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>Reconnect →</button>
                         </div>
                       )}
-                      <div className="ec-form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, alignItems: 'start' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                         <div style={s.panel}>
                           <div style={{ padding: '14px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <span style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>Filing schedule</span>
@@ -2403,7 +2403,7 @@ export default function StudioPortal() {
                   })()}
 
                   {sectionLabel('Invoicing')}
-                  <div className="ec-form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, alignItems: 'start' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                     <div style={s.panel}>
                       <div style={{ padding: '14px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -2428,7 +2428,7 @@ export default function StudioPortal() {
                     <div style={s.panel}>
                       <div style={{ padding: '14px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)' }}><span style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>Recent payments</span></div>
                       {recentPayments.length === 0 ? (
-                        <div style={{ padding: '14px 18px', fontSize: 12, color: 'rgba(200,194,187,0.25)' }}>No payments recorded in Xero yet</div>
+                        <div style={{ padding: '14px 18px', fontSize: 12, color: pnl.recentPaymentsError ? 'rgba(210,90,90,0.7)' : 'rgba(200,194,187,0.25)' }}>{pnl.recentPaymentsError ? `Couldn't load payments: ${pnl.recentPaymentsError}` : 'No invoices marked paid in Xero'}</div>
                       ) : recentPayments.map((inv: any) => (
                         <div key={inv.invoiceId} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.06)' }}>
                           <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(100,200,130,0.12)', color: 'rgba(100,200,130,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 600, flexShrink: 0 }}>{(inv.contact || '?').charAt(0).toUpperCase()}</div>

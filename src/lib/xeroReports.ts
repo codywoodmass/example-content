@@ -89,12 +89,15 @@ export async function getOutstandingInvoices(accessToken: string, tenantId: stri
 // The app's own invoices1 table is meant to mirror Xero but can drift out of
 // sync or simply not be the path payments actually arrived through — pulling
 // paid invoices straight from Xero (FullyPaidOnDate) is ground truth instead.
-export async function getRecentPayments(accessToken: string, tenantId: string, limit = 6) {
+export async function getRecentPayments(accessToken: string, tenantId: string, limit = 6): Promise<{ items: any[]; error: string | null }> {
   try {
+    // No `order` param here — UpdatedDateUTC isn't a documented orderable
+    // field for this endpoint and an invalid one can fail the whole request;
+    // sorting happens client-side below instead, on a field we know exists.
     const where = encodeURIComponent('Type=="ACCREC" && Status=="PAID"')
-    const res = await xeroFetch(accessToken, tenantId, `/api.xro/2.0/Invoices?where=${where}&order=UpdatedDateUTC DESC`)
-    if (!res.ok) return []
-    return (res.data?.Invoices || [])
+    const res = await xeroFetch(accessToken, tenantId, `/api.xro/2.0/Invoices?where=${where}`)
+    if (!res.ok) return { items: [], error: res.data?.Message || `Xero returned ${res.status}` }
+    const items = (res.data?.Invoices || [])
       .map((inv: any) => {
         const paidDate = parseXeroDate(inv.FullyPaidOnDate) || parseXeroDate(inv.UpdatedDateUTC)
         return {
@@ -107,9 +110,10 @@ export async function getRecentPayments(accessToken: string, tenantId: string, l
       })
       .sort((a: any, b: any) => (b.paidDate || '').localeCompare(a.paidDate || ''))
       .slice(0, limit)
-  } catch (e) {
+    return { items, error: null }
+  } catch (e: any) {
     console.error('Xero recent payments fetch error:', e)
-    return []
+    return { items: [], error: e?.message || 'request failed' }
   }
 }
 
