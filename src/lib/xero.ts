@@ -7,12 +7,17 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 // Granular scopes (required for Xero apps created on/after 2 Mar 2026):
 // accounting.invoices replaces the old broad accounting.transactions for writing
 // invoices, and accounting.reports.read (which split into one scope per report
-// type) is replaced here by accounting.reports.profitandloss.read for the P&L and
-// accounting.reports.banksummary.read for the cash in/out chart. Legacy broad
-// scopes are silently rejected with invalid_scope by Xero's /authorize endpoint for
-// newer apps, failing the whole request before any login screen (Xero doesn't say
-// which scope was bad) — confirmed by bisection testing.
-export const XERO_SCOPES = 'openid profile email accounting.invoices accounting.reports.profitandloss.read accounting.reports.banksummary.read accounting.reports.taxsummary.read accounting.reports.balancesheet.read accounting.contacts offline_access'
+// type) is replaced here by accounting.reports.profitandloss.read for the P&L,
+// accounting.reports.banksummary.read for the cash in/out chart,
+// accounting.reports.taxreports.read for the GST/TaxSummary report, and
+// accounting.reports.balancesheet.read for the cash flow forecast's bank balance.
+// Legacy broad scopes AND any unrecognised scope string are silently rejected
+// with invalid_scope by Xero's /authorize endpoint for newer apps, failing the
+// whole request (and every scope in it, not just the bad one) before any login
+// screen — confirmed by bisection testing, and by accounting.reports.taxsummary.read
+// (not a real Xero scope; the correct one is taxreports.read) breaking the entire
+// connect flow until caught.
+export const XERO_SCOPES = 'openid profile email accounting.invoices accounting.reports.profitandloss.read accounting.reports.banksummary.read accounting.reports.taxreports.read accounting.reports.balancesheet.read accounting.contacts offline_access'
 
 export function xeroAuthorizeUrl(state: string, codeChallenge: string, scopeOverride?: string) {
   const params = new URLSearchParams({
