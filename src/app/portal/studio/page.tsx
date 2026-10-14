@@ -447,7 +447,12 @@ export default function StudioPortal() {
     const endStr = localDateKey(sunday)
     const AUCKLAND = { lat: -36.8485, lon: 174.7633 }
     const WAIKATO = { lat: -37.7870, lon: 175.2793 } // Hamilton, as a representative point for the region
-    fetch(`https://api.open-meteo.com/v1/forecast?latitude=${AUCKLAND.lat},${WAIKATO.lat}&longitude=${AUCKLAND.lon},${WAIKATO.lon}&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum,windspeed_10m_max,weathercode&timezone=Pacific/Auckland&start_date=${startStr}&end_date=${endStr}`)
+    // Explicitly requests the ECMWF IFS 0.25° model rather than Open-Meteo's
+    // "best_match" auto-selection — ECMWF is the more accurate global model
+    // for NZ specifically (no dedicated high-res regional model exists here,
+    // unlike e.g. the US/Europe), and best_match's blend can fall back to
+    // the less accurate GFS.
+    fetch(`https://api.open-meteo.com/v1/forecast?latitude=${AUCKLAND.lat},${WAIKATO.lat}&longitude=${AUCKLAND.lon},${WAIKATO.lon}&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum,windspeed_10m_max,weathercode&timezone=Pacific/Auckland&models=ecmwf_ifs025&start_date=${startStr}&end_date=${endStr}`)
       .then(r => r.json())
       .then(data => {
         const [akl, wko] = Array.isArray(data) ? data : [data, null]
@@ -1211,6 +1216,23 @@ export default function StudioPortal() {
                   )}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                  {userRole === 'studio' && (
+                    <div>
+                      <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 14 }}>Booking requests</div>
+                      <div style={{ background: bookingCount > 0 ? 'rgba(210,90,90,0.06)' : '#1A1F28', border: '0.5px solid ' + (bookingCount > 0 ? 'rgba(210,90,90,0.25)' : 'rgba(200,194,187,0.09)'), borderRadius: 7, padding: '16px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <div style={{ fontSize: 20, fontWeight: 600, color: (bookingCount + changeRequestCount) > 0 ? 'rgba(210,90,90,0.9)' : '#C8C2BB' }}>{bookingCount + changeRequestCount}</div>
+                          <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', marginTop: 2 }}>
+                            {bookingCount > 0 && <span>{bookingCount} booking request{bookingCount !== 1 ? 's' : ''}</span>}
+                            {bookingCount > 0 && changeRequestCount > 0 && <span> · </span>}
+                            {changeRequestCount > 0 && <span style={{ color: 'rgba(210,90,90,0.8)' }}>{changeRequestCount} change request{changeRequestCount !== 1 ? 's' : ''}</span>}
+                            {bookingCount === 0 && changeRequestCount === 0 && <span>No pending requests</span>}
+                          </div>
+                        </div>
+                        {(bookingCount + changeRequestCount) > 0 && <button onClick={() => setActiveView('bookings')} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, border: '0.5px solid rgba(210,90,90,0.4)', color: 'rgba(210,90,90,0.9)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Review →</button>}
+                      </div>
+                    </div>
+                  )}
                   {(() => {
                     const liveFor = (person: string) => tracker.timers.find(t => t.person === person)
                     const people = Array.from(new Set([...weeklyTimeTotals.map(w => w.person), ...tracker.timers.map(t => t.person)]))
@@ -1240,23 +1262,6 @@ export default function StudioPortal() {
                       </div>
                     )
                   })()}
-                  {userRole === 'studio' && (
-                    <div>
-                      <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 14 }}>Booking requests</div>
-                      <div style={{ background: bookingCount > 0 ? 'rgba(210,90,90,0.06)' : '#1A1F28', border: '0.5px solid ' + (bookingCount > 0 ? 'rgba(210,90,90,0.25)' : 'rgba(200,194,187,0.09)'), borderRadius: 7, padding: '16px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div>
-                          <div style={{ fontSize: 20, fontWeight: 600, color: (bookingCount + changeRequestCount) > 0 ? 'rgba(210,90,90,0.9)' : '#C8C2BB' }}>{bookingCount + changeRequestCount}</div>
-                          <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', marginTop: 2 }}>
-                            {bookingCount > 0 && <span>{bookingCount} booking request{bookingCount !== 1 ? 's' : ''}</span>}
-                            {bookingCount > 0 && changeRequestCount > 0 && <span> · </span>}
-                            {changeRequestCount > 0 && <span style={{ color: 'rgba(210,90,90,0.8)' }}>{changeRequestCount} change request{changeRequestCount !== 1 ? 's' : ''}</span>}
-                            {bookingCount === 0 && changeRequestCount === 0 && <span>No pending requests</span>}
-                          </div>
-                        </div>
-                        {(bookingCount + changeRequestCount) > 0 && <button onClick={() => setActiveView('bookings')} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, border: '0.5px solid rgba(210,90,90,0.4)', color: 'rgba(210,90,90,0.9)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Review →</button>}
-                      </div>
-                    </div>
-                  )}
                   <div style={{ marginTop: 28 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
                       <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)' }}>To do</div>
@@ -1356,19 +1361,26 @@ export default function StudioPortal() {
                   return (
                     <div style={{ marginBottom: 28 }}>
                       <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 10 }}>Weather — week ahead</div>
-                      <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, padding: 14, overflowX: 'auto' }}>
-                        {!hasAnyData ? (
-                          <div style={{ padding: '6px 0', fontSize: 12, color: 'rgba(200,194,187,0.25)', textAlign: 'center' }}>Forecast unavailable for this week</div>
-                        ) : (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-                            <div>
-                              <div style={{ fontSize: 10, color: 'rgba(200,194,187,0.5)', marginBottom: 8 }}>🏙️ Auckland</div>
-                              <RegionCards pick={(w: any) => w?.akl} />
+                      <div style={{ position: 'relative' }}>
+                        <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, padding: 14, overflowX: 'auto' }}>
+                          {!hasAnyData ? (
+                            <div style={{ padding: '6px 0', fontSize: 12, color: 'rgba(200,194,187,0.25)', textAlign: 'center' }}>Forecast unavailable for this week</div>
+                          ) : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+                              <div>
+                                <div style={{ fontSize: 10, color: 'rgba(200,194,187,0.5)', marginBottom: 8 }}>Auckland</div>
+                                <RegionCards pick={(w: any) => w?.akl} />
+                              </div>
+                              <div>
+                                <div style={{ fontSize: 10, color: 'rgba(200,194,187,0.5)', marginBottom: 8 }}>Waikato</div>
+                                <RegionCards pick={(w: any) => w?.wko} />
+                              </div>
                             </div>
-                            <div>
-                              <div style={{ fontSize: 10, color: 'rgba(200,194,187,0.5)', marginBottom: 8 }}>🚜 Waikato</div>
-                              <RegionCards pick={(w: any) => w?.wko} />
-                            </div>
+                          )}
+                        </div>
+                        {hasAnyData && (
+                          <div style={{ position: 'absolute', top: 1, right: 1, bottom: 1, width: 40, pointerEvents: 'none', borderRadius: '0 7px 7px 0', background: 'linear-gradient(90deg, transparent, #1A1F28 65%)', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: 6 }}>
+                            <span style={{ fontSize: 13, color: 'rgba(200,194,187,0.45)' }}>→</span>
                           </div>
                         )}
                       </div>
