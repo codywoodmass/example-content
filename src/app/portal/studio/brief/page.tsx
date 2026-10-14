@@ -105,7 +105,7 @@ export default function BriefPage() {
           <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', marginTop: 2 }}>AI-powered property research for shoot preparation</div>
         </div>
 
-        <div style={{ padding: 28, maxWidth: 800 }}>
+        <div style={{ padding: 28 }}>
           <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, overflow: 'hidden', marginBottom: 20 }}>
             <div style={{ padding: '13px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>Property details</div>
             <div style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 14 }}>

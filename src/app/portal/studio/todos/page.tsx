@@ -5,7 +5,7 @@ import StudioSidebar from '../StudioSidebar'
 import { notify, confirmDialog, ToastHost, ConfirmHost } from '@/lib/notify'
 import { localDateKey } from '@/lib/time'
 
-type Todo = { id: string; text: string; due_date: string | null; done: boolean; created_at: string }
+type Todo = { id: string; text: string; due_date: string | null; done: boolean; created_at: string; completed_at: string | null }
 
 const BUCKET_ORDER = ['Overdue', 'Today', 'Tomorrow', 'This week', 'Later', 'No date']
 const BUCKET_COLOR: Record<string, string> = {
@@ -40,6 +40,11 @@ export default function TodosPage() {
   async function loadTodos() {
     if (!userEmail) return
     setLoading(true)
+    // Tasks ticked off more than a day ago are cleared out so the Done
+    // section doesn't accumulate indefinitely. Rows done before completed_at
+    // existed (null) are left alone rather than guessed at.
+    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+    await supabase.from('todos').delete().eq('user_email', userEmail).eq('done', true).lt('completed_at', cutoff)
     const { data } = await supabase.from('todos').select('*')
       .eq('user_email', userEmail)
       .order('done', { ascending: true })
@@ -59,7 +64,8 @@ export default function TodosPage() {
   }
 
   async function toggleTodo(todo: Todo) {
-    await supabase.from('todos').update({ done: !todo.done }).eq('id', todo.id)
+    const willBeDone = !todo.done
+    await supabase.from('todos').update({ done: willBeDone, completed_at: willBeDone ? new Date().toISOString() : null }).eq('id', todo.id)
     loadTodos()
   }
 

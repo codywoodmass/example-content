@@ -458,7 +458,7 @@ export default function Home() {
 
       {/* WORK SECTION */}
       <div style={{ padding: 'clamp(24px, 5vw, 40px) 0 0', borderTop: '0.5px solid rgba(200,194,187,0.1)' }}>
-        <a href="/work" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 16, padding: '0 clamp(20px, 5vw, 48px)', paddingBottom: 40, borderBottom: '0.5px solid rgba(200,194,187,0.1)', marginBottom: 48, textDecoration: 'none' }}>
+        <a href="/work" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 16, padding: '0 clamp(20px, 5vw, 48px)', paddingBottom: 40, marginBottom: 48, textDecoration: 'none' }}>
           <div>
             <p style={{ fontSize: 11, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)', marginBottom: 10 }}>Selected work</p>
             <h2 style={{ fontSize: 'clamp(32px, 6vw, 52px)', fontWeight: 400, color: '#fff', letterSpacing: '0.02em', margin: 0, fontFamily: "'Bebas Neue', sans-serif", textTransform: 'uppercase' }}>Our recent work</h2>
