@@ -956,7 +956,7 @@ function ProjectsPageInner() {
       <div className="ec-toolbar-wrap" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 28px', height: 57, borderBottom: '0.5px solid rgba(200,194,187,0.09)', background: '#14181F', position: 'sticky', top: 0, zIndex: 20 }}>
         <div>
           <div style={{ fontSize: 14, fontWeight: 500, color: '#fff' }}>Projects</div>
-          <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', marginTop: 1 }}>{projects.length} projects · {projects.filter(p => p.stage === 'Completed' && !p.invoice_id).length} ready to invoice</div>
+          <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', marginTop: 1 }}>{projects.filter(p => !p.archived).length} active projects · {projects.filter(p => p.stage === 'Completed' && !p.invoice_id).length} ready to invoice</div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
