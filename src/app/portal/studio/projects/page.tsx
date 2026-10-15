@@ -25,7 +25,7 @@ function formatDate(dateStr: string | null | undefined): string {
 }
 
 type ShootDate = { id: string; date: string; start_time: string; end_time: string; notes: string }
-type TimeEntry = { id: string; project_id: string; phase: string; hours: number; person: string | null; entry_date: string; note: string | null; created_at: string; started_at: string | null; ended_at: string | null }
+type TimeEntry = { id: string; project_id: string; phase: string; hours: number; person: string | null; entry_date: string; note: string | null; created_at: string; started_at: string | null; ended_at: string | null; billable: boolean }
 const TIME_PHASES = ['Pre-Production', 'Shooting', 'Editing']
 
 function briefTemplate(title: string): string {
@@ -311,6 +311,9 @@ function ProjectsPageInner() {
         person: newTimeEntry.person || null,
         entry_date: newTimeEntry.entry_date,
         note: newTimeEntry.note || null,
+        billable: true, // project-tied work is billable by default; non-billable
+        // time (meetings, admin, training) is logged separately against no
+        // project at all, from the team member's own profile.
       }]).select().single()
       if (error) { notify('Error logging time: ' + error.message, 'error'); return }
       setTimeEntries(p => [data, ...p])

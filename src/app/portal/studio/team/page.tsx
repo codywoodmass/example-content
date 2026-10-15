@@ -2,6 +2,9 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { notify, confirmDialog, ToastHost, ConfirmHost } from '@/lib/notify'
+import { localDateKey } from '@/lib/time'
+import { mondayOf } from '@/lib/timeTracking'
 import StudioSidebar from '../StudioSidebar'
 
 type TeamMember = {
@@ -14,6 +17,26 @@ type TeamMember = {
   bio: string
   active: boolean
 }
+
+type MemberTimeEntry = {
+  id: string
+  project_id: string | null
+  label: string | null
+  phase: string
+  hours: number
+  entry_date: string
+  note: string | null
+  billable: boolean
+  projects1: { title: string } | null
+}
+
+// Fin's KPI (and the general target for billable utilisation) is 85% of a
+// 40-hour week spent on billable work — shown as a reference for everyone
+// rather than a per-person configurable number, since that's the only
+// target actually asked for.
+const TARGET_WEEKLY_HOURS = 40
+const TARGET_BILLABLE_PCT = 85
+const INTERNAL_LABELS = ['Meeting', 'Admin', 'Training', 'Other']
 
 export default function TeamPage() {
   const router = useRouter()
@@ -45,6 +68,67 @@ export default function TeamPage() {
 
   const [previewBroken, setPreviewBroken] = useState(false)
   useEffect(() => { setPreviewBroken(false) }, [selected?.id])
+
+  const [memberWeekOffset, setMemberWeekOffset] = useState(0)
+  const [memberEntries, setMemberEntries] = useState<MemberTimeEntry[]>([])
+  const [memberEntriesLoading, setMemberEntriesLoading] = useState(false)
+  const [newInternal, setNewInternal] = useState({ label: 'Meeting', hours: '', entry_date: localDateKey(new Date()), note: '', billable: false })
+  const [addingInternal, setAddingInternal] = useState(false)
+
+  useEffect(() => { setMemberWeekOffset(0) }, [selected?.id])
+
+  const weekStart = (() => {
+    const monday = mondayOf(new Date())
+    monday.setDate(monday.getDate() + memberWeekOffset * 7)
+    return monday
+  })()
+  const weekEnd = (() => { const d = new Date(weekStart); d.setDate(d.getDate() + 6); return d })()
+
+  async function loadMemberEntries() {
+    if (!selected) return
+    setMemberEntriesLoading(true)
+    const { data, error } = await supabase.from('time_entries')
+      .select('id, project_id, label, phase, hours, entry_date, note, billable, projects1(title)')
+      .eq('person', selected.name)
+      .gte('entry_date', localDateKey(weekStart))
+      .lte('entry_date', localDateKey(weekEnd))
+      .order('entry_date', { ascending: false })
+    if (!error) setMemberEntries((data as any) || [])
+    setMemberEntriesLoading(false)
+  }
+  useEffect(() => { if (selected) loadMemberEntries() }, [selected?.id, memberWeekOffset])
+
+  async function addInternalEntry() {
+    if (!selected) return
+    const hours = parseFloat(newInternal.hours)
+    if (!Number.isFinite(hours) || hours <= 0) { notify('Enter a valid number of hours', 'error'); return }
+    setAddingInternal(true)
+    try {
+      const { data, error } = await supabase.from('time_entries').insert([{
+        project_id: null,
+        label: newInternal.label,
+        phase: 'Internal',
+        hours,
+        person: selected.name,
+        entry_date: newInternal.entry_date,
+        note: newInternal.note || null,
+        billable: newInternal.billable,
+      }]).select('id, project_id, label, phase, hours, entry_date, note, billable, projects1(title)').single()
+      if (error) { notify('Error logging time: ' + error.message, 'error'); return }
+      if (data && localDateKey(weekStart) <= newInternal.entry_date && newInternal.entry_date <= localDateKey(weekEnd)) {
+        setMemberEntries(p => [data as any, ...p])
+      }
+      setNewInternal(p => ({ ...p, hours: '', note: '' }))
+    } finally {
+      setAddingInternal(false)
+    }
+  }
+
+  async function deleteMemberEntry(id: string) {
+    if (!(await confirmDialog('Delete this time entry?'))) return
+    await supabase.from('time_entries').delete().eq('id', id)
+    setMemberEntries(p => p.filter(e => e.id !== id))
+  }
 
   async function uploadTeamPhoto(file: File, apply: (url: string) => void) {
     setUploadingPhoto(true)
@@ -104,6 +188,8 @@ export default function TeamPage() {
 
   return (
     <main style={{ background: '#0E1014', minHeight: '100vh', fontFamily: 'Inter, sans-serif', color: '#C8C2BB', fontSize: 13, display: 'flex' }}>
+      <ToastHost />
+      <ConfirmHost />
       <StudioSidebar active="team" />
       <div className="ec-studio-main ec-split-pane" style={{ flex: 1, display: 'flex', overflow: 'hidden', height: '100vh', minWidth: 0 }}>
 
@@ -177,6 +263,78 @@ export default function TeamPage() {
                   <div style={{ gridColumn: 'span 2' }}><label style={lbl}>Bio (shown in pitch decks)</label><textarea style={{ ...inp, resize: 'vertical' as const, lineHeight: 1.65, minHeight: 80 }} value={selected.bio || ''} onChange={e => setSelected(s => s ? { ...s, bio: e.target.value } : s)} placeholder="Short bio for pitch decks and client-facing materials..." /></div>
                 </div>
               </div>
+
+              {(() => {
+                const totalHours = memberEntries.reduce((s, e) => s + e.hours, 0)
+                const billableHours = memberEntries.filter(e => e.billable).reduce((s, e) => s + e.hours, 0)
+                const billablePct = TARGET_WEEKLY_HOURS ? Math.round((billableHours / TARGET_WEEKLY_HOURS) * 100) : 0
+                const onTarget = billablePct >= TARGET_BILLABLE_PCT
+                return (
+                  <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, overflow: 'hidden', marginBottom: 20 }}>
+                    <div style={{ padding: '13px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>Time tracking</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <button onClick={() => setMemberWeekOffset(o => o - 1)} style={{ background: 'transparent', border: 'none', color: 'rgba(200,194,187,0.5)', cursor: 'pointer', fontSize: 13, padding: '2px 6px', fontFamily: 'inherit' }}>‹</button>
+                        <span style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', whiteSpace: 'nowrap' as const }}>
+                          {memberWeekOffset === 0 ? 'This week' : weekStart.toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' }) + ' – ' + weekEnd.toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' })}
+                        </span>
+                        <button onClick={() => setMemberWeekOffset(o => Math.min(0, o + 1))} disabled={memberWeekOffset === 0} style={{ background: 'transparent', border: 'none', color: memberWeekOffset === 0 ? 'rgba(200,194,187,0.15)' : 'rgba(200,194,187,0.5)', cursor: memberWeekOffset === 0 ? 'default' : 'pointer', fontSize: 13, padding: '2px 6px', fontFamily: 'inherit' }}>›</button>
+                      </div>
+                    </div>
+                    <div style={{ padding: 18 }}>
+                      <div className="ec-form-grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 18 }}>
+                        <div style={{ background: 'rgba(200,194,187,0.03)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 6, padding: '12px 14px' }}>
+                          <div style={{ fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>Total hours</div>
+                          <div style={{ fontSize: 20, fontWeight: 600, color: '#C8C2BB' }}>{totalHours.toFixed(1)}h</div>
+                        </div>
+                        <div style={{ background: 'rgba(200,194,187,0.03)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 6, padding: '12px 14px' }}>
+                          <div style={{ fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>Billable hours</div>
+                          <div style={{ fontSize: 20, fontWeight: 600, color: '#C8C2BB' }}>{billableHours.toFixed(1)}h</div>
+                        </div>
+                        <div style={{ background: onTarget ? 'rgba(100,200,130,0.06)' : 'rgba(210,175,80,0.06)', border: `0.5px solid ${onTarget ? 'rgba(100,200,130,0.25)' : 'rgba(210,175,80,0.25)'}`, borderRadius: 6, padding: '12px 14px' }}>
+                          <div style={{ fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>Billable % (target {TARGET_BILLABLE_PCT}%)</div>
+                          <div style={{ fontSize: 20, fontWeight: 600, color: onTarget ? 'rgba(100,200,130,0.9)' : 'rgba(210,175,80,0.9)' }}>{billablePct}%</div>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 8, marginBottom: 16, padding: '10px 12px', background: 'rgba(200,194,187,0.03)', borderRadius: 6, border: '0.5px solid rgba(200,194,187,0.08)' }}>
+                        <select value={newInternal.label} onChange={e => setNewInternal(p => ({ ...p, label: e.target.value }))} style={{ flex: '1 1 110px', minWidth: 0, background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '7px 8px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }}>
+                          {INTERNAL_LABELS.map(l => <option key={l} value={l}>{l}</option>)}
+                        </select>
+                        <input type="number" min="0" step="0.25" placeholder="Hours" value={newInternal.hours} onChange={e => setNewInternal(p => ({ ...p, hours: e.target.value }))} style={{ flex: '0 1 70px', minWidth: 0, background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '7px 8px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }} />
+                        <input type="date" value={newInternal.entry_date} onChange={e => setNewInternal(p => ({ ...p, entry_date: e.target.value }))} style={{ flex: '1 1 130px', minWidth: 0, background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '7px 8px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }} />
+                        <input placeholder="Note (optional)" value={newInternal.note} onChange={e => setNewInternal(p => ({ ...p, note: e.target.value }))} style={{ flex: '2 1 140px', minWidth: 0, background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '7px 8px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }} />
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'rgba(200,194,187,0.5)', flex: '0 0 auto', cursor: 'pointer' }}>
+                          <input type="checkbox" checked={newInternal.billable} onChange={e => setNewInternal(p => ({ ...p, billable: e.target.checked }))} />
+                          Billable
+                        </label>
+                        <button onClick={addInternalEntry} disabled={addingInternal || !newInternal.hours} style={{ flexShrink: 0, fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 4, background: newInternal.hours ? '#C8C2BB' : 'rgba(200,194,187,0.1)', color: newInternal.hours ? '#111' : 'rgba(200,194,187,0.3)', border: 'none', cursor: newInternal.hours ? 'pointer' : 'not-allowed', fontFamily: 'inherit', fontWeight: 500 }}>+ Log</button>
+                      </div>
+
+                      {memberEntriesLoading ? (
+                        <div style={{ padding: '14px 0', fontSize: 12, color: 'rgba(200,194,187,0.25)' }}>Loading...</div>
+                      ) : memberEntries.length === 0 ? (
+                        <div style={{ padding: '14px 0', fontSize: 12, color: 'rgba(200,194,187,0.25)' }}>Nothing logged this week yet</div>
+                      ) : (
+                        <div style={{ background: 'rgba(200,194,187,0.02)', border: '0.5px solid rgba(200,194,187,0.08)', borderRadius: 6, overflow: 'hidden' }}>
+                          {memberEntries.map((e, i) => (
+                            <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderBottom: i < memberEntries.length - 1 ? '0.5px solid rgba(200,194,187,0.06)' : 'none' }}>
+                              <span style={{ fontSize: 11, color: 'rgba(200,194,187,0.35)', width: 60, flexShrink: 0 }}>{new Date(e.entry_date + 'T12:00:00').toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' })}</span>
+                              <span style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB', width: 44, flexShrink: 0 }}>{e.hours}h</span>
+                              <span style={{ fontSize: 9, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '2px 7px', borderRadius: 2, background: e.billable ? 'rgba(100,200,130,0.1)' : 'rgba(200,194,187,0.08)', color: e.billable ? 'rgba(100,200,130,0.8)' : 'rgba(200,194,187,0.4)', flexShrink: 0 }}>{e.billable ? 'Billable' : 'Non-billable'}</span>
+                              <span style={{ fontSize: 12, color: '#C8C2BB', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>
+                                {e.projects1?.title || e.label || e.phase}{e.note ? ' — ' + e.note : ''}
+                              </span>
+                              <button onClick={() => deleteMemberEntry(e.id)} style={{ fontSize: 14, color: 'rgba(200,194,187,0.25)', background: 'transparent', border: 'none', cursor: 'pointer', lineHeight: 1, flexShrink: 0 }}>×</button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })()}
+
               {selected.photo_url && (
                 <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, overflow: 'hidden', marginBottom: 20 }}>
                   <div style={{ padding: '13px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>Photo preview</div>
