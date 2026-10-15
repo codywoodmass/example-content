@@ -87,13 +87,31 @@ export default function TeamPage() {
   async function loadMemberEntries() {
     if (!selected) return
     setMemberEntriesLoading(true)
+    // No embedded projects1(title) here — PostgREST embeds depend on it
+    // correctly resolving the FK relationship, which is one more thing to
+    // go wrong silently. A plain query plus a separate lookup for titles
+    // is more robust, and matches the same shape the dashboard's weekly
+    // ring already successfully uses for this exact table.
     const { data, error } = await supabase.from('time_entries')
-      .select('id, project_id, label, phase, hours, entry_date, note, billable, projects1(title)')
-      .eq('person', selected.name)
+      .select('id, project_id, label, phase, hours, entry_date, note, billable')
+      // Matches by name OR email — a handful of entries from before the
+      // live-tracker's person-resolution settled on team1.name could be
+      // sitting under a raw email instead, and would otherwise silently
+      // never show up here.
+      .or(`person.eq.${selected.name}${selected.email ? `,person.eq.${selected.email}` : ''}`)
       .gte('entry_date', localDateKey(weekStart))
       .lte('entry_date', localDateKey(weekEnd))
       .order('entry_date', { ascending: false })
-    if (!error) setMemberEntries((data as any) || [])
+    if (error) { notify('Could not load time entries: ' + error.message, 'error'); setMemberEntriesLoading(false); return }
+    const rows = data || []
+    const projectIds = Array.from(new Set(rows.map(r => r.project_id).filter((id): id is string => !!id)))
+    let titleById: Record<string, string> = {}
+    if (projectIds.length > 0) {
+      const { data: projs, error: projErr } = await supabase.from('projects1').select('id, title').in('id', projectIds)
+      if (projErr) notify('Could not load project names: ' + projErr.message, 'error')
+      titleById = Object.fromEntries((projs || []).map((p: any) => [p.id, p.title]))
+    }
+    setMemberEntries(rows.map((r: any) => ({ ...r, projects1: r.project_id ? { title: titleById[r.project_id] || 'Untitled project' } : null })))
     setMemberEntriesLoading(false)
   }
   useEffect(() => { if (selected) loadMemberEntries() }, [selected?.id, memberWeekOffset])
@@ -113,10 +131,10 @@ export default function TeamPage() {
         entry_date: newInternal.entry_date,
         note: newInternal.note || null,
         billable: newInternal.billable,
-      }]).select('id, project_id, label, phase, hours, entry_date, note, billable, projects1(title)').single()
+      }]).select('id, project_id, label, phase, hours, entry_date, note, billable').single()
       if (error) { notify('Error logging time: ' + error.message, 'error'); return }
       if (data && localDateKey(weekStart) <= newInternal.entry_date && newInternal.entry_date <= localDateKey(weekEnd)) {
-        setMemberEntries(p => [data as any, ...p])
+        setMemberEntries(p => [{ ...data, projects1: null } as any, ...p])
       }
       setNewInternal(p => ({ ...p, hours: '', note: '' }))
     } finally {
