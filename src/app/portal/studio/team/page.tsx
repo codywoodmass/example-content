@@ -334,7 +334,7 @@ export default function TeamPage() {
                       ) : memberEntries.length === 0 ? (
                         <div style={{ padding: '14px 0', fontSize: 12, color: 'rgba(200,194,187,0.25)' }}>Nothing logged this week yet</div>
                       ) : (
-                        <div style={{ background: 'rgba(200,194,187,0.02)', border: '0.5px solid rgba(200,194,187,0.08)', borderRadius: 6, overflow: 'hidden' }}>
+                        <div style={{ background: 'rgba(200,194,187,0.02)', border: '0.5px solid rgba(200,194,187,0.08)', borderRadius: 6, maxHeight: 280, overflowY: 'auto' as const }}>
                           {memberEntries.map((e, i) => (
                             <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderBottom: i < memberEntries.length - 1 ? '0.5px solid rgba(200,194,187,0.06)' : 'none' }}>
                               <span style={{ fontSize: 11, color: 'rgba(200,194,187,0.35)', width: 60, flexShrink: 0 }}>{new Date(e.entry_date + 'T12:00:00').toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' })}</span>
