@@ -33,6 +33,8 @@ export default function StudioSidebar({ active, onViewChange }: { active?: strin
   const [name, setName] = useState('')
   const [role, setRole] = useState<string | null>(null)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null)
+  const [photoBroken, setPhotoBroken] = useState(false)
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
@@ -40,6 +42,14 @@ export default function StudioSidebar({ active, onViewChange }: { active?: strin
       const { data: profile } = await supabase.from('profiles').select('role, full_name').eq('id', session.user.id).maybeSingle()
       setRole(profile?.role || null)
       setName(profile?.full_name || session.user.email || 'Studio')
+      // Reuses whatever photo is set on the person's Team & Time profile —
+      // matched by email, same resolution used for live time-tracking
+      // attribution, so this stays consistent with that rather than
+      // needing its own separate avatar field.
+      if (session.user.email) {
+        const { data: member } = await supabase.from('team1').select('photo_url').ilike('email', session.user.email).maybeSingle()
+        if (member?.photo_url) setPhotoUrl(member.photo_url)
+      }
     })
   }, [])
 
@@ -127,7 +137,11 @@ export default function StudioSidebar({ active, onViewChange }: { active?: strin
           <button onClick={() => setMenuOpen(false)} aria-label="Close menu" className="ec-studio-sidebar-close" style={{ background: 'transparent', border: 'none', color: 'rgba(200,194,187,0.5)', fontSize: 20, cursor: 'pointer', lineHeight: 1 }}>×</button>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 16px', borderBottom: '0.5px solid rgba(200,194,187,0.09)' }}>
-          <div style={{ width: 30, height: 30, borderRadius: '50%', background: 'rgba(200,194,187,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 12, fontWeight: 600, color: '#C8C2BB' }}>{initial}</div>
+          {photoUrl && !photoBroken ? (
+            <img src={photoUrl} alt={name} onError={() => setPhotoBroken(true)} style={{ width: 30, height: 30, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+          ) : (
+            <div style={{ width: 30, height: 30, borderRadius: '50%', background: 'rgba(200,194,187,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 12, fontWeight: 600, color: '#C8C2BB' }}>{initial}</div>
+          )}
           <div style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>{name}</div>
         </div>
         <nav style={{ padding: '12px 10px', flex: 1, overflowY: 'auto' }}>
