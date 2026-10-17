@@ -202,6 +202,23 @@ export default function TeamPage() {
     if (selected?.id === id) setSelected(s => s ? { ...s, active } : s)
   }
 
+  const [deletingMember, setDeletingMember] = useState(false)
+  async function deleteMember(member: TeamMember) {
+    if (!(await confirmDialog(`Delete ${member.name}? This can't be undone — any time already logged under their name stays in the records, just no longer tied to a profile here.`))) return
+    setDeletingMember(true)
+    try {
+      const { error } = await supabase.from('team1').delete().eq('id', member.id)
+      if (error) { notify('Error deleting: ' + error.message, 'error'); return }
+      setTeam(p => {
+        const remaining = p.filter(m => m.id !== member.id)
+        setSelected(s => s?.id === member.id ? (remaining[0] || null) : s)
+        return remaining
+      })
+    } finally {
+      setDeletingMember(false)
+    }
+  }
+
   if (!authorized) return <main style={{ background: '#0E1014', minHeight: '100vh' }} />
 
   return (
@@ -252,6 +269,9 @@ export default function TeamPage() {
                 <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', marginTop: 2 }}>{selected.role}</div>
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => deleteMember(selected)} disabled={deletingMember} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, border: '0.5px solid rgba(210,90,90,0.3)', color: 'rgba(210,90,90,0.8)', background: 'transparent', cursor: deletingMember ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>
+                  {deletingMember ? 'Deleting...' : 'Delete'}
+                </button>
                 <button onClick={() => toggleActive(selected.id, !selected.active)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, border: `0.5px solid ${selected.active ? 'rgba(210,90,90,0.3)' : 'rgba(100,200,130,0.3)'}`, color: selected.active ? 'rgba(210,90,90,0.8)' : 'rgba(100,200,130,0.8)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>
                   {selected.active ? 'Deactivate' : 'Activate'}
                 </button>
