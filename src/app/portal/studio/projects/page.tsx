@@ -267,6 +267,12 @@ function ProjectsPageInner() {
     if (!modalProject?.id) { setProjectFeedback([]); return }
     supabase.from('video_feedback').select('*').eq('project_id', modalProject.id).order('created_at', { ascending: false })
       .then(({ data }) => setProjectFeedback(data || []))
+    // Un-submitted text in the internal-feedback compose box was carrying
+    // over into whichever project got opened next (it's just component
+    // state, not tied to a project) — cleared here alongside the actual
+    // per-project feedback reload so switching projects always starts blank.
+    setNewFeedbackMsg('')
+    setNewFeedbackAssignee('')
   }, [modalProject?.id])
 
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([])
