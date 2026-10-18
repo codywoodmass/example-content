@@ -796,7 +796,20 @@ function ProjectsPageInner() {
     if (!project.amount) { notify('Set an amount for this project before sending it to invoice.', 'error'); return }
     setSendingInvoice(true)
     try {
-      let { data: invoice, error: findError } = await supabase.from('invoices1').select('*').eq('client_email', project.email).eq('status', 'draft').maybeSingle()
+      // Only ever reuse an existing draft when this project has a real,
+      // non-blank client email to match on — matching on '' or null would
+      // silently glom onto whichever OTHER still-open draft happens to also
+      // have no email recorded (e.g. an old internally-added project), which
+      // is exactly how unrelated projects ended up stacked onto a different
+      // client's invoice. No usable email means there's nothing safe to
+      // match against, so this always starts a fresh invoice instead.
+      let invoice: any = null
+      let findError: any = null
+      if (project.email && project.email.trim()) {
+        const res = await supabase.from('invoices1').select('*').eq('client_email', project.email.trim()).eq('status', 'draft').maybeSingle()
+        invoice = res.data
+        findError = res.error
+      }
       if (findError) { notify('Invoice error: ' + findError.message, 'error'); return }
       if (!invoice) {
         const { data: created, error: createError } = await supabase.from('invoices1').insert([{
