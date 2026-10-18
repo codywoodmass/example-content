@@ -12,6 +12,7 @@ import { parseLabeledNotes } from '@/lib/parseNotes'
 import LabeledNotes from '@/components/studio/LabeledNotes'
 import { useTimeTracking, elapsedLabel } from '@/lib/timeTracking'
 import TimeTrackerBar from '@/components/studio/TimeTrackerBar'
+import { PACKAGE_ESTIMATES } from '@/lib/packageEstimates'
 
 function formatDate(dateStr: string | null | undefined): string {
   if (!dateStr) return '—'
@@ -1533,6 +1534,10 @@ function ProjectsPageInner() {
                 const totalHours = round2(timeEntries.reduce((s, t) => s + t.hours, 0))
                 const byPhase = TIME_PHASES.map(phase => ({ phase, hours: round2(timeEntries.filter(t => t.phase === phase).reduce((s, t) => s + t.hours, 0)) }))
                 const effectiveRate = totalHours > 0 && modalProject.amount ? modalProject.amount / totalHours : null
+                const packageMatch = /^PACKAGE:\s*(.+)$/m.exec(modalProject.deliverables || '')
+                const packageEstimate = packageMatch ? PACKAGE_ESTIMATES[packageMatch[1].trim()] : undefined
+                const shootHours = byPhase.find(p => p.phase === 'Shooting')?.hours || 0
+                const editHours = byPhase.find(p => p.phase === 'Editing')?.hours || 0
                 const trackingThis = tracker.mine?.project_id === modalProject.id
                 const otherTrackingThis = tracker.others.filter(t => t.project_id === modalProject.id)
                 return (
@@ -1575,6 +1580,38 @@ function ProjectsPageInner() {
                     </div>
                     {effectiveRate != null && (
                       <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', marginBottom: 20 }}>Effective hourly rate: <span style={{ color: '#C8C2BB', fontWeight: 500 }}>${effectiveRate.toFixed(0)}/hr</span> (${modalProject.amount?.toLocaleString()} ÷ {totalHours}h)</div>
+                    )}
+                    {packageEstimate && (
+                      <div style={{ marginBottom: 20 }}>
+                        <div style={{ fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 8 }}>Estimate vs actual — {packageMatch![1].trim()}</div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 12 }}>
+                          {([
+                            ['Shooting', shootHours, packageEstimate.shootHours],
+                            ['Editing', editHours, packageEstimate.editHours],
+                          ] as const).map(([label, actual, estimate]) => {
+                            const over = actual > estimate
+                            const pct = estimate ? Math.min(150, Math.round((actual / estimate) * 100)) : 0
+                            return (
+                              <div key={label} style={{ flex: '1 1 160px', background: over ? 'rgba(210,90,90,0.05)' : 'rgba(200,194,187,0.03)', border: `0.5px solid ${over ? 'rgba(210,90,90,0.25)' : 'rgba(200,194,187,0.09)'}`, borderRadius: 6, padding: '12px 14px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                                  <span style={{ fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)' }}>{label}</span>
+                                  <span style={{ fontSize: 10, color: over ? 'rgba(210,90,90,0.8)' : 'rgba(200,194,187,0.35)' }}>{actual.toFixed(1)}h of {estimate}h</span>
+                                </div>
+                                <div style={{ height: 4, background: 'rgba(200,194,187,0.06)', borderRadius: 2 }}>
+                                  <div style={{ height: '100%', width: `${pct}%`, background: over ? 'rgba(210,90,90,0.6)' : 'rgba(100,200,130,0.5)', borderRadius: 2 }} />
+                                </div>
+                                {over && <div style={{ fontSize: 10, color: 'rgba(210,90,90,0.75)', marginTop: 4 }}>{(actual - estimate).toFixed(1)}h over</div>}
+                              </div>
+                            )
+                          })}
+                          {packageEstimate.travelFee != null && (
+                            <div style={{ flex: '1 1 160px', background: 'rgba(200,194,187,0.03)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 6, padding: '12px 14px' }}>
+                              <div style={{ fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>Travel budget</div>
+                              <div style={{ fontSize: 18, fontWeight: 600, color: '#C8C2BB' }}>${packageEstimate.travelFee}</div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     )}
                     <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 8, marginBottom: 14, padding: '10px 12px', background: 'rgba(200,194,187,0.03)', borderRadius: 6, border: '0.5px solid rgba(200,194,187,0.08)' }}>
                       <select value={newTimeEntry.phase} onChange={e => setNewTimeEntry(p => ({ ...p, phase: e.target.value }))} style={{ flex: '1 1 100px', minWidth: 0, background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '7px 8px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }}>
