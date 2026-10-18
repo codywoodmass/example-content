@@ -28,13 +28,15 @@ type Invoice = {
 async function syncXero(invoiceId: string) {
   try {
     const res = await xeroAuthedFetch('/api/xero/invoice', { method: 'POST', body: JSON.stringify({ invoiceId }) })
+    const data = await res.json().catch(() => ({}))
     if (!res.ok) {
-      const data = await res.json().catch(() => ({}))
       // "Xero is not connected" used to be swallowed entirely here, same bug
       // as sendToInvoice had — meaning a dead/expired connection could sit
       // silently failing every sync with zero indication anything was wrong.
       if (data.error === 'Xero is not connected') notify('Saved locally — Xero isn\'t connected, so this change wasn\'t synced there', 'error')
       else notify('Xero sync failed: ' + (data.error || 'unknown error'), 'error')
+    } else {
+      notify(`✓ Xero received the invoice${data.tenantName ? ' — ' + data.tenantName : ''}`, 'success')
     }
     return res.ok
   } catch (e) {

@@ -53,12 +53,12 @@ export async function requireStudioUser(req: NextRequest): Promise<
 
 // Reads the stored connection, refreshing the access token first if it's near expiry.
 // Xero rotates refresh tokens on every use, so the new one is persisted immediately.
-export async function getValidXeroToken(supabase: SupabaseClient): Promise<{ accessToken: string; tenantId: string } | null> {
+export async function getValidXeroToken(supabase: SupabaseClient): Promise<{ accessToken: string; tenantId: string; tenantName: string | null } | null> {
   const { data: conn } = await supabase.from('xero_connection').select('*').order('connected_at', { ascending: false }).limit(1).maybeSingle()
   if (!conn) return null
 
   const expiresAt = new Date(conn.expires_at).getTime()
-  if (expiresAt - Date.now() > 60_000) return { accessToken: conn.access_token, tenantId: conn.tenant_id }
+  if (expiresAt - Date.now() > 60_000) return { accessToken: conn.access_token, tenantId: conn.tenant_id, tenantName: conn.tenant_name }
 
   const basic = Buffer.from(`${process.env.XERO_CLIENT_ID}:${process.env.XERO_CLIENT_SECRET}`).toString('base64')
   const res = await fetch('https://identity.xero.com/connect/token', {
@@ -76,7 +76,7 @@ export async function getValidXeroToken(supabase: SupabaseClient): Promise<{ acc
     access_token: tokens.access_token, refresh_token: tokens.refresh_token, expires_at: newExpiresAt,
   }).eq('id', conn.id)
 
-  return { accessToken: tokens.access_token, tenantId: conn.tenant_id }
+  return { accessToken: tokens.access_token, tenantId: conn.tenant_id, tenantName: conn.tenant_name }
 }
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))

@@ -65,5 +65,5 @@ export async function POST(req: NextRequest) {
     await auth.supabase.from('invoices1').update({ xero_invoice_id: xeroInvoiceId }).eq('id', invoiceId)
   }
 
-  return NextResponse.json({ success: true, xeroInvoiceId: xeroInvoiceId || invoice.xero_invoice_id })
+  return NextResponse.json({ success: true, xeroInvoiceId: xeroInvoiceId || invoice.xero_invoice_id, tenantName: token.tenantName })
 }

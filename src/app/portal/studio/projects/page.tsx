@@ -827,6 +827,8 @@ function ProjectsPageInner() {
         if (!res.ok) {
           if (xeroData.error === 'Xero is not connected') notify('Saved locally — Xero isn\'t connected, so no draft invoice was created there', 'error')
           else notify('Xero sync failed: ' + xeroData.error, 'error')
+        } else {
+          notify(`✓ Xero received the invoice${xeroData.tenantName ? ' — ' + xeroData.tenantName : ''}`, 'success')
         }
       } catch (e) {
         console.warn('Xero sync error:', e)
