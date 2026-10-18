@@ -430,6 +430,40 @@ export default function StudioPortal() {
     setPnl(null)
   }
 
+  // Lets the studio user pick directly which organisation (under the same
+  // Xero login) this app talks to, rather than relying on the OAuth
+  // callback's best-effort guess — the one case that guess can't fix on its
+  // own is exactly the one this is for: invoices landing in an org other
+  // than the one being checked.
+  const [xeroOrgs, setXeroOrgs] = useState<{ tenantId: string; tenantName: string }[] | null>(null)
+  const [xeroOrgsOpen, setXeroOrgsOpen] = useState(false)
+  const [switchingOrg, setSwitchingOrg] = useState(false)
+
+  async function loadXeroOrgs() {
+    const res = await xeroAuthedFetch('/api/xero/organisations')
+    const data = await res.json()
+    if (!res.ok) { notify('Could not list Xero organisations: ' + (data.error || 'unknown'), 'error'); return }
+    setXeroOrgs(data.organisations || [])
+    setXeroOrgsOpen(true)
+  }
+
+  async function selectXeroOrg(tenantId: string) {
+    setSwitchingOrg(true)
+    try {
+      const res = await xeroAuthedFetch('/api/xero/select-org', { method: 'POST', body: JSON.stringify({ tenantId }) })
+      const data = await res.json()
+      if (!res.ok) { notify('Could not switch organisation: ' + (data.error || 'unknown'), 'error'); return }
+      notify(`Now using — ${data.tenantName}`, 'success')
+      setXeroOrgsOpen(false)
+      loadXeroStatus()
+      loadPnl(pnlMonths)
+      loadGst()
+      loadCashflow()
+    } finally {
+      setSwitchingOrg(false)
+    }
+  }
+
   useEffect(() => { if (activeView === 'finance' && userRole === 'studio') loadXeroStatus() }, [activeView, userRole])
 
   // Week-ahead forecast for Auckland and Waikato (Hamilton), shown on the
@@ -2012,6 +2046,24 @@ export default function StudioPortal() {
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
+                {xeroStatus?.connected && (
+                  <div style={{ position: 'relative' }}>
+                    <button onClick={() => xeroOrgsOpen ? setXeroOrgsOpen(false) : loadXeroOrgs()} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, border: '0.5px solid rgba(100,150,220,0.3)', color: 'rgba(100,150,220,0.9)', background: 'rgba(100,150,220,0.08)', cursor: 'pointer', fontFamily: 'inherit' }}>Switch organisation ▾</button>
+                    {xeroOrgsOpen && (
+                      <div style={{ position: 'absolute', top: '110%', right: 0, zIndex: 20, minWidth: 220, background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 5, padding: 6, boxShadow: '0 8px 24px rgba(0,0,0,0.4)' }}>
+                        {xeroOrgs === null ? (
+                          <div style={{ padding: '8px 10px', fontSize: 12, color: 'rgba(200,194,187,0.4)' }}>Loading...</div>
+                        ) : xeroOrgs.length === 0 ? (
+                          <div style={{ padding: '8px 10px', fontSize: 12, color: 'rgba(200,194,187,0.4)' }}>No organisations found</div>
+                        ) : xeroOrgs.map(org => (
+                          <button key={org.tenantId} disabled={switchingOrg} onClick={() => selectXeroOrg(org.tenantId)} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 10px', borderRadius: 4, fontSize: 12, color: org.tenantName === xeroStatus.tenantName ? '#C8C2BB' : 'rgba(200,194,187,0.6)', background: org.tenantName === xeroStatus.tenantName ? 'rgba(100,150,220,0.12)' : 'transparent', border: 'none', cursor: switchingOrg ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>
+                            {org.tenantName === xeroStatus.tenantName ? '✓ ' : ''}{org.tenantName}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
                 {xeroStatus?.connected && <button onClick={disconnectXero} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, border: '0.5px solid rgba(210,90,90,0.3)', color: 'rgba(210,90,90,0.7)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Disconnect Xero</button>}
                 <button onClick={() => setActiveView('dashboard')} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>← Dashboard</button>
               </div>
