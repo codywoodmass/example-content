@@ -574,7 +574,11 @@ export default function StudioPortal() {
       setBookingCount(actionable.length)
     }
     if (crs) { setChangeRequests(crs); setChangeRequestCount(crs.length) }
-    if (vf) { setVideoFeedbackCount(vf.length); setVideoFeedbackList(vf) }
+    // Excludes studio-logged internal feedback (assigned-to-a-teammate notes
+    // typed in from an email) — this widget is specifically client-submitted
+    // revision requests, and internal notes have their own panel on the
+    // project itself instead.
+    if (vf) { const clientVf = vf.filter((f: any) => f.source !== 'studio'); setVideoFeedbackCount(clientVf.length); setVideoFeedbackList(clientVf) }
     if (projects) {
       const now = new Date()
       const in14 = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000)

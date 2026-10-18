@@ -105,6 +105,8 @@ type Project = {
   delivered_at: string | null
   redelivered_at: string | null
   invoiced_at: string | null
+  shooter: string | null
+  editor: string | null
 }
 
 function attachmentIcon(name: string): string {
@@ -268,12 +270,12 @@ function ProjectsPageInner() {
   }, [modalProject?.id])
 
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([])
-  const [teamOptions, setTeamOptions] = useState<{ name: string }[]>([])
+  const [teamOptions, setTeamOptions] = useState<{ name: string; email: string }[]>([])
   const [newTimeEntry, setNewTimeEntry] = useState<{ phase: string; hours: string; person: string; entry_date: string; note: string }>({ phase: 'Editing', hours: '', person: '', entry_date: new Date().toISOString().split('T')[0], note: '' })
   const [addingTimeEntry, setAddingTimeEntry] = useState(false)
 
   useEffect(() => {
-    supabase.from('team1').select('name').eq('active', true).order('created_at', { ascending: true })
+    supabase.from('team1').select('name, email').eq('active', true).order('created_at', { ascending: true })
       .then(({ data }) => setTeamOptions(data || []))
   }, [])
 
@@ -359,6 +361,59 @@ function ProjectsPageInner() {
   async function resolveFeedbackGroup(ids: string[]) {
     await supabase.from('video_feedback').update({ status: 'resolved' }).in('id', ids)
     setProjectFeedback(p => p.map(f => ids.includes(f.id) ? { ...f, status: 'resolved' } : f))
+  }
+
+  // Feedback Cody types in manually (e.g. relayed from an email) rather than
+  // submitted by a client — reuses video_feedback (file_id/client_email left
+  // null, same shape as the client portal's general project feedback) so it
+  // gets the same pending/resolved tracking, tagged `source: 'studio'` so it
+  // never counts toward the client-facing Revision Requests widget. Only
+  // notifies the assignee — leaving it unassigned is just a private note.
+  const [newFeedbackMsg, setNewFeedbackMsg] = useState('')
+  const [newFeedbackAssignee, setNewFeedbackAssignee] = useState('')
+  const [addingFeedback, setAddingFeedback] = useState(false)
+
+  async function addInternalFeedback(project: Project) {
+    if (!newFeedbackMsg.trim()) return
+    setAddingFeedback(true)
+    const { data, error } = await supabase.from('video_feedback').insert([{
+      project_id: project.id,
+      file_id: null,
+      file_name: null,
+      client_email: null,
+      client_name: null,
+      timestamp_seconds: null,
+      message: newFeedbackMsg.trim(),
+      source: 'studio',
+      assigned_to: newFeedbackAssignee || null,
+    }]).select().single()
+    if (error) {
+      notify('Could not save feedback: ' + error.message, 'error')
+      setAddingFeedback(false)
+      return
+    }
+    setProjectFeedback(p => [data, ...p])
+    if (newFeedbackAssignee) {
+      const assignee = teamOptions.find(t => t.name === newFeedbackAssignee)
+      if (assignee?.email) {
+        try {
+          await fetch('/api/notify-feedback-assigned', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              projectId: project.id,
+              projectTitle: project.title,
+              assigneeEmail: assignee.email,
+              assigneeName: assignee.name,
+              message: newFeedbackMsg.trim(),
+            }),
+          })
+        } catch (e) { console.error('Feedback-assigned notify error:', e) }
+      }
+    }
+    setNewFeedbackMsg('')
+    setNewFeedbackAssignee('')
+    setAddingFeedback(false)
   }
   const [creatingFolder, setCreatingFolder] = useState(false)
 
@@ -1296,6 +1351,19 @@ function ProjectsPageInner() {
                   ) : null}
                 </div>
               </div>
+              <div className="ec-form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
+                {[{ label: 'Shooter', key: 'shooter' as const }, { label: 'Editor', key: 'editor' as const }].map(({ label, key }) => (
+                  <div key={key}>
+                    <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>{label}</div>
+                    {modalEditing ? (
+                      <select value={modalProject[key] || ''} onChange={e => setModalProject(p => { const u = p ? { ...p, [key]: e.target.value || null } : p; if (u) triggerAutoSave(u); return u })} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '8px 10px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }}>
+                        <option value="">— Unassigned —</option>
+                        {teamOptions.map(t => <option key={t.name} value={t.name}>{t.name}</option>)}
+                      </select>
+                    ) : <div style={{ fontSize: 13, color: '#C8C2BB' }}>{modalProject[key] || '—'}</div>}
+                  </div>
+                ))}
+              </div>
               <div style={{ marginBottom: 20 }}>
                 <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>Google Drive</div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -1384,14 +1452,14 @@ function ProjectsPageInner() {
               )}
               {modalTab === 'notes' && (
               <>
-              {projectFeedback.length > 0 && (
+              {projectFeedback.filter(f => f.source !== 'studio').length > 0 && (
                 <div style={{ marginBottom: 20 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                     <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)' }}>Client feedback</div>
-                    <span style={{ fontSize: 10, color: 'rgba(200,194,187,0.3)' }}>{projectFeedback.filter(f => f.status !== 'resolved').length} pending</span>
+                    <span style={{ fontSize: 10, color: 'rgba(200,194,187,0.3)' }}>{projectFeedback.filter(f => f.source !== 'studio' && f.status !== 'resolved').length} pending</span>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    {groupFeedback(projectFeedback).map(group => {
+                    {groupFeedback(projectFeedback.filter(f => f.source !== 'studio')).map(group => {
                       const first = group[0]
                       const allResolved = group.every((f: any) => f.status === 'resolved')
                       const pendingIds = group.filter((f: any) => f.status !== 'resolved').map((f: any) => f.id)
@@ -1421,6 +1489,39 @@ function ProjectsPageInner() {
                   </div>
                 </div>
               )}
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                  <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)' }}>Internal feedback</div>
+                  {projectFeedback.filter(f => f.source === 'studio' && f.status !== 'resolved').length > 0 && (
+                    <span style={{ fontSize: 10, color: 'rgba(200,194,187,0.3)' }}>{projectFeedback.filter(f => f.source === 'studio' && f.status !== 'resolved').length} pending</span>
+                  )}
+                </div>
+                {projectFeedback.filter(f => f.source === 'studio').length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 10 }}>
+                    {projectFeedback.filter(f => f.source === 'studio').map((fb: any) => (
+                      <div key={fb.id} style={{ background: fb.status === 'resolved' ? 'rgba(200,194,187,0.03)' : 'rgba(100,150,220,0.05)', border: `0.5px solid ${fb.status === 'resolved' ? 'rgba(200,194,187,0.08)' : 'rgba(100,150,220,0.2)'}`, borderRadius: 5, padding: '10px 12px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                          <span style={{ fontSize: 10, color: fb.assigned_to ? 'rgba(100,150,220,0.9)' : 'rgba(200,194,187,0.35)' }}>{fb.assigned_to ? `Assigned to ${fb.assigned_to}` : 'Unassigned'}</span>
+                          {fb.status === 'resolved' ? (
+                            <span style={{ fontSize: 9, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'rgba(100,200,130,0.8)' }}>✓ Resolved</span>
+                          ) : (
+                            <button onClick={() => resolveFeedbackGroup([fb.id])} style={{ fontSize: 9, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '3px 8px', borderRadius: 3, border: '0.5px solid rgba(210,175,80,0.3)', color: 'rgba(210,175,80,0.9)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Mark resolved</button>
+                          )}
+                        </div>
+                        <div style={{ fontSize: 12, color: 'rgba(200,194,187,0.7)', lineHeight: 1.5, opacity: fb.status === 'resolved' ? 0.5 : 1 }}>{fb.message}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                  <textarea value={newFeedbackMsg} onChange={e => setNewFeedbackMsg(e.target.value)} placeholder="Log feedback received by email or elsewhere..." style={{ flex: 1, background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.08)', borderRadius: 4, padding: '8px 10px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', lineHeight: 1.5, resize: 'vertical' as const, minHeight: 36 }} />
+                  <select value={newFeedbackAssignee} onChange={e => setNewFeedbackAssignee(e.target.value)} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '8px 10px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', flexShrink: 0, width: 130 }}>
+                    <option value="">Unassigned</option>
+                    {teamOptions.map(t => <option key={t.name} value={t.name}>{t.name}</option>)}
+                  </select>
+                  <button disabled={addingFeedback || !newFeedbackMsg.trim()} onClick={() => addInternalFeedback(modalProject)} style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 3, border: '0.5px solid rgba(100,150,220,0.3)', color: 'rgba(100,150,220,0.9)', background: 'rgba(100,150,220,0.08)', cursor: addingFeedback || !newFeedbackMsg.trim() ? 'not-allowed' : 'pointer', fontFamily: 'inherit', flexShrink: 0, opacity: addingFeedback || !newFeedbackMsg.trim() ? 0.5 : 1 }}>{addingFeedback ? 'Adding...' : 'Add'}</button>
+                </div>
+              </div>
               <div style={{ marginBottom: 20 }}>
                 {parseLabeledNotes(modalProject.general_notes).length > 1 && (
                   <div style={{ marginBottom: 14 }}>
