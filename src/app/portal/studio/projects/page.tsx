@@ -796,7 +796,8 @@ function ProjectsPageInner() {
     if (!project.amount) { notify('Set an amount for this project before sending it to invoice.', 'error'); return }
     setSendingInvoice(true)
     try {
-      let { data: invoice } = await supabase.from('invoices1').select('*').eq('client_email', project.email).eq('status', 'draft').maybeSingle()
+      let { data: invoice, error: findError } = await supabase.from('invoices1').select('*').eq('client_email', project.email).eq('status', 'draft').maybeSingle()
+      if (findError) { notify('Invoice error: ' + findError.message, 'error'); return }
       if (!invoice) {
         const { data: created, error: createError } = await supabase.from('invoices1').insert([{
           client_email: project.email, client_name: project.client, status: 'draft',
@@ -809,12 +810,15 @@ function ProjectsPageInner() {
       // from earlier deliveries this cycle, so completing one project doesn't sweep
       // in unrelated older ones that were never invoiced for some other reason.
       const invoiced_at = new Date().toISOString()
-      await supabase.from('projects1').update({ invoice_id: invoice.id, invoiced_at }).eq('id', project.id)
-      const { data: existingLines } = await supabase.from('projects1').select('amount').eq('invoice_id', invoice.id)
+      const { error: linkError } = await supabase.from('projects1').update({ invoice_id: invoice.id, invoiced_at }).eq('id', project.id)
+      if (linkError) { notify('Could not attach this project to the invoice: ' + linkError.message, 'error'); return }
+      const { data: existingLines, error: linesError } = await supabase.from('projects1').select('amount').eq('invoice_id', invoice.id)
+      if (linesError) { notify('Could not total the invoice: ' + linesError.message, 'error'); return }
       const subtotal = (existingLines || []).reduce((sum, r) => sum + (r.amount || 0), 0)
       const gst = Math.round(subtotal * 0.15 * 100) / 100
       const total = subtotal + gst
-      await supabase.from('invoices1').update({ subtotal, gst, total }).eq('id', invoice.id)
+      const { error: totalsError } = await supabase.from('invoices1').update({ subtotal, gst, total }).eq('id', invoice.id)
+      if (totalsError) { notify('Could not save invoice totals: ' + totalsError.message, 'error'); return }
       setProjects(p => p.map(proj => proj.id === project.id ? { ...proj, invoice_id: invoice.id, invoiced_at } : proj))
       setModalProject(p => p && p.id === project.id ? { ...p, invoice_id: invoice.id, invoiced_at } : p)
       try {

@@ -154,8 +154,14 @@ export default function InvoicesPage() {
     window.open('/portal/studio/invoices/' + invoice.id + '/print', '_blank')
   }
 
+  // `grouped[inv.status]?.push` used to silently drop any invoice whose
+  // status wasn't exactly 'draft'/'sent'/'paid' — it would exist in the
+  // database (and still sync fine to Xero, since that path doesn't care
+  // about this field) while being completely invisible on this page, with
+  // no error anywhere. Falling back to 'draft' means a row can never just
+  // disappear here again.
   const grouped: Record<string, Invoice[]> = { draft: [], sent: [], paid: [] }
-  for (const inv of invoices) grouped[inv.status]?.push(inv)
+  for (const inv of invoices) (grouped[inv.status] || grouped.draft).push(inv)
 
   if (loading) return (
     <main style={{ background: '#0E1014', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Inter, sans-serif' }}>
