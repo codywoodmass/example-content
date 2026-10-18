@@ -66,7 +66,10 @@ export async function getValidXeroToken(supabase: SupabaseClient): Promise<{ acc
     headers: { Authorization: `Basic ${basic}`, 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: conn.refresh_token }),
   })
-  if (!res.ok) return null
+  if (!res.ok) {
+    console.error('Xero token refresh failed:', res.status, await res.text().catch(() => ''))
+    return null
+  }
   const tokens = await res.json()
   const newExpiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString()
   await supabase.from('xero_connection').update({

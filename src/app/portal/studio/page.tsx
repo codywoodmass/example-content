@@ -344,7 +344,7 @@ export default function StudioPortal() {
     if (hash) setActiveView(hash)
   }, [])
 
-  const [xeroStatus, setXeroStatus] = useState<{ connected: boolean; tenantName?: string } | null>(null)
+  const [xeroStatus, setXeroStatus] = useState<{ connected: boolean; tenantName?: string; staleConnection?: boolean } | null>(null)
   const [pnl, setPnl] = useState<any>(null)
   const [pnlLoading, setPnlLoading] = useState(false)
   const [pnlMonths, setPnlMonths] = useState(6)
@@ -2020,7 +2020,9 @@ export default function StudioPortal() {
               <div style={{ padding: 28, textAlign: 'center', paddingTop: 80, color: 'rgba(200,194,187,0.4)', fontSize: 13 }}>Checking Xero connection...</div>
             ) : !xeroStatus?.connected ? (
               <div style={{ padding: 28, textAlign: 'center', paddingTop: 80 }}>
-                <div style={{ fontSize: 14, color: 'rgba(200,194,187,0.4)', marginBottom: 16 }}>Connect Xero to see your real P&L here</div>
+                <div style={{ fontSize: 14, color: xeroStatus?.staleConnection ? 'rgba(210,90,90,0.8)' : 'rgba(200,194,187,0.4)', marginBottom: 16 }}>
+                  {xeroStatus?.staleConnection ? 'Xero has invalidated this connection — reconnect to resume syncing invoices and reports' : 'Connect Xero to see your real P&L here'}
+                </div>
                 <button onClick={() => connectXero()} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '9px 20px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>Connect Xero →</button>
               </div>
             ) : pnlLoading || !pnl ? (
