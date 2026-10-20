@@ -128,6 +128,11 @@ function ProjectsPageInner() {
   const [dragId, setDragId] = useState<string | null>(null)
   const searchParams = useSearchParams()
   const [modalProject, setModalProject] = useState<Project | null>(null)
+  // Lets triggerCalendarSync read the actual latest calendar_event_id at the
+  // moment its debounced timer actually fires, instead of whatever was
+  // true back when that keystroke scheduled it — see the comment there.
+  const modalProjectRef = useRef<Project | null>(null)
+  useEffect(() => { modalProjectRef.current = modalProject }, [modalProject])
   const [modalEditing, setModalEditing] = useState(false)
   const [modalTab, setModalTab] = useState<'overview' | 'notes' | 'brief' | 'time'>('overview')
   useEffect(() => { setModalTab('overview') }, [modalProject?.id])
@@ -141,13 +146,24 @@ function ProjectsPageInner() {
   // Keeps the Google Calendar event in step whenever the shoot date or time is
   // edited — only once a project actually has a synced event, or is past Enquiry
   // (see createCalendarEventForProject), so this stays quiet for tentative enquiries.
+  // 10s (not 1s) because date + start time + end time are usually edited as three
+  // separate fields a few seconds apart — too short a window fired early, patching
+  // (or creating) a calendar event on every single field instead of once the whole
+  // date/time change was actually done.
   function triggerCalendarSync(updatedProject: Project) {
     if (calendarSyncTimer) clearTimeout(calendarSyncTimer)
     const timer = setTimeout(() => {
-      if (!updatedProject.shoot_date || !updatedProject.shoot_window_start || !updatedProject.shoot_window_end) return
-      if (updatedProject.stage === 'Enquiry' && !updatedProject.calendar_event_id) return
-      createCalendarEventForProject(updatedProject)
-    }, 1000)
+      // calendar_event_id specifically comes from the live ref, not the
+      // snapshot this timer was scheduled with — the snapshot is only as
+      // fresh as the keystroke that captured it, and a previous sync's
+      // server round trip may have since written a new event id that this
+      // one would otherwise miss, creating a second calendar event instead
+      // of patching the first.
+      const latest = { ...updatedProject, calendar_event_id: modalProjectRef.current?.id === updatedProject.id ? (modalProjectRef.current.calendar_event_id ?? updatedProject.calendar_event_id) : updatedProject.calendar_event_id }
+      if (!latest.shoot_date || !latest.shoot_window_start || !latest.shoot_window_end) return
+      if (latest.stage === 'Enquiry' && !latest.calendar_event_id) return
+      createCalendarEventForProject(latest)
+    }, 10000)
     setCalendarSyncTimer(timer)
   }
 
