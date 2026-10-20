@@ -363,36 +363,39 @@ export default function StudioPortal() {
     setXeroStatus(data)
   }
 
-  async function loadPnl(months = pnlMonths) {
-    setPnlLoading(true)
+  // `silent` skips the loading flag — used by the 60s auto-refresh so the
+  // panel just swaps in new numbers instead of flashing back to the
+  // "Loading from Xero..." placeholder every minute.
+  async function loadPnl(months = pnlMonths, silent = false) {
+    if (!silent) setPnlLoading(true)
     try {
       const res = await xeroAuthedFetch('/api/xero/pnl?months=' + months)
       const data = await res.json()
       setPnl(data)
     } finally {
-      setPnlLoading(false)
+      if (!silent) setPnlLoading(false)
     }
   }
 
-  async function loadGst() {
-    setGstLoading(true)
+  async function loadGst(silent = false) {
+    if (!silent) setGstLoading(true)
     try {
       const res = await xeroAuthedFetch('/api/xero/gst')
       const data = await res.json()
       setGst(data)
     } finally {
-      setGstLoading(false)
+      if (!silent) setGstLoading(false)
     }
   }
 
-  async function loadCashflow() {
-    setCashflowLoading(true)
+  async function loadCashflow(silent = false) {
+    if (!silent) setCashflowLoading(true)
     try {
       const res = await xeroAuthedFetch('/api/xero/cashflow')
       const data = await res.json()
       setCashflow(data)
     } finally {
-      setCashflowLoading(false)
+      if (!silent) setCashflowLoading(false)
     }
   }
 
@@ -512,6 +515,19 @@ export default function StudioPortal() {
   useEffect(() => { if (activeView === 'finance' && xeroStatus?.connected) loadPnl(pnlMonths) }, [activeView, xeroStatus?.connected, pnlMonths])
   useEffect(() => { if (activeView === 'finance' && xeroStatus?.connected) loadGst() }, [activeView, xeroStatus?.connected])
   useEffect(() => { if (activeView === 'finance' && xeroStatus?.connected) loadCashflow() }, [activeView, xeroStatus?.connected])
+  // Keeps the Finance tab reasonably live instead of only ever reflecting
+  // whatever Xero looked like the moment the tab was opened — only runs
+  // while actually on that tab and connected, so it doesn't burn API calls
+  // in the background on other views.
+  useEffect(() => {
+    if (activeView !== 'finance' || !xeroStatus?.connected) return
+    const id = setInterval(() => {
+      loadPnl(pnlMonths, true)
+      loadGst(true)
+      loadCashflow(true)
+    }, 60000)
+    return () => clearInterval(id)
+  }, [activeView, xeroStatus?.connected, pnlMonths])
   useEffect(() => { if (activeView === 'finance' && userRole === 'studio') loadWeeklyTarget() }, [activeView, userRole])
   useEffect(() => { if (activeView === 'finance' && userRole === 'studio') loadMonthlyHours() }, [activeView, userRole])
   useEffect(() => {
