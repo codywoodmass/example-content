@@ -109,6 +109,20 @@ export default function PublicBriefViewer() {
             </div>
           </div>
         </div>
+        {/* CREATIVE DIRECTION SECTION */}
+        {(d.projectGoals || d.tone) && (
+          <div style={{ padding: '32px clamp(20px, 6vw, 40px)', borderBottom: '0.5px solid rgba(200,194,187,0.09)' }}>
+            <div style={{ fontSize: 9, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>Creative Direction</div>
+            <div style={{ fontSize: 22, fontWeight: 700, color: '#fff', marginBottom: 20 }}>{(d.tone || 'THE VISION').toUpperCase()}</div>
+            {d.projectGoals && <div style={{ fontSize: 14, color: 'rgba(200,194,187,0.7)', lineHeight: 1.75, marginBottom: d.references ? 20 : 0 }}>{d.projectGoals}</div>}
+            {d.references && (
+              <div>
+                <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)', marginBottom: 8, fontWeight: 700 }}>References</div>
+                <div style={{ fontSize: 13, color: 'rgba(200,194,187,0.5)', lineHeight: 1.6 }}>{d.references}</div>
+              </div>
+            )}
+          </div>
+        )}
         {/* INVESTMENT SECTION */}
         {d.total > 0 && (
           <div style={{ padding: '32px clamp(20px, 6vw, 40px)', borderBottom: '0.5px solid rgba(200,194,187,0.09)' }}>

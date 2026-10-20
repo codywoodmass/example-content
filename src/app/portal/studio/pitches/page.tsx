@@ -45,6 +45,12 @@ const DEFAULT_EQUIPMENT: EquipmentItem[] = [
 const DEFAULT_SLIDES: SlideItem[] = [
   { id: 'cover', type: 'cover', label: 'Cover' },
   { id: 'brief', type: 'brief', label: 'The Scope' },
+  // 'creative' was previously only reachable through a right-panel editor
+  // keyed to a slide type that never existed in any default or addable
+  // slide — projectGoals/tone/references were editable nowhere, saved
+  // nowhere useful, and never restored when reopening a brief. Now a real
+  // default slide so the creative direction actually reaches the client.
+  { id: 'creative', type: 'creative', label: 'Creative Direction' },
   { id: 'team', type: 'team', label: 'The Team' },
   { id: 'moodboard', type: 'moodboard', label: 'Moodboard' },
   { id: 'investment', type: 'investment', label: 'Investment' },
@@ -150,6 +156,8 @@ export default function PitchDeckPage() {
   const [briefId, setBriefId] = useState<string | null>(null)
   const briefIdRef = useRef<string | null>(null)
   const [briefStatus, setBriefStatus] = useState<'draft' | 'sent' | 'approved'>('draft')
+  const [clientFeedback, setClientFeedback] = useState('')
+  const [clientFeedbackAt, setClientFeedbackAt] = useState('')
   useEffect(() => { briefIdRef.current = briefId }, [briefId])
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -169,7 +177,63 @@ export default function PitchDeckPage() {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; brief: any } | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState<any>(null)
   const [showBriefMenu, setShowBriefMenu] = useState(false)
+  const [showAddSlideMenu, setShowAddSlideMenu] = useState(false)
   const [showRightPanel, setShowRightPanel] = useState(true)
+  const [aiPasteText, setAiPasteText] = useState('')
+  const [aiGenerating, setAiGenerating] = useState(false)
+  const [aiUploadName, setAiUploadName] = useState('')
+
+  // Reads a pasted/typed client brief (or a plain-text file) and asks Claude
+  // to propose a scope, creative direction, and hours — rates stay exactly
+  // as set, this only fills in what it can so there's a draft to adjust.
+  async function generateBriefWithAI() {
+    if (!aiPasteText.trim()) { notify('Paste or upload the client\'s info first.', 'error'); return }
+    setAiGenerating(true)
+    try {
+      const res = await fetch('/api/brief-ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: aiPasteText }),
+      })
+      const data = await res.json()
+      if (!res.ok || !data.brief) { notify('Could not generate a brief: ' + (data.error || 'unknown error'), 'error'); return }
+      const b = data.brief
+      if (b.projectName) setProjectName(b.projectName)
+      if (b.jobType) setJobType(b.jobType)
+      if (b.jobDescription) setJobDescription(b.jobDescription)
+      if (b.category) setCategory(b.category)
+      if (b.locations) setLocations(b.locations)
+      if (b.projectGoals) setProjectGoals(b.projectGoals)
+      if (b.tone) setTone(b.tone)
+      if (b.deliveryEstimate) setDeliveryEstimate(b.deliveryEstimate)
+      if (Array.isArray(b.deliverables) && b.deliverables.length > 0) {
+        setDeliverables(b.deliverables.map((d: any, i: number) => ({
+          id: Date.now().toString() + i, name: d.name || '', quantity: d.quantity || 1,
+          duration: d.duration || '', formats: Array.isArray(d.formats) ? d.formats : [], notes: '',
+        })))
+      }
+      if (typeof b.shootHours === 'number') setShootHours(b.shootHours)
+      if (typeof b.editHours === 'number') setEditHours(b.editHours)
+      if (typeof b.preProdHours === 'number') { setPreProdHours(b.preProdHours); setShowPreProd(b.preProdHours > 0) }
+      if (typeof b.travelKm === 'number') { setTravelKm(b.travelKm); setShowTravel(b.travelKm > 0) }
+      if (b.assumptions) setPricingNotes(b.assumptions)
+      notify('Brief drafted — review the scope and creative direction below', 'success')
+    } catch (e) {
+      notify('Could not reach the AI drafting service', 'error')
+    } finally {
+      setAiGenerating(false)
+    }
+  }
+
+  async function handleAiFileUpload(file: File) {
+    if (!file.type.startsWith('text/') && !file.name.endsWith('.txt')) {
+      notify('Only plain text (.txt) files can be read directly — paste the content instead for PDFs/Word docs.', 'error')
+      return
+    }
+    const text = await file.text()
+    setAiPasteText(p => (p ? p + '\n\n' : '') + text)
+    setAiUploadName(file.name)
+  }
 
   async function searchLocations(query: string) {
     if (!query || query.length < 3) { setLocationSuggestions([]); return }
@@ -216,6 +280,11 @@ export default function PitchDeckPage() {
       rateFilming, rateEditing, ratePreProd, rateTravelKm,
       calcFilming, calcEditing, calcPreProd, calcTravel,
       moodboardImages, pricingNotes, tcNotes, template, shotLists, slides, locationList, editHoursMax,
+      // saveBrief replaces the whole stored `data` object on every
+      // auto-save — without carrying these forward, feedback the client
+      // left (written separately by /api/public-brief-action) was silently
+      // erased the next time the studio so much as edited the brief.
+      clientFeedback, feedbackAt: clientFeedbackAt,
     }
     const currentBriefId = briefIdRef.current || briefId
     if (currentBriefId) {
@@ -230,6 +299,11 @@ export default function PitchDeckPage() {
     supabase.from('briefs').select('*').order('created_at', { ascending: false }).then(({ data }) => {
       if (data) setSavedBriefs(data)
     })
+  }
+
+  function clearClientFeedback() {
+    setClientFeedback('')
+    setClientFeedbackAt('')
   }
 
   async function sendBriefToClient() {
@@ -252,7 +326,13 @@ export default function PitchDeckPage() {
 
   async function convertToProject() {
     if (!(await confirmDialog('Convert this brief to a project?'))) return
-    const { data } = await supabase.from('projects1').insert([{
+    // Was writing the hardcoded placeholder jobDeliverables string here
+    // (a leftover field with no editing UI anywhere) instead of what this
+    // brief's deliverables panel actually specifies — every converted
+    // project ended up with the same default text regardless of the real
+    // scope. Built from the actual deliverables list instead.
+    const deliverablesText = deliverables.map(d => `${d.quantity}x ${d.name}${d.duration ? ' (' + d.duration + ')' : ''}`).join(', ')
+    const { data, error } = await supabase.from('projects1').insert([{
       title: projectName,
       client: clientName,
       email: clientEmail,
@@ -264,8 +344,9 @@ export default function PitchDeckPage() {
       delivery_due: finalsDue || null,
       from_booking: false,
       general_notes: jobDescription,
-      deliverables: 'PACKAGE: ' + jobType + '\nDELIVERABLES: ' + jobDeliverables,
+      deliverables: 'PACKAGE: ' + jobType + '\nDELIVERABLES: ' + deliverablesText,
     }]).select().single()
+    if (error) { notify('Could not create project: ' + error.message, 'error'); return }
     if (data) {
       if (briefId) await supabase.from('briefs').update({ project_id: data.id, status: 'approved' }).eq('id', briefId)
       notify('Project created successfully!', 'success')
@@ -283,7 +364,8 @@ export default function PitchDeckPage() {
       projectGoals, tone, references, shootDuration, shootDays, shootDates, shootStartTime,
       shootEndTime, draftDue, finalsDue, locations, deliverables, crew, equipment,
       shootHours, editHours, preProdHours, travelKm, rateFilming, rateEditing,
-      ratePreProd, rateTravelKm, pricingNotes, tcNotes, moodboardImages, shotLists, slides])
+      ratePreProd, rateTravelKm, pricingNotes, tcNotes, moodboardImages, shotLists, slides,
+      deliveryEstimate, clientFeedback])
 
   const t = TEMPLATES[template]
   const inp: React.CSSProperties = { background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }
@@ -364,7 +446,7 @@ export default function PitchDeckPage() {
   ]
 
   function SlidePreview({ slideItem, scale = 1 }: { slideItem: SlideItem; scale?: number }) {
-    const isAlt = ['brief', 'team', 'terms'].includes(slideItem.type)
+    const isAlt = ['brief', 'creative', 'team', 'terms'].includes(slideItem.type)
     const bg = isAlt ? t.surfaceAlt : t.bg
     const HW = t.headingWeight
     const HS = t.headingSize
@@ -426,6 +508,22 @@ export default function PitchDeckPage() {
           {draftDue && <div><div style={{ fontSize:scale*3.5, letterSpacing:'0.16em', textTransform:'uppercase', color:t.muted, marginBottom:scale*1.5 }}>Draft Due</div><div style={{ fontSize:scale*5.5, color:t.accent, fontWeight:600 }}>{draftDue}</div></div>}
           {finalsDue && <div><div style={{ fontSize:scale*3.5, letterSpacing:'0.16em', textTransform:'uppercase', color:t.muted, marginBottom:scale*1.5 }}>Finals Due</div><div style={{ fontSize:scale*5.5, color:t.accent, fontWeight:600 }}>{finalsDue}</div></div>}
         </div>
+        {footer}
+      </div>
+    )
+
+    if (slideItem.type === 'creative') return (
+      <div style={{ width:'100%', height:'100%', background:bg, position:'relative', overflow:'hidden', boxSizing:'border-box', padding:`${scale*16}px ${scale*20}px`, display:'flex', flexDirection:'column' }}>
+        <div style={{ fontSize:scale*5, letterSpacing:'0.2em', textTransform:'uppercase', color:t.muted, marginBottom:scale*2 }}>Creative Direction</div>
+        <div style={{ fontSize:scale*HS*0.32, fontWeight:HW, color:t.accent, lineHeight:1.0, letterSpacing:'-0.02em', marginBottom:scale*6 }}>{(tone || 'THE VISION').toUpperCase()}</div>
+        <div style={{ height:0.5, background:t.border, marginBottom:scale*6 }} />
+        <div style={{ fontSize:scale*7, color:t.text, lineHeight:1.7, flex:1 }}>{projectGoals}</div>
+        {references && (
+          <div style={{ marginTop:scale*4 }}>
+            <div style={{ fontSize:scale*4, letterSpacing:'0.16em', textTransform:'uppercase', color:t.muted, marginBottom:scale*2, fontWeight:700 }}>References</div>
+            <div style={{ fontSize:scale*6, color:t.accentDim, lineHeight:1.5 }}>{references}</div>
+          </div>
+        )}
         {footer}
       </div>
     )
@@ -549,13 +647,13 @@ export default function PitchDeckPage() {
               <span style={{ fontSize: scale * 7, color: t.accent, fontWeight: 600 }}>${(e.hireRate*e.days).toLocaleString()}</span>
             </div>
           ))}
-          <div style={{ display: 'flex', justifyContent: 'space-between', padding: `${scale*3}px 0`, borderBottom: `0.5px solid ${t.border}` }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: `${scale*2}px 0`, marginTop: scale * 2 }}>
             <span style={{ fontSize: scale * 6.5, color: t.muted }}>GST (15%)</span>
             <span style={{ fontSize: scale * 6.5, color: t.muted }}>${gst.toLocaleString()}</span>
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', padding: `${scale*4}px 0` }}>
-            <span style={{ fontSize: scale * 9, fontWeight: 700, color: t.accent }}>Total inc. GST</span>
-            <span style={{ fontSize: scale * 9, fontWeight: 700, color: t.accent }}>${total.toLocaleString()}</span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: `${scale*4}px ${scale*6}px`, marginTop: scale * 2, background: t.surfaceAlt, border: `0.5px solid ${t.border}`, borderRadius: scale }}>
+            <span style={{ fontSize: scale * 8, fontWeight: 700, color: t.accent }}>Total inc. GST</span>
+            <span style={{ fontSize: scale * 11, fontWeight: 900, color: t.accent }}>${total.toLocaleString()}</span>
           </div>
           {pricingNotes && <div style={{ fontSize: scale * 6, color: t.muted, marginTop: scale * 2 }}>{pricingNotes}</div>}
         </div>
@@ -569,10 +667,10 @@ export default function PitchDeckPage() {
         <div style={{ fontSize: scale * 6, letterSpacing: '0.2em', textTransform: 'uppercase', color: t.muted, fontWeight: 600, marginBottom: scale * 6 }}>Terms & Conditions</div>
         <div style={{ fontSize: scale * HS * 0.75, fontWeight: HW, color: t.accent, lineHeight: 1.0, letterSpacing: '-0.02em', marginBottom: scale * 4 }}>LET'S GET THIS</div>
         <div style={{ fontSize: scale * HS * 0.75, fontWeight: HW, color: t.accent, lineHeight: 1.0, letterSpacing: '-0.02em', marginBottom: scale * 10 }}>STARTED.</div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: scale * 4 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: scale * 3.5 }}>
           {['Proposal valid 14 days from issue', '50% deposit to confirm, balance due on delivery', 'Cancellations within 48hrs incur a 25% fee', 'Example Content retains portfolio rights unless waiver requested in writing', 'All prices exclude GST', 'Files delivered via Google Drive, retained 60 days', tcNotes].filter(Boolean).map((tc, i) => (
-            <div key={i} style={{ display: 'flex', gap: scale * 5, fontSize: scale * 6.5, color: t.text, lineHeight: 1.55 }}>
-              <span style={{ color: t.muted, flexShrink: 0 }}>—</span>{tc}
+            <div key={i} style={{ display: 'flex', gap: scale * 6, alignItems: 'flex-start', fontSize: scale * 6.5, color: t.text, lineHeight: 1.55 }}>
+              <span style={{ flexShrink: 0, width: scale * 11, height: scale * 11, borderRadius: '50%', border: `0.5px solid ${t.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: scale * 5, color: t.muted, fontWeight: 700 }}>{i + 1}</span>{tc}
             </div>
           ))}
         </div>
@@ -676,6 +774,29 @@ export default function PitchDeckPage() {
                     setShowPreProd(d.showPreProd||false); setShowTravel(d.showTravel||false)
                     setMoodboardImages(d.moodboardImages||[]); setPricingNotes(d.pricingNotes||'')
                     setTcNotes(d.tcNotes||''); setShotLists(d.shotLists||{})
+                    // These used to be dropped on every reopen — logoUrl, the
+                    // creative-direction fields, shoot duration/days, the
+                    // delivery estimate and deposit toggle were all saved
+                    // but never restored, silently reverting to defaults.
+                    setLogoUrl(d.logoUrl||''); setProjectGoals(d.projectGoals||'')
+                    setTone(d.tone||''); setReferences(d.references||'')
+                    setShootDuration(d.shootDuration||'fullday'); setShootDays(d.shootDays||2)
+                    setExtraHours(d.extraHours||0)
+                    setDeliveryEstimate(d.deliveryEstimate||'10-14 business days')
+                    setShowDeposit(d.showDeposit !== false)
+                    setClientFeedback(d.clientFeedback||''); setClientFeedbackAt(d.feedbackAt||'')
+                    // Saved crew/equipment are only the selected subset (see
+                    // saveBrief) — merge back onto the full roster instead of
+                    // replacing it, so unselected members/items aren't lost
+                    // from the picker.
+                    if (d.crew) setCrew(prev => prev.map(c => {
+                      const saved = d.crew.find((sc: any) => sc.id === c.id)
+                      return saved ? { ...c, ...saved, selected: true } : { ...c, selected: false }
+                    }))
+                    if (d.equipment) setEquipment(prev => prev.map(e => {
+                      const saved = d.equipment.find((se: any) => se.id === e.id)
+                      return saved ? { ...e, ...saved, selected: true } : { ...e, selected: false }
+                    }))
                     if (d.slides) setSlides(d.slides)
                     setView('deck'); setActiveSlide(0)
                   }} style={{ display:'flex', alignItems:'center', gap:14, padding:'14px 18px', borderBottom: i < savedBriefs.length-1 ? '0.5px solid rgba(200,194,187,0.06)':'none', cursor:'pointer' }}>
@@ -742,6 +863,35 @@ export default function PitchDeckPage() {
       {view === 'brief' && (
         <div style={{ padding: 28, maxWidth: 780 }}>
 
+          {clientFeedback && (
+            <div style={{ ...panelS, border: '0.5px solid rgba(210,175,80,0.3)', background: 'rgba(210,175,80,0.06)' }}>
+              <div style={{ padding: '13px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ fontSize: 12, fontWeight: 500, color: 'rgba(210,175,80,0.9)' }}>
+                  Client feedback{clientFeedbackAt ? ' — ' + new Date(clientFeedbackAt).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' }) : ''}
+                </div>
+                <button onClick={clearClientFeedback} style={{ fontSize: 9, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '3px 8px', borderRadius: 3, border: '0.5px solid rgba(210,175,80,0.3)', color: 'rgba(210,175,80,0.9)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Mark reviewed</button>
+              </div>
+              <div style={{ padding: '0 18px 16px', fontSize: 13, color: '#C8C2BB', lineHeight: 1.6 }}>{clientFeedback}</div>
+            </div>
+          )}
+
+          <div style={{ ...panelS, border: '0.5px solid rgba(100,150,220,0.25)', background: 'linear-gradient(135deg, rgba(100,150,220,0.06) 0%, #1A1F28 60%)' }}>
+            <div style={{ padding: '13px 18px', borderBottom: '0.5px solid rgba(100,150,220,0.15)', fontSize: 12, fontWeight: 500, color: '#C8C2BB', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 13 }}>✦</span> Draft with AI
+            </div>
+            <div style={{ padding: 18 }}>
+              <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', marginBottom: 10, lineHeight: 1.6 }}>Paste the email or brief the client sent through — Claude will propose a scope, creative direction and shoot/edit hours. Nothing's final: review and adjust everything below before sending.</div>
+              <textarea style={{ ...inp, resize: 'vertical' as const, lineHeight: 1.6, minHeight: 110 }} value={aiPasteText} onChange={e => setAiPasteText(e.target.value)} placeholder="Paste the client's email, brief, or requirements here..." />
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
+                <label style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '7px 12px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', cursor: 'pointer', fontFamily: 'inherit' }}>
+                  {aiUploadName || '+ Upload .txt'}
+                  <input type="file" accept=".txt,text/plain" style={{ display: 'none' }} onChange={e => { if (e.target.files?.[0]) handleAiFileUpload(e.target.files[0]) }} />
+                </label>
+                <button disabled={aiGenerating || !aiPasteText.trim()} onClick={generateBriefWithAI} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, background: aiGenerating || !aiPasteText.trim() ? 'rgba(100,150,220,0.15)' : 'rgba(100,150,220,0.9)', color: aiGenerating || !aiPasteText.trim() ? 'rgba(200,194,187,0.3)' : '#0E1014', border: 'none', cursor: aiGenerating || !aiPasteText.trim() ? 'not-allowed' : 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>{aiGenerating ? 'Drafting...' : '✦ Generate brief'}</button>
+              </div>
+            </div>
+          </div>
+
           <div style={panelS}>
             <div style={{ padding: '13px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>Client & project</div>
             <div style={{ padding: 18 }}>
@@ -805,6 +955,7 @@ export default function PitchDeckPage() {
                 </div>
                 <div><label style={lbl}>Draft due</label><input style={inp} type="date" value={draftDue} onChange={e => setDraftDue(e.target.value)} /></div>
                 <div><label style={lbl}>Finals due</label><input style={inp} type="date" value={finalsDue} onChange={e => setFinalsDue(e.target.value)} /></div>
+                <div><label style={lbl}>Delivery estimate</label><input style={inp} value={deliveryEstimate} onChange={e => setDeliveryEstimate(e.target.value)} placeholder="10-14 business days" /></div>
                 <div style={{ gridColumn: 'span 2', position: 'relative', zIndex: 30 }}>
                   <label style={lbl}>Locations</label>
                   <div style={{ position: 'relative' }}>
@@ -961,11 +1112,30 @@ export default function PitchDeckPage() {
                 </div>
               </div>
             ))}
-            <button onClick={() => {
-              const newId = 'shotlist-' + Date.now()
-              setSlides(p => [...p.slice(0,-1), { id:newId, type:'shotlist', label:'Shot List' }, p[p.length-1]])
-              setShotLists(prev => ({ ...prev, [newId]: { deliverableId: deliverables[0]?.id||'', shots:[{time:'',description:''}] } }))
-            }} style={{ width:'100%', marginTop:8, fontSize:10, letterSpacing:'0.1em', textTransform:'uppercase', padding:'8px', borderRadius:3, border:'0.5px solid rgba(200,194,187,0.15)', color:'rgba(200,194,187,0.4)', background:'transparent', cursor:'pointer', fontFamily:'inherit' }}>+ Shot list</button>
+            <div style={{ position: 'relative' }}>
+              <button onClick={() => setShowAddSlideMenu(p => !p)} style={{ width:'100%', marginTop:8, fontSize:10, letterSpacing:'0.1em', textTransform:'uppercase', padding:'8px', borderRadius:3, border:'0.5px solid rgba(200,194,187,0.15)', color:'rgba(200,194,187,0.4)', background:'transparent', cursor:'pointer', fontFamily:'inherit' }}>+ Add slide</button>
+              {showAddSlideMenu && <>
+                <div style={{ position:'fixed', inset:0, zIndex:49 }} onClick={() => setShowAddSlideMenu(false)} />
+                <div style={{ position:'absolute', bottom:'110%', left:0, right:0, background:'#1A1F28', border:'0.5px solid rgba(200,194,187,0.15)', borderRadius:6, zIndex:50, overflow:'hidden', boxShadow:'0 8px 24px rgba(0,0,0,0.4)' }}>
+                  {/* Creative Direction and Scope & Deliverables are in
+                      DEFAULT_SLIDES, but had no way back in if deleted — this
+                      menu is the only place that can re-add them, or a shot
+                      list for a specific deliverable. */}
+                  {[
+                    { type: 'creative', label: 'Creative Direction' },
+                    { type: 'deliverables', label: 'Scope & Deliverables' },
+                    { type: 'shotlist', label: 'Shot List' },
+                  ].map(({ type, label }) => (
+                    <button key={type} onClick={() => {
+                      const newId = type + '-' + Date.now()
+                      setSlides(p => [...p.slice(0,-1), { id:newId, type, label }, p[p.length-1]])
+                      if (type === 'shotlist') setShotLists(prev => ({ ...prev, [newId]: { deliverableId: deliverables[0]?.id||'', shots:[{time:'',description:''}] } }))
+                      setShowAddSlideMenu(false)
+                    }} style={{ display:'block', width:'100%', padding:'10px 14px', fontSize:11, color:'#C8C2BB', background:'transparent', border:'none', borderBottom:'0.5px solid rgba(200,194,187,0.06)', cursor:'pointer', textAlign:'left', fontFamily:'inherit' }} onMouseEnter={e=>(e.currentTarget.style.background='rgba(200,194,187,0.05)')} onMouseLeave={e=>(e.currentTarget.style.background='transparent')}>+ {label}</button>
+                  ))}
+                </div>
+              </>}
+            </div>
           </div>
 
           {/* CENTRE CANVAS */}

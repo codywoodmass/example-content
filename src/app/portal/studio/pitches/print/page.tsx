@@ -138,6 +138,22 @@ export default function PitchPrintPage() {
       </div>
     )
 
+    if (slide.type === 'creative') return (
+      <div key={idx} style={base}>
+        {label('Creative Direction')}
+        <div style={{ fontSize: HS * 0.5, fontWeight: HW, color: t.accent, lineHeight: 1.0, letterSpacing: '-0.02em', marginBottom: 28 }}>{(tone || 'The Vision').toUpperCase()}</div>
+        {rule()}
+        <div style={{ fontSize: 15, color: t.text, lineHeight: 1.8, flex: 1 }}>{projectGoals}</div>
+        {references && (
+          <div style={{ marginTop: 24 }}>
+            <div style={{ fontSize: 11, letterSpacing: '0.18em', textTransform: 'uppercase', color: t.muted, marginBottom: 10, fontWeight: 700 }}>References</div>
+            <div style={{ fontSize: 14, color: t.accentDim, lineHeight: 1.6 }}>{references}</div>
+          </div>
+        )}
+        {footer(idx)}
+      </div>
+    )
+
    if (slide.type === 'deliverables') return (
       <div key={idx} style={base}>
         {label('Scope & Deliverables')}
@@ -221,11 +237,9 @@ export default function PitchPrintPage() {
           {showPreProd && calcPreProd > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', padding: '14px 0', borderBottom: `0.5px solid ${t.border}` }}><span style={{ fontSize: 15, color: t.accentDim }}>Pre-production &mdash; {preProdHours}hrs</span><span style={{ fontSize: 15, color: t.accent, fontWeight: 700 }}>{'$'+(calcPreProd||0).toLocaleString()}</span></div>}
           {showTravel && calcTravel > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', padding: '14px 0', borderBottom: `0.5px solid ${t.border}` }}><span style={{ fontSize: 15, color: t.accentDim }}>Travel &mdash; {travelKm}km</span><span style={{ fontSize: 15, color: t.accent, fontWeight: 700 }}>{'$'+(calcTravel||0).toFixed(2)}</span></div>}
           {(equipment||[]).filter((e:any)=>e.hire).map((e:any,i:number)=><div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '14px 0', borderBottom: `0.5px solid ${t.border}` }}><span style={{ fontSize: 15, color: t.accentDim }}>{e.name} hire x{e.days}</span><span style={{ fontSize: 15, color: t.accent, fontWeight: 700 }}>{'$'+(e.hireRate*e.days).toLocaleString()}</span></div>)}
-          <div style={{ marginTop: 20, borderTop: `1px solid ${t.border}`, paddingTop: 16 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}><span style={{ fontSize: 14, color: t.muted }}>Subtotal</span><span style={{ fontSize: 14, color: t.accent }}>{'$'+(subtotal||0).toLocaleString()}</span></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}><span style={{ fontSize: 14, color: t.muted }}>GST (15%)</span><span style={{ fontSize: 14, color: t.accent }}>{'$'+(gst||0).toLocaleString()}</span></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: 18, fontWeight: 700, color: t.accent }}>Total inc. GST</span><span style={{ fontSize: 22, fontWeight: 900, color: t.accent }}>{'$'+(total||0).toLocaleString()}</span></div>
-          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 20 }}><span style={{ fontSize: 14, color: t.muted }}>Subtotal</span><span style={{ fontSize: 14, color: t.accent }}>{'$'+(subtotal||0).toLocaleString()}</span></div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, marginBottom: 20 }}><span style={{ fontSize: 14, color: t.muted }}>GST (15%)</span><span style={{ fontSize: 14, color: t.accent }}>{'$'+(gst||0).toLocaleString()}</span></div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', background: t.surfaceAlt, border: `1px solid ${t.border}`, borderRadius: 4 }}><span style={{ fontSize: 18, fontWeight: 700, color: t.accent }}>Total inc. GST</span><span style={{ fontSize: 26, fontWeight: 900, color: t.accent }}>{'$'+(total||0).toLocaleString()}</span></div>
           {pricingNotes && <div style={{ fontSize: 14, color: t.muted, marginTop: 16 }}>{pricingNotes}</div>}
         </div>
         {showDeposit && <div style={{ padding: '16px 20px', background: t.surfaceAlt, fontSize: 14, color: t.muted, marginTop: 16 }}>50% deposit required to confirm. Balance due on delivery.</div>}
@@ -263,8 +277,8 @@ export default function PitchPrintPage() {
         <div style={{ fontSize: HS * 1.1, fontWeight: HW, color: t.accent, lineHeight: 0.95, letterSpacing: '-0.03em', marginBottom: 40 }}>LET'S GET<br/>THIS<br/>STARTED.</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {['Proposal valid 14 days from issue', '50% deposit to confirm, balance due on delivery', 'Cancellations within 48hrs incur a 25% fee', 'Example Content retains portfolio rights unless waiver requested in writing', 'All prices exclude GST', 'Files delivered via Google Drive, retained 60 days', tcNotes].filter(Boolean).map((tc: string, i: number) => (
-            <div key={i} style={{ display: 'flex', gap: 14, fontSize: 14, color: t.text, lineHeight: 1.6 }}>
-              <span style={{ color: t.muted, flexShrink: 0 }}>—</span>{tc}
+            <div key={i} style={{ display: 'flex', gap: 16, alignItems: 'flex-start', fontSize: 14, color: t.text, lineHeight: 1.6 }}>
+              <span style={{ flexShrink: 0, width: 24, height: 24, borderRadius: '50%', border: `1px solid ${t.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: t.muted, fontWeight: 700 }}>{i + 1}</span>{tc}
             </div>
           ))}
         </div>
