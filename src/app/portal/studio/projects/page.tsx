@@ -134,7 +134,7 @@ function ProjectsPageInner() {
   const modalProjectRef = useRef<Project | null>(null)
   useEffect(() => { modalProjectRef.current = modalProject }, [modalProject])
   const [modalEditing, setModalEditing] = useState(false)
-  const [modalTab, setModalTab] = useState<'overview' | 'notes' | 'brief' | 'time'>('overview')
+  const [modalTab, setModalTab] = useState<'overview' | 'brief' | 'time'>('overview')
   useEffect(() => { setModalTab('overview') }, [modalProject?.id])
   const [modalSaving, setModalSaving] = useState(false)
   const [modalSaved, setModalSaved] = useState(false)
@@ -1301,6 +1301,41 @@ function ProjectsPageInner() {
                   })
                 }} style={{ width: '100%', accentColor: '#C8C2BB', cursor: 'pointer' }} />
               </div>
+              {/* KEY FACTS — always visible regardless of which tab is open, so the handful
+                  of things actually checked/updated day-to-day (who's shooting and editing,
+                  what it's worth, when it's on, whether it's confirmed) never need a tab click. */}
+              <div className="ec-form-grid-5" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10, marginBottom: 20, background: 'rgba(200,194,187,0.03)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 6, padding: '12px 14px' }}>
+                <div>
+                  <div style={{ fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>Shoot date</div>
+                  <div style={{ fontSize: 12, color: '#C8C2BB' }}>
+                    {modalProject.shoot_date ? new Date(modalProject.shoot_date + 'T12:00:00').toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' }) : 'Not set'}
+                    {modalProject.shoot_window_start && <span style={{ color: 'rgba(200,194,187,0.4)' }}>{' · ' + formatTime12(modalProject.shoot_window_start)}</span>}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>Amount ($)</div>
+                  {modalEditing ? <input type="number" min="0" step="0.01" value={modalProject.amount ?? ''} onChange={e => setModalProject(p => { const u = p ? { ...p, amount: e.target.value === '' ? null : parseFloat(e.target.value) } : p; if (u) triggerAutoSave(u); return u })} placeholder="0.00" style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '7px 9px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }} /> : <div style={{ fontSize: 12, color: '#C8C2BB' }}>{modalProject.amount ? `$${modalProject.amount.toLocaleString()}` : '—'}</div>}
+                </div>
+                {[{ label: 'Shooter', key: 'shooter' as const }, { label: 'Editor', key: 'editor' as const }].map(({ label, key }) => (
+                  <div key={key}>
+                    <div style={{ fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>{label}</div>
+                    {modalEditing ? (
+                      <select value={modalProject[key] || ''} onChange={e => setModalProject(p => { const u = p ? { ...p, [key]: e.target.value || null } : p; if (u) triggerAutoSave(u); return u })} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '7px 9px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }}>
+                        <option value="">— Unassigned —</option>
+                        {teamOptions.map(t => <option key={t.name} value={t.name}>{t.name}</option>)}
+                      </select>
+                    ) : <div style={{ fontSize: 12, color: '#C8C2BB' }}>{modalProject[key] || '—'}</div>}
+                  </div>
+                ))}
+                <div>
+                  <div style={{ fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>Confirmed</div>
+                  {modalProject.client_confirmed ? (
+                    <div style={{ fontSize: 12, color: 'rgba(100,200,130,0.8)' }}>✓ {modalProject.confirmed_at ? new Date(modalProject.confirmed_at).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' }) : 'Yes'}</div>
+                  ) : modalProject.stage === 'Enquiry' ? (
+                    <button onClick={() => markConfirmed(modalProject)} style={{ fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '6px 8px', borderRadius: 3, border: '0.5px solid rgba(100,150,220,0.35)', color: 'rgba(100,150,220,0.9)', background: 'rgba(100,150,220,0.08)', cursor: 'pointer', fontFamily: 'inherit', width: '100%' }}>Mark confirmed</button>
+                  ) : <div style={{ fontSize: 12, color: 'rgba(200,194,187,0.25)' }}>—</div>}
+                </div>
+              </div>
               <div style={{ marginBottom: 20, background: 'rgba(100,150,220,0.06)', border: '0.5px solid rgba(100,150,220,0.2)', borderRadius: 6, padding: '14px 16px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                   <div style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(100,150,220,0.85)' }}>Attachments ({modalProject.attachment_urls?.length || 0})</div>
@@ -1355,7 +1390,7 @@ function ProjectsPageInner() {
                 )
               })()}
               <div style={{ display: 'flex', gap: 4, marginBottom: 20, borderBottom: '0.5px solid rgba(200,194,187,0.09)' }}>
-                {[{ id: 'overview', label: 'Overview' }, { id: 'notes', label: 'Notes & Files' }, { id: 'brief', label: 'Brief' }, { id: 'time', label: 'Time' }].map(tab => (
+                {[{ id: 'overview', label: 'Job' }, { id: 'brief', label: 'Brief' }, { id: 'time', label: 'Time' }].map(tab => (
                   <button key={tab.id} onClick={() => setModalTab(tab.id as any)} style={{ fontSize: 12, padding: '10px 14px', background: 'transparent', border: 'none', borderBottom: `2px solid ${modalTab === tab.id ? '#C8C2BB' : 'transparent'}`, color: modalTab === tab.id ? '#C8C2BB' : 'rgba(200,194,187,0.35)', cursor: 'pointer', fontFamily: 'inherit', marginBottom: -1 }}>{tab.label}</button>
                 ))}
               </div>
@@ -1370,38 +1405,6 @@ function ProjectsPageInner() {
                   <div key={key} style={{ gridColumn: key === 'address' ? 'span 2' : 'span 1' }}>
                     <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>{label}</div>
                     {modalEditing ? <input value={modalProject[key] || ''} onChange={e => setModalProject(p => { const u = p ? { ...p, [key]: e.target.value } : p; if (u) triggerAutoSave(u); return u })} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '8px 10px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }} /> : <div style={{ fontSize: 13, color: '#C8C2BB' }}>{modalProject[key] || '—'}</div>}
-                  </div>
-                ))}
-                <div>
-                  <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>Stage</div>
-                  {modalEditing ? (
-                    <select value={modalProject.stage} onChange={e => setModalProject(p => { const u = p ? { ...p, stage: e.target.value, progress: STAGE_PROGRESS[e.target.value] } : p; if (u) triggerAutoSave(u); return u })} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '8px 10px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }}>
-                      {STAGES.map(s => <option key={s} value={s}>{stageLabel(s)}</option>)}
-                    </select>
-                  ) : <div style={{ fontSize: 13, color: '#C8C2BB' }}>{stageLabel(modalProject.stage)}</div>}
-                </div>
-                <div>
-                  <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>Amount ($)</div>
-                  {modalEditing ? <input type="number" min="0" step="0.01" value={modalProject.amount ?? ''} onChange={e => setModalProject(p => { const u = p ? { ...p, amount: e.target.value === '' ? null : parseFloat(e.target.value) } : p; if (u) triggerAutoSave(u); return u })} placeholder="0.00" style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '8px 10px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }} /> : <div style={{ fontSize: 13, color: '#C8C2BB' }}>{modalProject.amount ? `$${modalProject.amount.toLocaleString()}` : '—'}</div>}
-                </div>
-                <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-                  {modalProject.client_confirmed ? (
-                    <div style={{ fontSize: 11, color: 'rgba(100,200,130,0.8)' }}>✓ Confirmed{modalProject.confirmed_at ? ' ' + new Date(modalProject.confirmed_at).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' }) : ''}</div>
-                  ) : modalProject.stage === 'Enquiry' ? (
-                    <button onClick={() => markConfirmed(modalProject)} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 3, border: '0.5px solid rgba(100,150,220,0.35)', color: 'rgba(100,150,220,0.9)', background: 'rgba(100,150,220,0.08)', cursor: 'pointer', fontFamily: 'inherit', width: '100%' }}>Mark confirmed</button>
-                  ) : null}
-                </div>
-              </div>
-              <div className="ec-form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
-                {[{ label: 'Shooter', key: 'shooter' as const }, { label: 'Editor', key: 'editor' as const }].map(({ label, key }) => (
-                  <div key={key}>
-                    <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>{label}</div>
-                    {modalEditing ? (
-                      <select value={modalProject[key] || ''} onChange={e => setModalProject(p => { const u = p ? { ...p, [key]: e.target.value || null } : p; if (u) triggerAutoSave(u); return u })} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '8px 10px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }}>
-                        <option value="">— Unassigned —</option>
-                        {teamOptions.map(t => <option key={t.name} value={t.name}>{t.name}</option>)}
-                      </select>
-                    ) : <div style={{ fontSize: 13, color: '#C8C2BB' }}>{modalProject[key] || '—'}</div>}
                   </div>
                 ))}
               </div>
@@ -1489,10 +1492,7 @@ function ProjectsPageInner() {
                   </div>
                 </div>
               )}
-              </>
-              )}
-              {modalTab === 'notes' && (
-              <>
+              <div style={{ height: 1, background: 'rgba(200,194,187,0.07)', margin: '4px 0 20px' }} />
               {projectFeedback.filter(f => f.source !== 'studio').length > 0 && (
                 <div style={{ marginBottom: 20 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
