@@ -2153,7 +2153,13 @@ export default function StudioPortal() {
               const kpiCard = (bg: string, borderCol: string) => ({ background: `linear-gradient(135deg, ${bg} 0%, rgba(20,24,32,0.95) 100%)`, border: `0.5px solid ${borderCol}`, borderRadius: 10, padding: '16px 18px', position: 'relative' as const, overflow: 'hidden' as const })
               const glow = (color: string) => <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1, background: `linear-gradient(90deg, transparent, ${color}, transparent)` }} />
               const unbilled = dashProjects.filter((p: any) => p.amount && !p.invoice_id)
-              const pipelineTotal = unbilled.reduce((sum: number, p: any) => sum + (p.amount || 0), 0)
+              const unbilledTotal = unbilled.reduce((sum: number, p: any) => sum + (p.amount || 0), 0)
+              const draftInvoiceItems = pnl.draftInvoices?.items || []
+              const draftInvoiceTotal = pnl.draftInvoices?.draftTotal || 0
+              // Not yet invoiced at all (unbilled) plus invoiced-but-still-draft
+              // in Xero — both are real forecasted revenue that outstanding/
+              // recognised-revenue figures elsewhere on this page don't count yet.
+              const pipelineTotal = unbilledTotal + draftInvoiceTotal
               const margin = pnl.revenueTotal ? Math.round((pnl.netProfit / pnl.revenueTotal) * 100) : 0
               const outstandingItems = pnl.outstandingInvoices?.items || []
               const outstandingTotal = pnl.outstandingInvoices?.outstandingTotal || 0
@@ -2199,7 +2205,7 @@ export default function StudioPortal() {
                         <span style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(210,175,80,0.6)' }}>Forecasted Pipeline</span>
                       </div>
                       <div style={{ fontSize: 24, fontWeight: 600, color: 'rgba(210,175,80,0.95)' }}>${pipelineTotal.toLocaleString()}</div>
-                      <div style={{ fontSize: 10, color: 'rgba(200,194,187,0.3)', marginTop: 4 }}>{unbilled.length} not yet invoiced</div>
+                      <div style={{ fontSize: 10, color: 'rgba(200,194,187,0.3)', marginTop: 4 }}>{unbilled.length} not yet invoiced{draftInvoiceItems.length > 0 ? ` · ${draftInvoiceItems.length} draft in Xero` : ''}</div>
                     </div>
                   </div>
 
@@ -2296,6 +2302,12 @@ export default function StudioPortal() {
                             <div key={m.label} style={{ flex: 1, textAlign: 'center', fontSize: 9, color: 'rgba(200,194,187,0.3)', letterSpacing: '0.03em', textTransform: 'uppercase' as const, whiteSpace: 'nowrap' as const }}>{m.label.split(' ')[0]}</div>
                           ))}
                         </div>
+                        {draftInvoiceTotal > 0 && (
+                          // Xero's P&L report only recognises posted/sent invoices — a
+                          // draft genuinely isn't revenue yet, so this stays a separate
+                          // caption rather than getting baked into the bars themselves.
+                          <div style={{ padding: '0 20px 14px', fontSize: 10.5, color: 'rgba(210,175,80,0.75)' }}>+ ${draftInvoiceTotal.toLocaleString()} sitting in draft invoices — not yet reflected above</div>
+                        )}
                       </div>
                       )
                     })() || (
@@ -2548,7 +2560,7 @@ export default function StudioPortal() {
                       const expectedOut = w.expectedOut + weeklyRecurringExpense
                       const gstAmount = w.gstPeriodDue ? gstForPeriod : 0
                       const opening = running
-                      const closing = opening + w.expectedIn + booked - expectedOut - gstAmount
+                      const closing = opening + w.expectedIn + (w.expectedInDraft || 0) + booked - expectedOut - gstAmount
                       running = closing
                       return { ...w, booked, expectedOut, gstAmount, opening, closing }
                     })
@@ -2561,10 +2573,10 @@ export default function StudioPortal() {
                         </div>
                       )}
                       <div style={{ ...s.panel, overflowX: 'auto' }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 860 }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 980 }}>
                           <thead>
                             <tr>
-                              {['Week', cashflow.hasBalance ? 'Opening' : null, 'Invoiced in (Xero)', 'Booked (not yet invoiced)', 'Expected out', 'GST (15%)', cashflow.hasBalance ? 'Closing' : null].filter(Boolean).map(h => (
+                              {['Week', cashflow.hasBalance ? 'Opening' : null, 'Invoiced in (Xero)', 'Draft invoices (Xero)', 'Booked (not yet invoiced)', 'Expected out', 'GST (15%)', cashflow.hasBalance ? 'Closing' : null].filter(Boolean).map(h => (
                                 <th key={h as string} style={{ fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.3)', padding: '10px 14px', textAlign: h === 'Week' ? 'left' : 'right', borderBottom: '0.5px solid rgba(200,194,187,0.09)', fontWeight: 400, whiteSpace: 'nowrap' }}>{h}</th>
                               ))}
                             </tr>
@@ -2575,6 +2587,7 @@ export default function StudioPortal() {
                                 <td style={{ padding: '9px 14px', borderBottom: '0.5px solid rgba(200,194,187,0.06)', fontSize: 12, color: 'rgba(200,194,187,0.6)', whiteSpace: 'nowrap' }}>{new Date(w.weekStart + 'T12:00:00').toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' })}{i === 0 ? ' (this wk)' : ''}</td>
                                 {cashflow.hasBalance && <td style={{ padding: '9px 14px', borderBottom: '0.5px solid rgba(200,194,187,0.06)', fontSize: 12, color: '#C8C2BB', textAlign: 'right' }}>${Math.round(w.opening).toLocaleString()}</td>}
                                 <td style={{ padding: '9px 14px', borderBottom: '0.5px solid rgba(200,194,187,0.06)', fontSize: 12, color: 'rgba(100,200,130,0.85)', textAlign: 'right' }}>{w.expectedIn ? '+$' + Math.round(w.expectedIn).toLocaleString() : '—'}</td>
+                                <td style={{ padding: '9px 14px', borderBottom: '0.5px solid rgba(200,194,187,0.06)', fontSize: 12, color: w.expectedInDraft ? 'rgba(210,175,80,0.85)' : 'rgba(200,194,187,0.25)', textAlign: 'right' }}>{w.expectedInDraft ? '+$' + Math.round(w.expectedInDraft).toLocaleString() : '—'}</td>
                                 <td style={{ padding: '9px 14px', borderBottom: '0.5px solid rgba(200,194,187,0.06)', fontSize: 12, color: w.booked ? 'rgba(100,150,220,0.85)' : 'rgba(200,194,187,0.25)', textAlign: 'right' }}>{w.booked ? '+$' + Math.round(w.booked).toLocaleString() : '—'}</td>
                                 <td style={{ padding: '9px 14px', borderBottom: '0.5px solid rgba(200,194,187,0.06)', fontSize: 12, color: 'rgba(210,90,90,0.85)', textAlign: 'right' }}>{w.expectedOut ? '−$' + Math.round(w.expectedOut).toLocaleString() : '—'}</td>
                                 <td style={{ padding: '9px 14px', borderBottom: '0.5px solid rgba(200,194,187,0.06)', fontSize: 12, color: w.gstAmount ? 'rgba(210,175,80,0.85)' : 'rgba(200,194,187,0.25)', textAlign: 'right' }}>{w.gstAmount ? (w.gstAmount > 0 ? '−' : '+') + '$' + Math.round(Math.abs(w.gstAmount)).toLocaleString() + ' (est.)' : '—'}</td>
@@ -2584,7 +2597,7 @@ export default function StudioPortal() {
                           </tbody>
                         </table>
                         <div style={{ padding: '10px 14px', fontSize: 9.5, color: 'rgba(200,194,187,0.25)', borderTop: '0.5px solid rgba(200,194,187,0.06)' }}>
-                          "Invoiced in" is real outstanding Xero invoices, assumed paid on their due date. "Booked" is confirmed portal work with no invoice yet (by delivery/shoot date) — money not yet billed, so its timing is a rougher guess. "Expected out" is outstanding Xero bills plus a weekly estimate (trailing 6mo average ÷ 4.345) for recurring costs like rent, wages and subscriptions, which mostly don't pass through Xero's Bills module at all. GST is 15% of (revenue − expenses) for the period that's due, from the same P&L figures. Doesn't include income tax, which isn't tracked here. Treat as a guide, not a guarantee.
+                          "Invoiced in" is real outstanding Xero invoices, assumed paid on their due date. "Draft invoices" are sitting in Xero but not yet sent/approved — bucketed by due date if set, otherwise issue date, so treat this column as lower-confidence than "Invoiced in". "Booked" is confirmed portal work with no invoice yet (by delivery/shoot date) — money not yet billed, so its timing is a rougher guess. "Expected out" is outstanding Xero bills plus a weekly estimate (trailing 6mo average ÷ 4.345) for recurring costs like rent, wages and subscriptions, which mostly don't pass through Xero's Bills module at all. GST is 15% of (revenue − expenses) for the period that's due, from the same P&L figures. Doesn't include income tax, which isn't tracked here. Treat as a guide, not a guarantee.
                         </div>
                       </div>
                     </div>
@@ -2611,6 +2624,26 @@ export default function StudioPortal() {
                             <div style={{ fontSize: 10, color: inv.overdue ? 'rgba(210,90,90,0.8)' : 'rgba(200,194,187,0.35)' }}>{inv.overdue ? 'Overdue — ' : 'Due '}{inv.dueDate ? new Date(inv.dueDate).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' }) : '—'}</div>
                           </div>
                           <div style={{ fontSize: 13, fontWeight: 500, color: inv.overdue ? 'rgba(210,90,90,0.9)' : 'rgba(210,175,80,0.85)', whiteSpace: 'nowrap' }}>${inv.amountDue.toLocaleString()}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <div style={s.panel}>
+                      <div style={{ padding: '14px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>Draft invoices</span>
+                          <span style={{ fontSize: 12, fontWeight: 500, color: 'rgba(210,175,80,0.9)' }}>${draftInvoiceTotal.toLocaleString()}</span>
+                        </div>
+                      </div>
+                      {draftInvoiceItems.length === 0 ? (
+                        <div style={{ padding: '14px 18px', fontSize: 12, color: 'rgba(200,194,187,0.25)' }}>No drafts sitting in Xero</div>
+                      ) : draftInvoiceItems.map((inv: any) => (
+                        <div key={inv.invoiceId} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.06)' }}>
+                          <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(210,175,80,0.12)', color: 'rgba(210,175,80,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 600, flexShrink: 0 }}>{(inv.contact || '?').charAt(0).toUpperCase()}</div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 12, color: '#C8C2BB', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{inv.contact}{inv.invoiceNumber ? ' · ' + inv.invoiceNumber : ''}</div>
+                            <div style={{ fontSize: 10, color: 'rgba(200,194,187,0.35)' }}>{inv.dueDate ? 'Due ' + new Date(inv.dueDate).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' }) : inv.issueDate ? 'Issued ' + new Date(inv.issueDate).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' }) : 'No date set'}</div>
+                          </div>
+                          <div style={{ fontSize: 13, fontWeight: 500, color: 'rgba(210,175,80,0.85)', whiteSpace: 'nowrap' }}>${inv.total.toLocaleString()}</div>
                         </div>
                       ))}
                     </div>

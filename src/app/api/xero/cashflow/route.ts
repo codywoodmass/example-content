@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireStudioUser, getValidXeroToken } from '@/lib/xero'
-import { toDateStr, getOutstandingInvoices, getGstSchedule, getBankBalance } from '@/lib/xeroReports'
+import { toDateStr, getOutstandingInvoices, getGstSchedule, getBankBalance, getDraftInvoices } from '@/lib/xeroReports'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
@@ -19,11 +19,12 @@ export async function GET(req: NextRequest) {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
 
-  const [bank, ar, ap, gst] = await Promise.all([
+  const [bank, ar, ap, gst, draftAr] = await Promise.all([
     getBankBalance(token.accessToken, token.tenantId, toDateStr(today)),
     getOutstandingInvoices(token.accessToken, token.tenantId, 'ACCREC'),
     getOutstandingInvoices(token.accessToken, token.tenantId, 'ACCPAY'),
     getGstSchedule(token.accessToken, token.tenantId),
+    getDraftInvoices(token.accessToken, token.tenantId, 'ACCREC'),
   ])
 
   const weeks = Array.from({ length: 13 }, (_, i) => {
@@ -38,6 +39,16 @@ export async function GET(req: NextRequest) {
     items.filter(it => it.dueDate && new Date(it.dueDate + 'T12:00:00') >= start && new Date(it.dueDate + 'T12:00:00') <= end)
       .reduce((s, it) => s + it.amountDue, 0)
 
+  // Drafts often have no due date set yet — fall back to issue date so they
+  // still land somewhere plausible instead of just vanishing from every week.
+  const sumDraftInRange = (items: { dueDate: string | null; issueDate: string | null; total: number }[], start: Date, end: Date) =>
+    items.filter(it => {
+      const dateStr = it.dueDate || it.issueDate
+      if (!dateStr) return false
+      const d = new Date(dateStr + 'T12:00:00')
+      return d >= start && d <= end
+    }).reduce((s, it) => s + it.total, 0)
+
   // Opening balance for week 0 is the only one that matters from here — the
   // client folds in portal bookings and a recurring-expense/GST estimate
   // (computed from the P&L data it already has loaded) on top of this and
@@ -49,6 +60,7 @@ export async function GET(req: NextRequest) {
   // this org was never confirmed. This just flags which week a due date falls in.
   const weekRows = weeks.map(w => {
     const expectedIn = sumDueInRange(ar.items, w.start, w.end)
+    const expectedInDraft = sumDraftInRange(draftAr.items, w.start, w.end)
     const expectedOut = sumDueInRange(ap.items, w.start, w.end)
     const gstPeriodDue = gst.periods.some(p => {
       const d = new Date(p.dueDate + 'T12:00:00')
@@ -59,6 +71,7 @@ export async function GET(req: NextRequest) {
       weekEnd: toDateStr(w.end),
       opening: bank.balance ?? 0,
       expectedIn,
+      expectedInDraft,
       expectedOut,
       gstPeriodDue,
     }
@@ -70,5 +83,6 @@ export async function GET(req: NextRequest) {
     hasBalance: bank.balance !== null,
     asOf: toDateStr(today),
     weeks: weekRows,
+    draftTotal: draftAr.draftTotal,
   })
 }

@@ -66,6 +66,37 @@ export async function getOutstandingInvoices(accessToken: string, tenantId: stri
   }
 }
 
+// Draft invoices (ACCREC/ACCPAY) aren't "outstanding" in Xero's own terms —
+// they haven't been sent/approved yet — but they're real forecasted revenue
+// the studio already knows about (a quote accepted and invoiced locally, but
+// not yet pushed to AUTHORISED in Xero), so pipeline/cashflow treats them as
+// a distinct, clearly-lower-confidence layer rather than folding them into
+// actual outstanding or recognised revenue figures.
+export async function getDraftInvoices(accessToken: string, tenantId: string, type: 'ACCREC' | 'ACCPAY' = 'ACCREC') {
+  try {
+    const where = encodeURIComponent(`Type=="${type}" && Status=="DRAFT"`)
+    const res = await xeroFetch(accessToken, tenantId, `/api.xro/2.0/Invoices?where=${where}`)
+    if (!res.ok) return { items: [], draftTotal: 0 }
+    const items = (res.data?.Invoices || []).map((inv: any) => {
+      const dueDate = parseXeroDate(inv.DueDateString || inv.DueDate)
+      const issueDate = parseXeroDate(inv.DateString || inv.Date)
+      return {
+        invoiceId: inv.InvoiceID,
+        invoiceNumber: inv.InvoiceNumber || '',
+        contact: inv.Contact?.Name || 'Unknown',
+        dueDate: dueDate ? toDateStr(dueDate) : null,
+        issueDate: issueDate ? toDateStr(issueDate) : null,
+        total: inv.Total || 0,
+      }
+    })
+    const draftTotal = items.reduce((sum: number, i: any) => sum + i.total, 0)
+    return { items, draftTotal }
+  } catch (e) {
+    console.error(`Xero draft ${type} fetch error:`, e)
+    return { items: [], draftTotal: 0 }
+  }
+}
+
 // The app's own invoices1 table is meant to mirror Xero but can drift out of
 // sync or simply not be the path payments actually arrived through — pulling
 // paid invoices straight from Xero (FullyPaidOnDate) is ground truth instead.
