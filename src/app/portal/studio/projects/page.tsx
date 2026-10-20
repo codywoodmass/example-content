@@ -26,6 +26,23 @@ function formatDate(dateStr: string | null | undefined): string {
 }
 
 type ShootDate = { id: string; date: string; start_time: string; end_time: string; notes: string }
+type ReferenceItem = { id: string; url: string; note: string }
+
+// Recognises a pasted link from the four platforms the studio actually uses
+// for references and builds the iframe URL that plays it inline, without
+// needing an API key for any of them. Facebook's video plugin resolves the
+// original URL itself (no ID extraction needed); Instagram's public posts
+// support a plain /embed suffix the same way.
+function getEmbedInfo(url: string): { platform: string; embedUrl: string } | null {
+  const yt = url.match(/(?:youtube\.com\/(?:watch\?v=|shorts\/|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/)
+  if (yt) return { platform: 'YouTube', embedUrl: `https://www.youtube.com/embed/${yt[1]}` }
+  const vimeo = url.match(/vimeo\.com\/(?:.*\/)?(\d+)/)
+  if (vimeo) return { platform: 'Vimeo', embedUrl: `https://player.vimeo.com/video/${vimeo[1]}` }
+  const insta = url.match(/instagram\.com\/(p|reel|tv)\/([a-zA-Z0-9_-]+)/)
+  if (insta) return { platform: 'Instagram', embedUrl: `https://www.instagram.com/${insta[1]}/${insta[2]}/embed` }
+  if (/(^|\.)facebook\.com|fb\.watch/.test(url)) return { platform: 'Facebook', embedUrl: `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(url)}&show_text=false` }
+  return null
+}
 type TimeEntry = { id: string; project_id: string; phase: string; hours: number; person: string | null; entry_date: string; note: string | null; created_at: string; started_at: string | null; ended_at: string | null; billable: boolean }
 const TIME_PHASES = ['Pre-Production', 'Shooting', 'Editing']
 
@@ -107,6 +124,7 @@ type Project = {
   invoiced_at: string | null
   shooter: string | null
   editor: string | null
+  references: ReferenceItem[]
 }
 
 function attachmentIcon(name: string): string {
@@ -275,6 +293,44 @@ function ProjectsPageInner() {
     })
   }
 
+  // Reference videos (YouTube/Vimeo/Facebook/Instagram) for the shooter or
+  // editor to watch against, each with a short note on why it's there —
+  // same persist-immediately pattern as shoot_dates above, not swept up in
+  // the general debounced autosave.
+  async function persistReferences(projectId: string, refs: ReferenceItem[]) {
+    const { error } = await supabase.from('projects1').update({ references: refs }).eq('id', projectId)
+    if (error) { notify('Error saving reference: ' + error.message, 'error'); return }
+    setProjects(p => p.map(proj => proj.id === projectId ? { ...proj, references: refs } : proj))
+  }
+  function addReference(url: string, note: string) {
+    if (!getEmbedInfo(url)) { notify('Only YouTube, Vimeo, Facebook or Instagram links are supported.', 'error'); return }
+    setModalProject(p => {
+      if (!p) return p
+      const refs = [...(p.references || []), { id: Date.now().toString(), url, note }]
+      const u = { ...p, references: refs }
+      persistReferences(p.id, refs)
+      return u
+    })
+  }
+  function updateReferenceNote(id: string, note: string) {
+    setModalProject(p => {
+      if (!p) return p
+      const refs = (p.references || []).map(r => r.id === id ? { ...r, note } : r)
+      const u = { ...p, references: refs }
+      persistReferences(p.id, refs)
+      return u
+    })
+  }
+  function removeReference(id: string) {
+    setModalProject(p => {
+      if (!p) return p
+      const refs = (p.references || []).filter(r => r.id !== id)
+      const u = { ...p, references: refs }
+      persistReferences(p.id, refs)
+      return u
+    })
+  }
+
   const [modalFullscreen, setModalFullscreen] = useState(false)
   const [projectFeedback, setProjectFeedback] = useState<any[]>([])
   const tracker = useTimeTracking()
@@ -289,6 +345,8 @@ function ProjectsPageInner() {
     // per-project feedback reload so switching projects always starts blank.
     setNewFeedbackMsg('')
     setNewFeedbackAssignee('')
+    setNewRefUrl('')
+    setNewRefNote('')
   }, [modalProject?.id])
 
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([])
@@ -394,6 +452,8 @@ function ProjectsPageInner() {
   const [newFeedbackMsg, setNewFeedbackMsg] = useState('')
   const [newFeedbackAssignee, setNewFeedbackAssignee] = useState('')
   const [addingFeedback, setAddingFeedback] = useState(false)
+  const [newRefUrl, setNewRefUrl] = useState('')
+  const [newRefNote, setNewRefNote] = useState('')
 
   async function addInternalFeedback(project: Project) {
     if (!newFeedbackMsg.trim()) return
@@ -1492,6 +1552,39 @@ function ProjectsPageInner() {
                   </div>
                 </div>
               )}
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 10 }}>References</div>
+                {(modalProject.references || []).length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 14, marginBottom: 14 }}>
+                    {modalProject.references.map(ref => {
+                      const embed = getEmbedInfo(ref.url)
+                      return (
+                        <div key={ref.id} style={{ width: 'calc(50% - 7px)', minWidth: 260, background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.08)', borderRadius: 6, overflow: 'hidden' }}>
+                          <div style={{ position: 'relative' as const, width: '100%', aspectRatio: '16/9', background: '#000' }}>
+                            {embed ? (
+                              <iframe src={embed.embedUrl} style={{ position: 'absolute' as const, inset: 0, width: '100%', height: '100%', border: 'none' }} allow="autoplay; fullscreen; picture-in-picture" allowFullScreen />
+                            ) : (
+                              <div style={{ position: 'absolute' as const, inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: 'rgba(200,194,187,0.3)' }}>Unsupported link</div>
+                            )}
+                          </div>
+                          <div style={{ padding: 10 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                              <a href={ref.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'rgba(100,150,220,0.8)', textDecoration: 'none' }}>{embed?.platform || 'Link'} ↗</a>
+                              <button onClick={() => removeReference(ref.id)} style={{ fontSize: 13, color: 'rgba(210,90,90,0.6)', background: 'transparent', border: 'none', cursor: 'pointer', lineHeight: 1 }}>✕</button>
+                            </div>
+                            <textarea value={ref.note} onChange={e => updateReferenceNote(ref.id, e.target.value)} placeholder="What's this reference for?" style={{ width: '100%', background: 'rgba(0,0,0,0.2)', border: '0.5px solid rgba(200,194,187,0.08)', borderRadius: 4, padding: '7px 9px', fontSize: 11, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', lineHeight: 1.5, resize: 'vertical' as const, minHeight: 48, boxSizing: 'border-box' as const }} />
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const }}>
+                  <input value={newRefUrl} onChange={e => setNewRefUrl(e.target.value)} placeholder="Paste a YouTube, Vimeo, Facebook or Instagram link..." style={{ flex: '2 1 260px', background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.08)', borderRadius: 4, padding: '8px 10px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }} />
+                  <input value={newRefNote} onChange={e => setNewRefNote(e.target.value)} placeholder="Note (optional)" style={{ flex: '1 1 160px', background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.08)', borderRadius: 4, padding: '8px 10px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }} />
+                  <button disabled={!newRefUrl.trim()} onClick={() => { addReference(newRefUrl.trim(), newRefNote.trim()); setNewRefUrl(''); setNewRefNote('') }} style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: newRefUrl.trim() ? 'rgba(200,194,187,0.7)' : 'rgba(200,194,187,0.25)', background: 'transparent', cursor: newRefUrl.trim() ? 'pointer' : 'not-allowed', fontFamily: 'inherit', flexShrink: 0 }}>+ Add</button>
+                </div>
+              </div>
               <div style={{ height: 1, background: 'rgba(200,194,187,0.07)', margin: '4px 0 20px' }} />
               {projectFeedback.filter(f => f.source !== 'studio').length > 0 && (
                 <div style={{ marginBottom: 20 }}>
