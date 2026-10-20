@@ -638,7 +638,14 @@ export default function StudioPortal() {
         const d = new Date(p.shoot_date)
         return d >= now && d <= in14
       }).sort((a: any, b: any) => new Date(a.shoot_date).getTime() - new Date(b.shoot_date).getTime()))
-      setRecentDeliveries(projects.filter((p: any) => p.drive_url && !p.archived && (p.stage === 'Awaiting Confirmation' || p.stage === 'Completed')).slice(0, 10))
+      // Any non-archived project with a linked folder counts — not just ones
+      // the studio has manually advanced to a late pipeline stage, since
+      // content can land in Drive well before that (and the point of this
+      // widget is to surface it the moment it does). Refined below once the
+      // actual Drive activity comes back, so the freshest folders sort first.
+      const deliveryCandidates = projects.filter((p: any) => p.drive_url && !p.archived)
+      setRecentDeliveries(deliveryCandidates.slice(0, 10))
+      loadRecentDeliveriesActivity(deliveryCandidates)
       setScheduleProjects(projects.filter((p: any) => !p.archived))
 
       // Once-a-day "what's coming up" popup, gated per signed-in user so Fin
@@ -668,15 +675,44 @@ export default function StudioPortal() {
     }
   }
 
-  // A project created from the client's own browser (confirmProposedTime ->
-  // /api/confirm-booking-time) has no Drive folder yet — only the studio's
-  // browser carries the Google OAuth cookies needed to create one. Backfill
-  // it automatically as soon as the studio dashboard loads, so the folder
-  // (and its url on the project) exists without anyone having to click
-  // the manual "+ Create folder" button.
+  // Checks each delivery candidate's actual Drive folder for when content was
+  // last added (createdTime, not modifiedTime — a straight re-upload bumps
+  // modifiedTime on edit, but a client's folder is almost always just having
+  // new files dropped in), falling back one level into a subfolder the same
+  // way StudioDriveThumb does when a folder holds only a subfolder and no
+  // files directly. Projects with no Drive data available yet keep their
+  // place rather than being dropped, since just having a url qualifies.
+  async function loadRecentDeliveriesActivity(candidates: any[]) {
+    const withActivity = await Promise.all(candidates.map(async (p: any) => {
+      try {
+        const res = await fetch(`/api/drive?url=${encodeURIComponent(p.drive_url)}`)
+        const data = await res.json()
+        let files = data.files || []
+        if (files.length > 0 && files.every((f: any) => f.mimeType === 'application/vnd.google-apps.folder')) {
+          const res2 = await fetch(`/api/drive?folderId=${files[0].id}`)
+          const data2 = await res2.json()
+          files = data2.files || []
+        }
+        const latest = files.reduce((max: string, f: any) => (f.createdTime && f.createdTime > max) ? f.createdTime : max, '')
+        return { ...p, _driveActivity: latest }
+      } catch (e) {
+        return { ...p, _driveActivity: '' }
+      }
+    }))
+    withActivity.sort((a, b) => (b._driveActivity || '').localeCompare(a._driveActivity || ''))
+    setRecentDeliveries(withActivity.slice(0, 10))
+  }
+
+  // Any project without a Drive folder yet — created from the client's own
+  // browser via a booking (confirmProposedTime -> /api/confirm-booking-time),
+  // accepted from a quote, converted from a brief, or added manually — only
+  // the studio's browser carries the Google OAuth cookies needed to create
+  // one. Backfill it automatically as soon as the studio dashboard loads, so
+  // the folder (and its url on the project) always exists without anyone
+  // having to remember to click the manual "+ Create folder" button.
   const attemptedDriveFolders = useRef<Set<string>>(new Set())
   useEffect(() => {
-    const candidates = dashProjects.filter((p: any) => p.from_booking && !p.drive_url && !attemptedDriveFolders.current.has(p.id))
+    const candidates = dashProjects.filter((p: any) => !p.drive_url && !attemptedDriveFolders.current.has(p.id))
     if (candidates.length === 0) return
     candidates.forEach((p: any) => attemptedDriveFolders.current.add(p.id))
     ;(async () => {
@@ -1261,7 +1297,23 @@ export default function StudioPortal() {
                             <div style={{ padding: '11px 13px' }}>
                               <div style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB', marginBottom: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.title}</div>
                               <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', marginBottom: 8 }}>{p.client}</div>
-                              <span style={{ fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '2px 7px', borderRadius: 2, background: 'rgba(100,200,130,0.15)', color: 'rgba(100,200,130,0.9)', border: '0.5px solid rgba(100,200,130,0.3)' }}>Delivered</span>
+                              {(() => {
+                                // Folder activity alone doesn't mean the job is
+                                // actually done — shows the real pipeline stage
+                                // instead of a blanket "Delivered" now that this
+                                // card can surface a project at any stage.
+                                const sc: Record<string, { color: string; bg: string; border: string }> = {
+                                  'Enquiry': { color: 'rgba(200,194,187,0.7)', bg: 'rgba(200,194,187,0.1)', border: 'rgba(200,194,187,0.25)' },
+                                  'Pre-Production': { color: 'rgba(100,150,220,0.9)', bg: 'rgba(25,45,80,0.4)', border: 'rgba(100,150,220,0.3)' },
+                                  'Shooting': { color: 'rgba(210,175,80,0.9)', bg: 'rgba(65,52,18,0.4)', border: 'rgba(210,175,80,0.3)' },
+                                  'Post-Production': { color: 'rgba(210,90,90,0.9)', bg: 'rgba(50,25,80,0.4)', border: 'rgba(210,90,90,0.3)' },
+                                  'Revisions': { color: 'rgba(220,120,60,0.9)', bg: 'rgba(80,35,15,0.4)', border: 'rgba(220,120,60,0.3)' },
+                                  'Awaiting Confirmation': { color: 'rgba(100,200,130,0.9)', bg: 'rgba(30,70,45,0.4)', border: 'rgba(100,200,130,0.3)' },
+                                  'Completed': { color: 'rgba(100,200,130,0.9)', bg: 'rgba(30,70,45,0.6)', border: 'rgba(100,200,130,0.3)' },
+                                }
+                                const c = sc[p.stage] || sc['Enquiry']
+                                return <span style={{ fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '2px 7px', borderRadius: 2, background: c.bg, color: c.color, border: `0.5px solid ${c.border}` }}>{stageLabel(p.stage)}</span>
+                              })()}
                             </div>
                           </div>
                         ))}

@@ -33,9 +33,14 @@ export async function GET(req: NextRequest) {
     folderId = match[1]
   }
 
+  // createdTime drives "recent deliveries" on the studio dashboard (when
+  // was content actually added to this folder), and the modifiedTime-desc
+  // ordering means the thumbnail picker (.find(isMedia) in StudioDriveThumb)
+  // naturally lands on the newest media item instead of whatever sorts
+  // first alphabetically.
   const apiKey = process.env.GOOGLE_DRIVE_API_KEY
   const res = await fetch(
-    `https://www.googleapis.com/drive/v3/files?q='${folderId}'+in+parents&fields=files(id,name,mimeType,thumbnailLink,webViewLink,webContentLink,size,videoMediaMetadata,imageMediaMetadata)&orderBy=folder,name&key=${apiKey}`,
+    `https://www.googleapis.com/drive/v3/files?q='${folderId}'+in+parents&fields=files(id,name,mimeType,thumbnailLink,webViewLink,webContentLink,size,videoMediaMetadata,imageMediaMetadata,createdTime,modifiedTime)&orderBy=folder,modifiedTime desc&key=${apiKey}`,
     { next: { revalidate: 60 } }
   )
   const data = await res.json()
