@@ -5,33 +5,30 @@ import { emailHasAccount } from '@/lib/account'
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
 
 export async function POST(req: NextRequest) {
-  const { projectName, clientName, clientEmail } = await req.json()
+  const { quoteId, projectName, clientName, clientEmail } = await req.json()
   if (!clientEmail) return NextResponse.json({ error: 'Missing clientEmail' }, { status: 400 })
 
   const title = projectName || 'your project'
   const hasAccount = await emailHasAccount(clientEmail)
+  // Unlike briefs, there's no in-portal view of a quote, so the public
+  // /quote/[id] link is how the client actually sees and accepts it —
+  // always email it, even to clients with a portal account.
+  const viewUrl = new URL(`/quote/${quoteId}`, req.nextUrl.origin).toString()
 
   if (hasAccount) {
-    // Known client: an in-app notification is enough since they can log in
-    // to see it. There's no public per-quote viewer page (unlike briefs),
-    // so this doesn't link anywhere beyond the portal itself.
     try {
       await supabase.from('notifications').insert([{
         user_email: clientEmail,
         type: 'quote_ready',
         title: 'Your quote is ready',
-        message: `Your quote for ${title} is ready to review.`,
+        message: `Your quote for ${title} is ready to review and accept.`,
         read: false,
       }])
     } catch (e) {
       console.error('Notification insert error:', e)
     }
-    return NextResponse.json({ success: true, hasAccount, emailSent: false })
   }
 
-  // No account: there's no public quote page to link to (unlike briefs), so
-  // this just confirms the quote was sent — the PDF export carries the
-  // actual content, attached separately from the portal.
   const resendKey = process.env.RESEND_API_KEY
   if (!resendKey) {
     return NextResponse.json({ success: true, hasAccount, emailSent: false, note: 'RESEND_API_KEY not configured' })
@@ -53,7 +50,11 @@ export async function POST(req: NextRequest) {
             </div>
             <div style="background: #14181F; padding: 36px 40px; border: 1px solid rgba(200,194,187,0.12); border-top: none;">
               <p style="font-size: 14px; color: #C8C2BB; line-height: 1.7; margin: 0 0 14px;">Hi ${clientName || 'there'},</p>
-              <p style="font-size: 14px; color: #C8C2BB; line-height: 1.7; margin: 0;">Your quote for <strong style="color: #ffffff;">${title}</strong> is ready — you'll find it attached, or we'll be in touch directly with the details.</p>
+              <p style="font-size: 14px; color: #C8C2BB; line-height: 1.7; margin: 0 0 28px;">Your quote for <strong style="color: #ffffff;">${title}</strong> is ready to review. Click below to see the full breakdown and accept &mdash; no account needed.</p>
+              <div style="text-align: center; margin-bottom: 28px;">
+                <a href="${viewUrl}" style="display: inline-block; background: #C8C2BB; color: #111111; text-decoration: none; padding: 14px 36px; border-radius: 4px; font-size: 13px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;">Review your quote →</a>
+              </div>
+              <p style="font-size: 12px; color: rgba(200,194,187,0.5); line-height: 1.7; margin: 0; text-align: center;">This link is just for you — no account or password needed.</p>
             </div>
             <div style="text-align: center; padding: 22px; font-size: 11px; color: rgba(200,194,187,0.35);">Example Content · examplecontent.co.nz</div>
           </div>

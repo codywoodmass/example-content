@@ -79,6 +79,9 @@ export default function QuotePage() {
   const [quoteId, setQuoteId] = useState<string | null>(null)
   const quoteIdRef = useRef<string | null>(null)
   const [quoteStatus, setQuoteStatus] = useState<'draft' | 'sent' | 'approved'>('draft')
+  const [quoteProjectId, setQuoteProjectId] = useState<string | null>(null)
+  const [clientFeedback, setClientFeedback] = useState('')
+  const [clientFeedbackAt, setClientFeedbackAt] = useState('')
   useEffect(() => { quoteIdRef.current = quoteId }, [quoteId])
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -184,8 +187,18 @@ export default function QuotePage() {
     setShowPreProd(false); setShowTravel(false)
     setRateFilming(175); setRateEditing(100); setRatePreProd(50); setRateTravelKm(1.17)
     setFilmingNotes(''); setPreProdNotes(''); setEditingNotes('')
-    setQuoteId(null); setQuoteStatus('draft')
+    setQuoteId(null); setQuoteStatus('draft'); setQuoteProjectId(null)
+    setClientFeedback(''); setClientFeedbackAt('')
     setAiPasteText(''); setAiUploadName('')
+  }
+
+  function buildDeliverablesText() {
+    return deliverables.filter(d => d.name).map(d => `${d.quantity}x ${d.name}${d.duration ? ' (' + d.duration + ')' : ''}`).join(', ')
+  }
+
+  function clearClientFeedback() {
+    setClientFeedback('')
+    setClientFeedbackAt('')
   }
 
   async function saveQuote() {
@@ -197,6 +210,12 @@ export default function QuotePage() {
       shootHours, editHours, preProdHours, travelKm, showPreProd, showTravel,
       rateFilming, rateEditing, ratePreProd, rateTravelKm,
       filmingNotes, preProdNotes, editingNotes,
+      // saveQuote replaces the whole stored `data` object on every
+      // auto-save — without carrying these forward, feedback the client
+      // left (written separately by /api/public-quote-action) would be
+      // silently erased the next time the studio so much as edited the
+      // quote.
+      clientFeedback, feedbackAt: clientFeedbackAt,
     }
     const currentId = quoteIdRef.current || quoteId
     if (currentId) {
@@ -214,36 +233,64 @@ export default function QuotePage() {
   async function sendQuoteToClient() {
     await saveQuote()
     if (!quoteId) return
-    await supabase.from('quotes1').update({ status: 'sent' }).eq('id', quoteId)
+    // Sending is the signal that this is now a real pipeline job, not just
+    // a draft — creates the linked Enquiry project here (once) rather than
+    // waiting on a separate manual "convert" step.
+    let projId = quoteProjectId
+    if (!projId) {
+      const { data: proj, error } = await supabase.from('projects1').insert([{
+        title: projectName, client: clientName, email: clientEmail,
+        category: category === 'Commercial' ? 'Commercial' : 'Property',
+        stage: 'Enquiry', progress: 0,
+        shoot_date: shootDates || null, draft_due: draftDue || null, delivery_due: finalsDue || null,
+        from_booking: false, general_notes: jobDescription,
+        deliverables: 'PACKAGE: ' + jobType + '\nDELIVERABLES: ' + buildDeliverablesText(),
+        amount: total || null,
+      }]).select().single()
+      if (error) { notify('Could not create the linked project: ' + error.message, 'error'); return }
+      projId = proj.id
+      setQuoteProjectId(proj.id)
+    }
+    await supabase.from('quotes1').update({ status: 'sent', project_id: projId }).eq('id', quoteId)
     setQuoteStatus('sent')
     try {
       await fetch('/api/notify-quote-ready', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ projectName, clientName, clientEmail }),
+        body: JSON.stringify({ quoteId, projectName, clientName, clientEmail }),
       })
     } catch (e) { console.error('Quote notify error:', e) }
-    notify('Quote sent to ' + clientEmail, 'success')
+    notify('Quote sent to ' + clientEmail + ' — project added as an Enquiry', 'success')
     setSendModal(false)
   }
 
-  async function convertToProject() {
-    if (!(await confirmDialog('Convert this quote to a project?'))) return
-    const deliverablesText = deliverables.filter(d => d.name).map(d => `${d.quantity}x ${d.name}${d.duration ? ' (' + d.duration + ')' : ''}`).join(', ')
-    const { data, error } = await supabase.from('projects1').insert([{
-      title: projectName, client: clientName, email: clientEmail,
-      category: category === 'Commercial' ? 'Commercial' : 'Property',
-      stage: 'Enquiry', progress: 0,
-      shoot_date: shootDates || null, draft_due: draftDue || null, delivery_due: finalsDue || null,
-      from_booking: false, general_notes: jobDescription,
-      deliverables: 'PACKAGE: ' + jobType + '\nDELIVERABLES: ' + deliverablesText,
-      amount: total || null,
-    }]).select().single()
-    if (error) { notify('Could not create project: ' + error.message, 'error'); return }
-    if (data) {
-      if (quoteId) await supabase.from('quotes1').update({ project_id: data.id, status: 'approved' }).eq('id', quoteId)
-      notify('Project created successfully!', 'success')
+  // Marks the quote accepted and moves its linked project into
+  // Pre-Production — the client can do the same thing themselves from the
+  // public quote link (see /quote/[id] + /api/public-quote-action); this is
+  // the studio-side equivalent for when they accept by phone/email instead.
+  async function acceptQuote() {
+    if (!(await confirmDialog('Mark this quote as accepted? The linked project will move to Pre-Production.'))) return
+    let projId = quoteProjectId
+    if (projId) {
+      const { error } = await supabase.from('projects1').update({ stage: 'Pre-Production', progress: 10, client_confirmed: true, confirmed_at: new Date().toISOString() }).eq('id', projId)
+      if (error) { notify('Could not update the project: ' + error.message, 'error'); return }
+    } else {
+      const { data: proj, error } = await supabase.from('projects1').insert([{
+        title: projectName, client: clientName, email: clientEmail,
+        category: category === 'Commercial' ? 'Commercial' : 'Property',
+        stage: 'Pre-Production', progress: 10, client_confirmed: true, confirmed_at: new Date().toISOString(),
+        shoot_date: shootDates || null, draft_due: draftDue || null, delivery_due: finalsDue || null,
+        from_booking: false, general_notes: jobDescription,
+        deliverables: 'PACKAGE: ' + jobType + '\nDELIVERABLES: ' + buildDeliverablesText(),
+        amount: total || null,
+      }]).select().single()
+      if (error) { notify('Could not create project: ' + error.message, 'error'); return }
+      projId = proj.id
+      setQuoteProjectId(proj.id)
     }
+    if (quoteId) await supabase.from('quotes1').update({ status: 'approved', project_id: projId }).eq('id', quoteId)
+    setQuoteStatus('approved')
+    notify('Quote accepted — project moved to Pre-Production', 'success')
   }
 
   // Auto-save while editing
@@ -255,7 +302,7 @@ export default function QuotePage() {
       shootDates, draftDue, finalsDue, locations, deliveryEstimate,
       deliverables, hireItems, openQuestions, tcNotes,
       shootHours, editHours, preProdHours, travelKm, showPreProd, showTravel,
-      rateFilming, rateEditing, ratePreProd, rateTravelKm, filmingNotes, preProdNotes, editingNotes])
+      rateFilming, rateEditing, ratePreProd, rateTravelKm, filmingNotes, preProdNotes, editingNotes, clientFeedback])
 
   const inp: React.CSSProperties = { background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }
   const lbl: React.CSSProperties = { fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)', marginBottom: 6, display: 'block' }
@@ -409,7 +456,7 @@ export default function QuotePage() {
                 localStorage.setItem('quote_print_data', JSON.stringify({ clientName, contactName, projectName, category, jobType, jobDescription, shootDates, locations, deliveryEstimate, deliverables, hireItems, openQuestions, tcNotes, shootHours, editHours, preProdHours, travelKm, showPreProd, showTravel, shootFee, editFee, preProdFee, travelFee, subtotal, gst, total, filmingNotes, preProdNotes, editingNotes }))
                 window.open('/portal/studio/quotes/print', '_blank')
               }}>↓ Save as PDF</button>
-              <button style={btnG} onClick={() => convertToProject()}>Convert to project</button>
+              <button style={btnG} onClick={() => acceptQuote()}>Mark accepted</button>
               <button style={btnP} onClick={() => setSendModal(true)}>Send to client</button>
             </>}
             {view === 'list' && <button style={btnP} onClick={() => { resetForm(); setView('form') }}>+ New quote</button>}
@@ -429,7 +476,7 @@ export default function QuotePage() {
                   const sc = statusColors[quote.status] || statusColors.draft
                   return (
                     <div key={quote.id} onContextMenu={e => { e.preventDefault(); setContextMenu({ x: e.clientX, y: e.clientY, quote }) }} onClick={() => {
-                      setQuoteId(quote.id); setQuoteStatus(quote.status)
+                      setQuoteId(quote.id); setQuoteStatus(quote.status); setQuoteProjectId(quote.project_id || null)
                       setClientName(d.clientName || ''); setContactName(d.contactName || ''); setClientEmail(d.clientEmail || '')
                       setProjectName(d.projectName || ''); setCategory(d.category || 'Commercial'); setJobType(d.jobType || '')
                       setJobDescription(d.jobDescription || ''); setShootDates(d.shootDates || '')
@@ -445,6 +492,7 @@ export default function QuotePage() {
                       setRateFilming(d.rateFilming || 175); setRateEditing(d.rateEditing || 100)
                       setRatePreProd(d.ratePreProd || 50); setRateTravelKm(d.rateTravelKm || 1.17)
                       setFilmingNotes(d.filmingNotes || ''); setPreProdNotes(d.preProdNotes || ''); setEditingNotes(d.editingNotes || '')
+                      setClientFeedback(d.clientFeedback || ''); setClientFeedbackAt(d.feedbackAt || '')
                       setAiPasteText(''); setAiUploadName('')
                       setView('form')
                     }} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 18px', borderBottom: i < savedQuotes.length - 1 ? '0.5px solid rgba(200,194,187,0.06)' : 'none', cursor: 'pointer' }}>
@@ -492,6 +540,18 @@ export default function QuotePage() {
         {/* FORM */}
         {view === 'form' && (
           <div style={{ padding: 28, maxWidth: 780, overflowY: 'auto' }}>
+            {clientFeedback && (
+              <div style={{ ...panelS, border: '0.5px solid rgba(210,175,80,0.3)', background: 'rgba(210,175,80,0.06)' }}>
+                <div style={{ padding: '13px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ fontSize: 12, fontWeight: 500, color: 'rgba(210,175,80,0.9)' }}>
+                    Client feedback{clientFeedbackAt ? ' — ' + new Date(clientFeedbackAt).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' }) : ''}
+                  </div>
+                  <button onClick={clearClientFeedback} style={{ fontSize: 9, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '3px 8px', borderRadius: 3, border: '0.5px solid rgba(210,175,80,0.3)', color: 'rgba(210,175,80,0.9)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Mark reviewed</button>
+                </div>
+                <div style={{ padding: '0 18px 16px', fontSize: 13, color: '#C8C2BB', lineHeight: 1.6 }}>{clientFeedback}</div>
+              </div>
+            )}
+
             <div style={{ ...panelS, border: '0.5px solid rgba(100,150,220,0.25)', background: 'linear-gradient(135deg, rgba(100,150,220,0.06) 0%, #1A1F28 60%)' }}>
               <div style={{ padding: '13px 18px', borderBottom: '0.5px solid rgba(100,150,220,0.15)', fontSize: 12, fontWeight: 500, color: '#C8C2BB', display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ fontSize: 13 }}>✦</span> Draft with AI
@@ -702,7 +762,7 @@ export default function QuotePage() {
           <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={e => { if (e.target === e.currentTarget) setSendModal(false) }}>
             <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 10, padding: 28, width: 420 }}>
               <div style={{ fontSize: 15, fontWeight: 500, color: '#fff', marginBottom: 6 }}>Send quote to client</div>
-              <div style={{ fontSize: 12, color: 'rgba(200,194,187,0.5)', marginBottom: 20, lineHeight: 1.6 }}>Sends to <strong style={{ color: '#C8C2BB' }}>{clientEmail || 'no email set'}</strong> — an in-app notification if they have a portal account, otherwise an email.</div>
+              <div style={{ fontSize: 12, color: 'rgba(200,194,187,0.5)', marginBottom: 20, lineHeight: 1.6 }}>Emails <strong style={{ color: '#C8C2BB' }}>{clientEmail || 'no email set'}</strong> a link to view and accept this quote, and adds it to Projects as an Enquiry{quoteProjectId ? '' : ' (if it isn\'t already)'}.</div>
               <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
                 <button onClick={() => setSendModal(false)} style={btnG}>Cancel</button>
                 <button disabled={!clientEmail} onClick={sendQuoteToClient} style={{ ...btnP, opacity: clientEmail ? 1 : 0.4, cursor: clientEmail ? 'pointer' : 'not-allowed' }}>Send</button>
