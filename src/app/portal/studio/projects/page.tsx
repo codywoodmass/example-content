@@ -1,6 +1,6 @@
 'use client'
 import StudioSidebar from '../StudioSidebar'
-import { useState, useEffect, useRef, useCallback, memo } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Suspense } from 'react'
 import { supabase } from '@/lib/supabase'
@@ -66,7 +66,14 @@ function getEmbedInfo(input: string): { platform: string; embedUrl: string } | n
   const vimeo = url.match(/vimeo\.com\/(?:.*\/)?(\d+)/)
   if (vimeo) return { platform: 'Vimeo', embedUrl: `https://player.vimeo.com/video/${vimeo[1]}` }
   const insta = url.match(/instagram\.com\/(p|reel|tv)\/([a-zA-Z0-9_-]+)/)
-  if (insta) return { platform: 'Instagram', embedUrl: `https://www.instagram.com/${insta[1]}/${insta[2]}/` }
+  // Instagram's official embed.js + <blockquote> approach (the "correct" way
+  // per their own docs) turned out to silently render nothing at all in
+  // practice — worse than this. The plain /embed iframe at least reliably
+  // shows the real post (thumbnail, caption, play control); tapping play can
+  // still hand off to Instagram's own app/web player instead of truly
+  // playing inline, which is Instagram's own behaviour on taps like this
+  // generally, independent of which embed technique is used.
+  if (insta) return { platform: 'Instagram', embedUrl: `https://www.instagram.com/${insta[1]}/${insta[2]}/embed` }
   if (/(^|\.)facebook\.com|fb\.watch/.test(url)) {
     // The embed code's own <iframe src> is already a ready-to-use
     // plugin URL — re-wrapping it in another href= layer would point
@@ -76,39 +83,6 @@ function getEmbedInfo(input: string): { platform: string; embedUrl: string } | n
   }
   return null
 }
-
-// Instagram has no bare video-only public embed — any embed of a post,
-// official or not, always shows its card chrome (avatar, username, "View
-// profile"), by Instagram's own design. The raw /embed iframe trick looks
-// like a player but was never actually wired up to Instagram's JS, which is
-// why the play button just linked out to the app instead of playing inline.
-// This loads Instagram's own embed.js and renders the sanctioned blockquote
-// markup instead, which is what actually makes inline playback work.
-let instagramScriptPromise: Promise<void> | null = null
-function loadInstagramEmbedScript(): Promise<void> {
-  if (typeof window === 'undefined') return Promise.resolve()
-  if ((window as any).instgrm) return Promise.resolve()
-  if (!instagramScriptPromise) {
-    instagramScriptPromise = new Promise(resolve => {
-      const script = document.createElement('script')
-      script.src = 'https://www.instagram.com/embed.js'
-      script.async = true
-      script.onload = () => resolve()
-      script.onerror = () => resolve()
-      document.body.appendChild(script)
-    })
-  }
-  return instagramScriptPromise
-}
-
-const InstagramEmbed = memo(function InstagramEmbed({ url }: { url: string }) {
-  useEffect(() => {
-    loadInstagramEmbedScript().then(() => { (window as any).instgrm?.Embeds?.process() })
-  }, [url])
-  return (
-    <blockquote className="instagram-media" data-instgrm-permalink={url} data-instgrm-version="14" style={{ margin: 0, width: '100%', minWidth: '100%' }} />
-  )
-})
 type TimeEntry = { id: string; project_id: string; phase: string; hours: number; person: string | null; entry_date: string; note: string | null; created_at: string; started_at: string | null; ended_at: string | null; billable: boolean }
 const TIME_PHASES = ['Pre-Production', 'Shooting', 'Editing']
 
@@ -1629,22 +1603,17 @@ function ProjectsPageInner() {
                       const embed = getEmbedInfo(ref.url)
                       return (
                         <div key={ref.id} style={{ width: 'calc(50% - 7px)', minWidth: 260, background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.08)', borderRadius: 6, overflow: 'hidden' }}>
-                          {embed?.platform === 'Instagram' ? (
-                            // Instagram sizes its own embed (header + video +
-                            // caption) — forcing it into a fixed 16:9 box like
-                            // the others clips it, so this lets it size itself.
-                            <div style={{ width: '100%', background: '#000', display: 'flex', justifyContent: 'center' }}>
-                              <InstagramEmbed url={embed.embedUrl} />
-                            </div>
-                          ) : (
-                            <div style={{ position: 'relative' as const, width: '100%', aspectRatio: '16/9', background: '#000' }}>
-                              {embed ? (
-                                <iframe src={embed.embedUrl} style={{ position: 'absolute' as const, inset: 0, width: '100%', height: '100%', border: 'none' }} allow="autoplay; fullscreen; picture-in-picture" allowFullScreen />
-                              ) : (
-                                <div style={{ position: 'absolute' as const, inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: 'rgba(200,194,187,0.3)' }}>Unsupported link</div>
-                              )}
-                            </div>
-                          )}
+                          {/* Instagram's embed includes its header + caption, not
+                              just the video, so it needs a taller box than the
+                              plain 16:9 players — a fixed height with its own
+                              scroll is safer than clipping it. */}
+                          <div style={{ position: 'relative' as const, width: '100%', aspectRatio: embed?.platform === 'Instagram' ? undefined : '16/9', height: embed?.platform === 'Instagram' ? 460 : undefined, background: '#000', overflow: 'auto' }}>
+                            {embed ? (
+                              <iframe src={embed.embedUrl} style={embed.platform === 'Instagram' ? { width: '100%', height: '100%', border: 'none' } : { position: 'absolute' as const, inset: 0, width: '100%', height: '100%', border: 'none' }} allow="autoplay; fullscreen; picture-in-picture" allowFullScreen />
+                            ) : (
+                              <div style={{ position: 'absolute' as const, inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: 'rgba(200,194,187,0.3)' }}>Unsupported link</div>
+                            )}
+                          </div>
                           <div style={{ padding: 10 }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                               <a href={ref.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'rgba(100,150,220,0.8)', textDecoration: 'none' }}>{embed?.platform || 'Link'} ↗</a>
