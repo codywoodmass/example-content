@@ -70,6 +70,11 @@ export default function QuotePage() {
   const [rateEditing, setRateEditing] = useState(100)
   const [ratePreProd, setRatePreProd] = useState(50)
   const [rateTravelKm, setRateTravelKm] = useState(1.17)
+  // Short notes on what each quoted block of hours actually covers, so the
+  // client can see what's involved rather than just a number of hours.
+  const [filmingNotes, setFilmingNotes] = useState('')
+  const [preProdNotes, setPreProdNotes] = useState('')
+  const [editingNotes, setEditingNotes] = useState('')
 
   const [quoteId, setQuoteId] = useState<string | null>(null)
   const quoteIdRef = useRef<string | null>(null)
@@ -178,6 +183,7 @@ export default function QuotePage() {
     setShootHours(0); setEditHours(0); setPreProdHours(0); setTravelKm(0)
     setShowPreProd(false); setShowTravel(false)
     setRateFilming(175); setRateEditing(100); setRatePreProd(50); setRateTravelKm(1.17)
+    setFilmingNotes(''); setPreProdNotes(''); setEditingNotes('')
     setQuoteId(null); setQuoteStatus('draft')
     setAiPasteText(''); setAiUploadName('')
   }
@@ -190,6 +196,7 @@ export default function QuotePage() {
       deliverables, hireItems, openQuestions, tcNotes,
       shootHours, editHours, preProdHours, travelKm, showPreProd, showTravel,
       rateFilming, rateEditing, ratePreProd, rateTravelKm,
+      filmingNotes, preProdNotes, editingNotes,
     }
     const currentId = quoteIdRef.current || quoteId
     if (currentId) {
@@ -248,7 +255,7 @@ export default function QuotePage() {
       shootDates, draftDue, finalsDue, locations, deliveryEstimate,
       deliverables, hireItems, openQuestions, tcNotes,
       shootHours, editHours, preProdHours, travelKm, showPreProd, showTravel,
-      rateFilming, rateEditing, ratePreProd, rateTravelKm])
+      rateFilming, rateEditing, ratePreProd, rateTravelKm, filmingNotes, preProdNotes, editingNotes])
 
   const inp: React.CSSProperties = { background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }
   const lbl: React.CSSProperties = { fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)', marginBottom: 6, display: 'block' }
@@ -322,9 +329,24 @@ export default function QuotePage() {
         <div style={{ marginBottom: 36 }}>
           <div style={{ fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase', color: DOC.muted, marginBottom: 14, fontWeight: 700 }}>Pricing</div>
           <div style={{ display: 'flex', flexDirection: 'column' as const }}>
-            {shootFee > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: `1px solid ${DOC.border}` }}><span style={{ fontSize: 13, color: DOC.muted }}>Filming — {shootHours} hrs</span><span style={{ fontSize: 13, color: DOC.heading, fontWeight: 600 }}>${shootFee.toLocaleString()}</span></div>}
-            {editFee > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: `1px solid ${DOC.border}` }}><span style={{ fontSize: 13, color: DOC.muted }}>Editing — {editHours} hrs</span><span style={{ fontSize: 13, color: DOC.heading, fontWeight: 600 }}>${editFee.toLocaleString()}</span></div>}
-            {showPreProd && preProdFee > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: `1px solid ${DOC.border}` }}><span style={{ fontSize: 13, color: DOC.muted }}>Pre-production — {preProdHours} hrs</span><span style={{ fontSize: 13, color: DOC.heading, fontWeight: 600 }}>${preProdFee.toLocaleString()}</span></div>}
+            {shootFee > 0 && (
+              <div style={{ padding: '10px 0', borderBottom: `1px solid ${DOC.border}` }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: 13, color: DOC.muted }}>Filming — {shootHours} hrs</span><span style={{ fontSize: 13, color: DOC.heading, fontWeight: 600 }}>${shootFee.toLocaleString()}</span></div>
+                {filmingNotes && <div style={{ fontSize: 11, color: DOC.faint, marginTop: 3 }}>{filmingNotes}</div>}
+              </div>
+            )}
+            {editFee > 0 && (
+              <div style={{ padding: '10px 0', borderBottom: `1px solid ${DOC.border}` }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: 13, color: DOC.muted }}>Editing — {editHours} hrs</span><span style={{ fontSize: 13, color: DOC.heading, fontWeight: 600 }}>${editFee.toLocaleString()}</span></div>
+                {editingNotes && <div style={{ fontSize: 11, color: DOC.faint, marginTop: 3 }}>{editingNotes}</div>}
+              </div>
+            )}
+            {showPreProd && preProdFee > 0 && (
+              <div style={{ padding: '10px 0', borderBottom: `1px solid ${DOC.border}` }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: 13, color: DOC.muted }}>Pre-production — {preProdHours} hrs</span><span style={{ fontSize: 13, color: DOC.heading, fontWeight: 600 }}>${preProdFee.toLocaleString()}</span></div>
+                {preProdNotes && <div style={{ fontSize: 11, color: DOC.faint, marginTop: 3 }}>{preProdNotes}</div>}
+              </div>
+            )}
             {showTravel && travelFee > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: `1px solid ${DOC.border}` }}><span style={{ fontSize: 13, color: DOC.muted }}>Travel — {travelKm} km</span><span style={{ fontSize: 13, color: DOC.heading, fontWeight: 600 }}>${travelFee.toFixed(2)}</span></div>}
             {hireItems.filter(h => h.name).map(h => (
               <div key={h.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: `1px solid ${DOC.border}` }}><span style={{ fontSize: 13, color: DOC.muted }}>{h.name} hire ×{h.days}</span><span style={{ fontSize: 13, color: DOC.heading, fontWeight: 600 }}>${(h.hireRate * h.days).toLocaleString()}</span></div>
@@ -384,7 +406,7 @@ export default function QuotePage() {
             </>}
             {view === 'preview' && <>
               <button style={btnG} onClick={() => {
-                localStorage.setItem('quote_print_data', JSON.stringify({ clientName, contactName, projectName, category, jobType, jobDescription, shootDates, locations, deliveryEstimate, deliverables, hireItems, openQuestions, tcNotes, shootHours, editHours, preProdHours, travelKm, showPreProd, showTravel, shootFee, editFee, preProdFee, travelFee, subtotal, gst, total }))
+                localStorage.setItem('quote_print_data', JSON.stringify({ clientName, contactName, projectName, category, jobType, jobDescription, shootDates, locations, deliveryEstimate, deliverables, hireItems, openQuestions, tcNotes, shootHours, editHours, preProdHours, travelKm, showPreProd, showTravel, shootFee, editFee, preProdFee, travelFee, subtotal, gst, total, filmingNotes, preProdNotes, editingNotes }))
                 window.open('/portal/studio/quotes/print', '_blank')
               }}>↓ Save as PDF</button>
               <button style={btnG} onClick={() => convertToProject()}>Convert to project</button>
@@ -422,6 +444,7 @@ export default function QuotePage() {
                       setShowPreProd(d.showPreProd || false); setShowTravel(d.showTravel || false)
                       setRateFilming(d.rateFilming || 175); setRateEditing(d.rateEditing || 100)
                       setRatePreProd(d.ratePreProd || 50); setRateTravelKm(d.rateTravelKm || 1.17)
+                      setFilmingNotes(d.filmingNotes || ''); setPreProdNotes(d.preProdNotes || ''); setEditingNotes(d.editingNotes || '')
                       setAiPasteText(''); setAiUploadName('')
                       setView('form')
                     }} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 18px', borderBottom: i < savedQuotes.length - 1 ? '0.5px solid rgba(200,194,187,0.06)' : 'none', cursor: 'pointer' }}>
@@ -592,22 +615,27 @@ export default function QuotePage() {
                     <div key={label}><label style={lbl}>{label}</label><input style={inp} type="number" min="0" value={val} onChange={e => set(parseFloat(e.target.value) || 0)} /></div>
                   ))}
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
                   <input style={{ ...inp, width: 70, padding: '7px 9px' }} type="number" min="0" value={shootHours} onChange={e => setShootHours(parseFloat(e.target.value) || 0)} />
                   <span style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>hrs filming × ${rateFilming} = <strong style={{ color: '#C8C2BB' }}>${shootFee.toLocaleString()}</strong></span>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+                <input style={{ ...inp, marginBottom: 14 }} value={filmingNotes} onChange={e => setFilmingNotes(e.target.value)} placeholder="What's involved — e.g. on-location filming, 1 camera operator" />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
                   <input style={{ ...inp, width: 70, padding: '7px 9px' }} type="number" min="0" value={editHours} onChange={e => setEditHours(parseFloat(e.target.value) || 0)} />
                   <span style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>hrs editing × ${rateEditing} = <strong style={{ color: '#C8C2BB' }}>${editFee.toLocaleString()}</strong></span>
                 </div>
+                <input style={{ ...inp, marginBottom: 14 }} value={editingNotes} onChange={e => setEditingNotes(e.target.value)} placeholder="What's involved — e.g. edit, colour grade, sound mix" />
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 12, color: 'rgba(200,194,187,0.6)', marginBottom: showPreProd ? 10 : 0 }}>
                   <input type="checkbox" checked={showPreProd} onChange={e => setShowPreProd(e.target.checked)} style={{ accentColor: '#C8C2BB' }} />Pre-production hours
                 </label>
                 {showPreProd && (
-                  <div className="ec-form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
-                    <div><label style={lbl}>Hours</label><input style={inp} type="number" min="0" value={preProdHours} onChange={e => setPreProdHours(parseFloat(e.target.value) || 0)} /></div>
-                    <div><label style={lbl}>Rate ($/hr)</label><input style={inp} type="number" min="0" value={ratePreProd} onChange={e => setRatePreProd(parseFloat(e.target.value) || 0)} /></div>
-                  </div>
+                  <>
+                    <div className="ec-form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 10 }}>
+                      <div><label style={lbl}>Hours</label><input style={inp} type="number" min="0" value={preProdHours} onChange={e => setPreProdHours(parseFloat(e.target.value) || 0)} /></div>
+                      <div><label style={lbl}>Rate ($/hr)</label><input style={inp} type="number" min="0" value={ratePreProd} onChange={e => setRatePreProd(parseFloat(e.target.value) || 0)} /></div>
+                    </div>
+                    <input style={{ ...inp, marginBottom: 14 }} value={preProdNotes} onChange={e => setPreProdNotes(e.target.value)} placeholder="What's involved — e.g. planning, shot list, location scouting" />
+                  </>
                 )}
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 12, color: 'rgba(200,194,187,0.6)', marginBottom: showTravel ? 10 : 0 }}>
                   <input type="checkbox" checked={showTravel} onChange={e => setShowTravel(e.target.checked)} style={{ accentColor: '#C8C2BB' }} />Travel costs

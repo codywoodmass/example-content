@@ -39,7 +39,8 @@ export default function QuotePrintPage() {
   const { clientName, contactName, projectName, category, jobType, jobDescription, shootDates, locations,
     deliveryEstimate, deliverables, hireItems, openQuestions, tcNotes,
     shootHours, editHours, preProdHours, travelKm, showPreProd, showTravel,
-    shootFee, editFee, preProdFee, travelFee, subtotal, gst, total } = data
+    shootFee, editFee, preProdFee, travelFee, subtotal, gst, total,
+    filmingNotes, preProdNotes, editingNotes } = data
 
   return (
     <>
@@ -91,9 +92,24 @@ export default function QuotePrintPage() {
         <div style={{ marginBottom: 36 }}>
           <div style={{ fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase', color: DOC.muted, marginBottom: 14, fontWeight: 700 }}>Pricing</div>
           <div style={{ display: 'flex', flexDirection: 'column' }}>
-            {shootFee > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: `1px solid ${DOC.border}` }}><span style={{ fontSize: 13, color: DOC.muted }}>Filming — {shootHours} hrs</span><span style={{ fontSize: 13, color: DOC.heading, fontWeight: 600 }}>${shootFee.toLocaleString()}</span></div>}
-            {editFee > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: `1px solid ${DOC.border}` }}><span style={{ fontSize: 13, color: DOC.muted }}>Editing — {editHours} hrs</span><span style={{ fontSize: 13, color: DOC.heading, fontWeight: 600 }}>${editFee.toLocaleString()}</span></div>}
-            {showPreProd && preProdFee > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: `1px solid ${DOC.border}` }}><span style={{ fontSize: 13, color: DOC.muted }}>Pre-production — {preProdHours} hrs</span><span style={{ fontSize: 13, color: DOC.heading, fontWeight: 600 }}>${preProdFee.toLocaleString()}</span></div>}
+            {shootFee > 0 && (
+              <div style={{ padding: '10px 0', borderBottom: `1px solid ${DOC.border}` }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: 13, color: DOC.muted }}>Filming — {shootHours} hrs</span><span style={{ fontSize: 13, color: DOC.heading, fontWeight: 600 }}>${shootFee.toLocaleString()}</span></div>
+                {filmingNotes && <div style={{ fontSize: 11, color: DOC.faint, marginTop: 3 }}>{filmingNotes}</div>}
+              </div>
+            )}
+            {editFee > 0 && (
+              <div style={{ padding: '10px 0', borderBottom: `1px solid ${DOC.border}` }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: 13, color: DOC.muted }}>Editing — {editHours} hrs</span><span style={{ fontSize: 13, color: DOC.heading, fontWeight: 600 }}>${editFee.toLocaleString()}</span></div>
+                {editingNotes && <div style={{ fontSize: 11, color: DOC.faint, marginTop: 3 }}>{editingNotes}</div>}
+              </div>
+            )}
+            {showPreProd && preProdFee > 0 && (
+              <div style={{ padding: '10px 0', borderBottom: `1px solid ${DOC.border}` }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: 13, color: DOC.muted }}>Pre-production — {preProdHours} hrs</span><span style={{ fontSize: 13, color: DOC.heading, fontWeight: 600 }}>${preProdFee.toLocaleString()}</span></div>
+                {preProdNotes && <div style={{ fontSize: 11, color: DOC.faint, marginTop: 3 }}>{preProdNotes}</div>}
+              </div>
+            )}
             {showTravel && travelFee > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: `1px solid ${DOC.border}` }}><span style={{ fontSize: 13, color: DOC.muted }}>Travel — {travelKm} km</span><span style={{ fontSize: 13, color: DOC.heading, fontWeight: 600 }}>${travelFee.toFixed(2)}</span></div>}
             {(hireItems || []).filter((h: any) => h.name).map((h: any) => (
               <div key={h.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: `1px solid ${DOC.border}` }}><span style={{ fontSize: 13, color: DOC.muted }}>{h.name} hire ×{h.days}</span><span style={{ fontSize: 13, color: DOC.heading, fontWeight: 600 }}>${(h.hireRate * h.days).toLocaleString()}</span></div>
