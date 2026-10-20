@@ -33,14 +33,47 @@ type ReferenceItem = { id: string; url: string; note: string }
 // needing an API key for any of them. Facebook's video plugin resolves the
 // original URL itself (no ID extraction needed); Instagram's public posts
 // support a plain /embed suffix the same way.
-function getEmbedInfo(url: string): { platform: string; embedUrl: string } | null {
+// A pasted "Embed" code (copied from the platform's own share menu) is HTML,
+// not a link — src= on an <iframe>, or data-instgrm-permalink= on
+// Instagram's <blockquote>, before any URL pattern matching happens. Without
+// this, pasting embed code instead of a plain link would use the whole raw
+// HTML blob as "the link" rather than the real permalink inside it.
+function extractUrlFromInput(input: string): string {
+  const trimmed = input.trim()
+  let url = trimmed
+  const src = trimmed.match(/\bsrc=["']([^"']+)["']/)
+  const permalink = trimmed.match(/data-instgrm-permalink=["']([^"']+)["']/)
+  const href = trimmed.match(/\bhref=["']([^"']+)["']/)
+  if (src) url = src[1].startsWith('//') ? 'https:' + src[1] : src[1]
+  else if (permalink) url = permalink[1]
+  else if (href) url = href[1]
+  // Facebook's plugin src wraps the real video URL in its own href= query
+  // param — unwrap it so what's stored/shown is the actual post link, not
+  // the plugin wrapper, which getEmbedInfo will re-wrap fresh anyway.
+  if (url.includes('/plugins/video.php')) {
+    try {
+      const inner = new URL(url, 'https://www.facebook.com').searchParams.get('href')
+      if (inner) url = decodeURIComponent(inner)
+    } catch {}
+  }
+  return url
+}
+
+function getEmbedInfo(input: string): { platform: string; embedUrl: string } | null {
+  const url = extractUrlFromInput(input)
   const yt = url.match(/(?:youtube\.com\/(?:watch\?v=|shorts\/|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/)
   if (yt) return { platform: 'YouTube', embedUrl: `https://www.youtube.com/embed/${yt[1]}` }
   const vimeo = url.match(/vimeo\.com\/(?:.*\/)?(\d+)/)
   if (vimeo) return { platform: 'Vimeo', embedUrl: `https://player.vimeo.com/video/${vimeo[1]}` }
   const insta = url.match(/instagram\.com\/(p|reel|tv)\/([a-zA-Z0-9_-]+)/)
-  if (insta) return { platform: 'Instagram', embedUrl: url }
-  if (/(^|\.)facebook\.com|fb\.watch/.test(url)) return { platform: 'Facebook', embedUrl: `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(url)}&show_text=false` }
+  if (insta) return { platform: 'Instagram', embedUrl: `https://www.instagram.com/${insta[1]}/${insta[2]}/` }
+  if (/(^|\.)facebook\.com|fb\.watch/.test(url)) {
+    // The embed code's own <iframe src> is already a ready-to-use
+    // plugin URL — re-wrapping it in another href= layer would point
+    // the plugin at itself instead of the video.
+    if (url.includes('/plugins/video.php')) return { platform: 'Facebook', embedUrl: url }
+    return { platform: 'Facebook', embedUrl: `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(url)}&show_text=false` }
+  }
   return null
 }
 
@@ -335,8 +368,11 @@ function ProjectsPageInner() {
     if (error) { notify('Error saving reference: ' + error.message, 'error'); return }
     setProjects(p => p.map(proj => proj.id === projectId ? { ...proj, references: refs } : proj))
   }
-  function addReference(url: string, note: string) {
-    if (!getEmbedInfo(url)) { notify('Only YouTube, Vimeo, Facebook or Instagram links are supported.', 'error'); return }
+  function addReference(input: string, note: string) {
+    if (!getEmbedInfo(input)) { notify('Only YouTube, Vimeo, Facebook or Instagram links (or their embed code) are supported.', 'error'); return }
+    // Stores the clean link either way — paste a plain URL or the full
+    // embed code from the platform's own share menu, same result.
+    const url = extractUrlFromInput(input)
     setModalProject(p => {
       if (!p) return p
       const refs = [...(p.references || []), { id: Date.now().toString(), url, note }]
@@ -1622,7 +1658,7 @@ function ProjectsPageInner() {
                   </div>
                 )}
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const }}>
-                  <input value={newRefUrl} onChange={e => setNewRefUrl(e.target.value)} placeholder="Paste a YouTube, Vimeo, Facebook or Instagram link..." style={{ flex: '2 1 260px', background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.08)', borderRadius: 4, padding: '8px 10px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }} />
+                  <input value={newRefUrl} onChange={e => setNewRefUrl(e.target.value)} placeholder="Paste a YouTube, Vimeo, Facebook or Instagram link (or embed code)..." style={{ flex: '2 1 260px', background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.08)', borderRadius: 4, padding: '8px 10px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }} />
                   <input value={newRefNote} onChange={e => setNewRefNote(e.target.value)} placeholder="Note (optional)" style={{ flex: '1 1 160px', background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.08)', borderRadius: 4, padding: '8px 10px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }} />
                   <button disabled={!newRefUrl.trim()} onClick={() => { addReference(newRefUrl.trim(), newRefNote.trim()); setNewRefUrl(''); setNewRefNote('') }} style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: newRefUrl.trim() ? 'rgba(200,194,187,0.7)' : 'rgba(200,194,187,0.25)', background: 'transparent', cursor: newRefUrl.trim() ? 'pointer' : 'not-allowed', fontFamily: 'inherit', flexShrink: 0 }}>+ Add</button>
                 </div>
