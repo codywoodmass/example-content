@@ -7,7 +7,7 @@ export type PackageEstimate = { shootHours: number; editHours: number; travelFee
 
 export const PACKAGE_ESTIMATES: Record<string, PackageEstimate> = {
   'Content Campaign Package': { shootHours: 3, editHours: 3.5, travelFee: 80 },
-  'The Walkthrough Package': { shootHours: 4, editHours: 4, travelFee: 80 },
+  'The Walkthrough Package': { shootHours: 3, editHours: 4, travelFee: 80 },
   'Lifestyle and Living Package': { shootHours: 4, editHours: 6 },
   // Media Release Package intentionally has no fixed estimate here — scope
   // varies per job rather than following a standard shoot/edit formula.
