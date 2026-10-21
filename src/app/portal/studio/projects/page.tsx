@@ -1872,14 +1872,18 @@ function ProjectsPageInner() {
                             ['Editing', editHours, packageEstimate.editHours],
                           ] as const).map(([label, actual, estimate]) => {
                             const over = actual > estimate
-                            const pct = estimate ? Math.min(150, Math.round((actual / estimate) * 100)) : 0
+                            // Was capped at 150, but that's 150% of this bar's
+                            // own box (only 100% wide to begin with) — the fill
+                            // spilled right out past the rounded edges once over
+                            // estimate instead of just maxing out flush with it.
+                            const pct = estimate ? Math.min(100, Math.round((actual / estimate) * 100)) : 0
                             return (
                               <div key={label} style={{ flex: '1 1 160px', background: over ? 'rgba(210,90,90,0.05)' : 'rgba(200,194,187,0.03)', border: `0.5px solid ${over ? 'rgba(210,90,90,0.25)' : 'rgba(200,194,187,0.09)'}`, borderRadius: 6, padding: '12px 14px' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
                                   <span style={{ fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)' }}>{label}</span>
                                   <span style={{ fontSize: 10, color: over ? 'rgba(210,90,90,0.8)' : 'rgba(200,194,187,0.35)' }}>{actual.toFixed(1)}h of {estimate}h</span>
                                 </div>
-                                <div style={{ height: 4, background: 'rgba(200,194,187,0.06)', borderRadius: 2 }}>
+                                <div style={{ height: 4, background: 'rgba(200,194,187,0.06)', borderRadius: 2, overflow: 'hidden' }}>
                                   <div style={{ height: '100%', width: `${pct}%`, background: over ? 'rgba(210,90,90,0.6)' : 'rgba(100,200,130,0.5)', borderRadius: 2 }} />
                                 </div>
                                 {over && <div style={{ fontSize: 10, color: 'rgba(210,90,90,0.75)', marginTop: 4 }}>{(actual - estimate).toFixed(1)}h over</div>}
