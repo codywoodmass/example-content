@@ -88,6 +88,11 @@ function ShowreelHero({ onNavOpacity }: { onNavOpacity: (v: number) => void }) {
   const [zoom, setZoom] = React.useState(1)
   const [muted, setMuted] = React.useState(true)
   const [indicatorOpacity, setIndicatorOpacity] = React.useState(0)
+  // The Vimeo iframe itself shows nothing but a spinner for the first
+  // couple of seconds (player JS loading, then the video buffering) — a
+  // static poster behind it covers that gap instead of a blank/spinning
+  // hero being the first thing visible on landing.
+  const [videoReady, setVideoReady] = React.useState(false)
 
   // Holds a click that arrives before the SDK has finished loading, so it
   // isn't silently dropped — applied the moment the player is ready.
@@ -101,6 +106,11 @@ function ShowreelHero({ onNavOpacity }: { onNavOpacity: (v: number) => void }) {
       const player = new (window as any).Vimeo.Player(iframeRef.current)
       player.setVolume(0).catch(() => {})
       playerRef.current = player
+      player.on('play', () => setVideoReady(true))
+      // Defensive fallback — if 'play' never fires for some reason (slow
+      // network, the event not landing), the poster shouldn't stay stuck
+      // forever just because one signal didn't arrive.
+      setTimeout(() => setVideoReady(true), 4000)
       if (pendingMutedRef.current !== null) {
         const wantMuted = pendingMutedRef.current
         player.setMuted(wantMuted)
@@ -213,6 +223,7 @@ function ShowreelHero({ onNavOpacity }: { onNavOpacity: (v: number) => void }) {
             allow="autoplay; fullscreen"
             frameBorder="0"
           />
+          <div style={{ position: 'absolute', inset: 0, backgroundImage: 'url(https://i.vimeocdn.com/video/2215297298-a6ba2e6db0190fd8d744b6c883d5688aabdbb5b179d860737fcb474b9cc18a2a-d_1920x1080?region=us)', backgroundSize: 'cover', backgroundPosition: 'center', opacity: videoReady ? 0 : 1, transition: 'opacity 0.5s ease', pointerEvents: 'none' }} />
         </div>
         {/* From-the-bottom gradient so the hero text sits on enough
             contrast on landing, fading out with the same scroll progress as
