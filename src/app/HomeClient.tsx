@@ -208,7 +208,7 @@ function ShowreelHero({ onNavOpacity }: { onNavOpacity: (v: number) => void }) {
             // why the mute toggle never actually produced sound. Every
             // other param here reproduces the same chrome-free look
             // without that restriction.
-            src="https://player.vimeo.com/video/1216750682?autoplay=1&loop=1&muted=1&title=0&byline=0&portrait=0&controls=0&badge=0&autopause=0&dnt=1"
+            src="https://player.vimeo.com/video/1238228672?autoplay=1&loop=1&muted=1&title=0&byline=0&portrait=0&controls=0&badge=0&autopause=0&dnt=1"
             style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: 'calc(100vw + 400px)', height: 'calc(100vh + 400px)', minWidth: '200vh', minHeight: '56.25vw', border: 'none', pointerEvents: 'none' }}
             allow="autoplay; fullscreen"
             frameBorder="0"

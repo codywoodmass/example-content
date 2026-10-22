@@ -36,6 +36,21 @@ export type WorkProject = {
 
 export const WORK_PROJECTS: WorkProject[] = [
   {
+    id: 'property-showreel-2026',
+    title: 'Property Showreel',
+    client: 'Example Content · Property Showreel',
+    category: 'Architectural',
+    type: 'Showreel',
+    propertyType: 'Property',
+    vimeoId: '1238228672',
+    // No oEmbed thumbnail available (the video returns a 404 on Vimeo's
+    // public oEmbed lookup, likely a privacy/domain-embed restriction) —
+    // vumbnail.com resolves one fine, same fallback already used for the
+    // homepage carousel elsewhere in this app.
+    thumb: 'https://vumbnail.com/1238228672_large.jpg',
+    description: 'Our most recent property showreel — pulling together the studio\'s current property work into one reel.',
+  },
+  {
     id: 'orakei-sunset',
     title: 'Orakei Sunset',
     client: 'Residential Listing · Orakei',
