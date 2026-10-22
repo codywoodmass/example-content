@@ -43,11 +43,11 @@ export const WORK_PROJECTS: WorkProject[] = [
     type: 'Showreel',
     propertyType: 'Property',
     vimeoId: '1238228672',
-    // No oEmbed thumbnail available (the video returns a 404 on Vimeo's
-    // public oEmbed lookup, likely a privacy/domain-embed restriction) —
-    // vumbnail.com resolves one fine, same fallback already used for the
-    // homepage carousel elsewhere in this app.
-    thumb: 'https://vumbnail.com/1238228672_large.jpg',
+    // The oEmbed endpoint 404s for this video (privacy/domain-embed
+    // restriction) but Vimeo's legacy v2 API still resolves its real CDN
+    // thumbnail — same i.vimeocdn.com source and 1280x720 size every other
+    // entry here uses, rather than the lower-res vumbnail.com fallback.
+    thumb: 'https://i.vimeocdn.com/video/2215297298-a6ba2e6db0190fd8d744b6c883d5688aabdbb5b179d860737fcb474b9cc18a2a-d_1280x720?region=us',
     description: 'Our most recent property showreel — pulling together the studio\'s current property work into one reel.',
   },
   {
