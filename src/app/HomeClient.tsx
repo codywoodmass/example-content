@@ -215,9 +215,11 @@ function ShowreelHero({ onNavOpacity }: { onNavOpacity: (v: number) => void }) {
           />
         </div>
         {/* From-the-bottom gradient so the hero text sits on enough
-            contrast on landing (~13% at its darkest), fading out with the
-            same scroll progress as the text itself. */}
-        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(10,12,16,0.13) 0%, rgba(10,12,16,0.06) 50%, rgba(10,12,16,0) 80%)', zIndex: 1, opacity: textOpacity, transition: 'opacity 0.35s ease-out' }} />
+            contrast on landing, fading out with the same scroll progress as
+            the text itself. Bumped up from ~13% at its darkest — too light
+            against the new, brighter showreel to keep the heading readable
+            over its lighter frames (window glare, pale timber cladding). */}
+        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(10,12,16,0.55) 0%, rgba(10,12,16,0.3) 45%, rgba(10,12,16,0.08) 70%, rgba(10,12,16,0) 90%)', zIndex: 1, opacity: textOpacity, transition: 'opacity 0.35s ease-out' }} />
         <button
           onClick={toggleSound}
           style={{ position: 'absolute', bottom: 'clamp(28px, 7vh, 52px)', right: 'clamp(20px, 5vw, 48px)', zIndex: 3, width: 44, height: 44, borderRadius: '50%', border: '0.5px solid rgba(200,194,187,0.18)', background: 'rgba(10,12,16,0.2)', color: '#C8C2BB', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(6px)' }}
