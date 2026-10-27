@@ -705,7 +705,11 @@ export default function StudioPortal() {
         return { ...p, _driveActivity: '' }
       }
     }))
-    const withContent = withActivity.filter(p => p._driveActivity)
+    // "Recent" shouldn't stretch back a month just to fill out 10 rows — cut
+    // off at 14 days (same window used for Upcoming Shoots) so this only ever
+    // shows deliveries that are actually recent, even if that's fewer than 10.
+    const cutoff = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString()
+    const withContent = withActivity.filter(p => p._driveActivity && p._driveActivity >= cutoff)
     withContent.sort((a, b) => (b._driveActivity || '').localeCompare(a._driveActivity || ''))
     setRecentDeliveries(withContent.slice(0, 10))
   }

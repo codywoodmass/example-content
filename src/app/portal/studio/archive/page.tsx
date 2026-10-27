@@ -43,7 +43,6 @@ export default function ArchivePage() {
   const [showNewDrive, setShowNewDrive] = useState(false)
   const [newDrive, setNewDrive] = useState({ name: '', volume_label: '', capacity: '', location: '', notes: '' })
   const [savingDrive, setSavingDrive] = useState(false)
-  const [importing, setImporting] = useState(false)
 
   const inp: React.CSSProperties = { background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }
   const lbl: React.CSSProperties = { fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)', marginBottom: 6, display: 'block' }
@@ -111,36 +110,6 @@ export default function ArchivePage() {
     if (error) notify('Failed to delete: ' + error.message, 'error')
   }
 
-  async function importFromSheet() {
-    const ok = await confirmDialog('Import the current hard-drive scan from the studio\'s Google Sheet? This adds a drive + its project folders for each tab that isn\'t already set up — existing drives/entries are left alone.')
-    if (!ok) return
-    setImporting(true)
-    try {
-      const res = await fetch('/api/archive-import')
-      const data = await res.json()
-      if (!data.success) { notify('Import failed: ' + data.error, 'error'); setImporting(false); return }
-      for (const d of data.drives) {
-        let drive = drives.find(dr => dr.name === d.name)
-        if (!drive) {
-          const { data: created, error } = await supabase.from('archive_drives1').insert([{ name: d.name, volume_label: '', capacity: '', location: '', notes: '' }]).select().single()
-          if (error) { notify('Failed to create ' + d.name + ': ' + error.message, 'error'); continue }
-          drive = created
-          setDrives(p => [...p, created])
-        }
-        const rows = d.entries.map((en: any) => ({ drive_id: drive!.id, project_name: en.project_name, folder_path: en.folder_path, client: '', notes: '' }))
-        if (rows.length > 0) {
-          const { data: inserted, error } = await supabase.from('archive_entries1').insert(rows).select()
-          if (error) notify('Failed to import entries for ' + d.name + ': ' + error.message, 'error')
-          else if (inserted) setEntries(p => [...p, ...inserted])
-        }
-      }
-      notify('Import complete', 'success')
-    } catch (e) {
-      notify('Import failed', 'error')
-    }
-    setImporting(false)
-  }
-
   if (!authorized || loading) return <main style={{ background: '#0E1014', minHeight: '100vh' }} />
 
   const selectedDrive = drives.find(d => d.id === selectedDriveId) || null
@@ -159,7 +128,6 @@ export default function ArchivePage() {
             <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', marginTop: 1 }}>{drives.length} drive{drives.length !== 1 ? 's' : ''} · {entries.length} projects archived</div>
           </div>
           <div style={{ display: 'flex', gap: 10 }}>
-            <button onClick={importFromSheet} disabled={importing} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 16px', borderRadius: 3, background: 'transparent', color: 'rgba(200,194,187,0.6)', border: '0.5px solid rgba(200,194,187,0.2)', cursor: importing ? 'default' : 'pointer', fontFamily: 'inherit' }}>{importing ? 'Importing...' : '⇩ Import from sheet'}</button>
             <button onClick={() => setShowNewDrive(true)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 16px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>+ New drive</button>
           </div>
         </div>

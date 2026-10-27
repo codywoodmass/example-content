@@ -106,22 +106,54 @@ const inFlightRefresh = new Map<string, Promise<{ accessToken: string; tenantId:
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
-// The P&L page fires a lot of these in parallel across three separate API
-// routes (pnl/gst/cashflow), each making several Xero calls of their own —
-// easy to burst past Xero's per-minute rate limit on first load. Rather than
-// surface a 429 as a broken panel, wait for the Retry-After Xero sends (or a
-// short default) and retry a couple of times before giving up for real.
+// Xero caps concurrent requests per tenant at 5 — and the P&L page fires a lot
+// of these in parallel across three separate API routes (pnl/gst/cashflow),
+// several of which (the cash flow chart's per-month BankSummary calls, for
+// one) are themselves a Promise.all of half a dozen more. Without this, that
+// burst blew straight past the concurrency cap, Xero 429'd most of them, and
+// every one of those then sat out the Retry-After backoff below before
+// re-trying — which is what actually made the page "take ages": not the
+// Xero calls themselves, but the retry sleeps stacking up behind a self-made
+// traffic jam. Queuing to a safe concurrency instead avoids hitting 429 in
+// the first place, so the retry path below is now the rare fallback, not the
+// common case.
+const MAX_CONCURRENT_XERO_CALLS = 4
+let activeXeroCalls = 0
+const xeroQueue: (() => void)[] = []
+
+async function acquireXeroSlot() {
+  if (activeXeroCalls < MAX_CONCURRENT_XERO_CALLS) { activeXeroCalls++; return }
+  await new Promise<void>(resolve => xeroQueue.push(resolve))
+  activeXeroCalls++
+}
+function releaseXeroSlot() {
+  activeXeroCalls--
+  const next = xeroQueue.shift()
+  if (next) next()
+}
+
+// Rather than surface a 429 as a broken panel, wait for the Retry-After Xero
+// sends (or a short default) and retry a couple of times before giving up for
+// real. The queue slot is released before this sleep — a backoff wait isn't
+// an in-flight Xero call, so holding a slot through it would just queue up
+// everyone else for no reason.
 export async function xeroFetch(accessToken: string, tenantId: string, path: string, options: RequestInit = {}, retries = 2) {
-  const res = await fetch(`https://api.xero.com${path}`, {
-    ...options,
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      'Xero-tenant-id': tenantId,
-      Accept: 'application/json',
-      ...(options.body ? { 'Content-Type': 'application/json' } : {}),
-      ...(options.headers || {}),
-    },
-  })
+  await acquireXeroSlot()
+  let res: Response
+  try {
+    res = await fetch(`https://api.xero.com${path}`, {
+      ...options,
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Xero-tenant-id': tenantId,
+        Accept: 'application/json',
+        ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+        ...(options.headers || {}),
+      },
+    })
+  } finally {
+    releaseXeroSlot()
+  }
   if (res.status === 429 && retries > 0) {
     const retryAfter = parseInt(res.headers.get('Retry-After') || '2', 10)
     await sleep(Math.min(retryAfter, 10) * 1000)

@@ -625,7 +625,6 @@ function ProjectsPageInner() {
   const [briefLoading, setBriefLoading] = useState(false)
   const [briefGenerated, setBriefGenerated] = useState(false)
   const [showArchived, setShowArchived] = useState(false)
-  const [hideUnconfirmed, setHideUnconfirmed] = useState(false)
   const [dragOverStage, setDragOverStage] = useState<string | null>(null)
   const [sortBy, setSortBy] = useState<string>('created_at')
   const [groupByStage, setGroupByStage] = useState(false)
@@ -1076,8 +1075,7 @@ function ProjectsPageInner() {
   const filtered = projects.filter(p => {
     const matchesCat = filterCat === 'All' || p.category === filterCat
     const matchesArchived = showArchived ? p.archived === true : !p.archived
-    const matchesConfirmed = hideUnconfirmed ? p.stage !== 'Enquiry' : true
-    return matchesCat && matchesArchived && matchesConfirmed
+    return matchesCat && matchesArchived
   }).sort((a, b) => {
     if (showArchived) return new Date(b.archived_at || b.created_at).getTime() - new Date(a.archived_at || a.created_at).getTime()
     if (sortBy === 'shoot_date') return (a.shoot_date || '9999') < (b.shoot_date || '9999') ? -1 : 1
@@ -1231,9 +1229,6 @@ function ProjectsPageInner() {
               {['All', 'Property', 'Commercial', 'Events', 'Socials'].map(cat => <option key={cat} value={cat}>{cat}</option>)}
             </select>
             <button onClick={() => setShowArchived(!showArchived)} style={{ fontSize: 11, padding: '6px 12px', borderRadius: 4, border: `0.5px solid ${showArchived ? 'rgba(210,175,80,0.4)' : 'rgba(200,194,187,0.15)'}`, background: showArchived ? 'rgba(210,175,80,0.08)' : 'transparent', color: showArchived ? 'rgba(210,175,80,0.9)' : 'rgba(200,194,187,0.35)', cursor: 'pointer', fontFamily: 'inherit' }}>📦 Archived</button>
-            {!showArchived && (
-              <button onClick={() => setHideUnconfirmed(!hideUnconfirmed)} title="Hide unconfirmed enquiries" style={{ fontSize: 11, padding: '6px 12px', borderRadius: 4, border: `0.5px solid ${hideUnconfirmed ? 'rgba(100,150,220,0.4)' : 'rgba(200,194,187,0.15)'}`, background: hideUnconfirmed ? 'rgba(100,150,220,0.08)' : 'transparent', color: hideUnconfirmed ? 'rgba(100,150,220,0.9)' : 'rgba(200,194,187,0.35)', cursor: 'pointer', fontFamily: 'inherit' }}>{hideUnconfirmed ? 'Unconfirmed hidden' : 'Hide unconfirmed'}</button>
-            )}
           </div>
           <select value={sortBy} onChange={e => setSortBy(e.target.value)} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '6px 12px', fontSize: 11, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', cursor: 'pointer' }}>
             <option value="created_at">Sort: Recent</option>
@@ -1253,7 +1248,7 @@ function ProjectsPageInner() {
             ))}
           </div>
           )}
-          <button onClick={() => setShowMeetingModal(true)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 16px', borderRadius: 3, background: 'transparent', color: 'rgba(200,194,187,0.7)', border: '0.5px solid rgba(200,194,187,0.2)', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>📅 Book a meeting</button>
+          <button onClick={() => setShowMeetingModal(true)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 16px', borderRadius: 3, background: 'transparent', color: 'rgba(200,194,187,0.7)', border: '0.5px solid rgba(200,194,187,0.2)', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>Book a meeting</button>
           <button onClick={() => setShowNewModal(true)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 16px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>+ New project</button>
         </div>
       </div>
