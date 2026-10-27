@@ -106,18 +106,17 @@ const inFlightRefresh = new Map<string, Promise<{ accessToken: string; tenantId:
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
-// Xero caps concurrent requests per tenant at 5 — and the P&L page fires a lot
-// of these in parallel across three separate API routes (pnl/gst/cashflow),
-// several of which (the cash flow chart's per-month BankSummary calls, for
-// one) are themselves a Promise.all of half a dozen more. Without this, that
-// burst blew straight past the concurrency cap, Xero 429'd most of them, and
-// every one of those then sat out the Retry-After backoff below before
-// re-trying — which is what actually made the page "take ages": not the
-// Xero calls themselves, but the retry sleeps stacking up behind a self-made
-// traffic jam. Queuing to a safe concurrency instead avoids hitting 429 in
-// the first place, so the retry path below is now the rare fallback, not the
-// common case.
-const MAX_CONCURRENT_XERO_CALLS = 4
+// Xero caps concurrent requests per tenant at 5. The cash flow chart's
+// per-month BankSummary calls alone are a Promise.all of half a dozen, so
+// without this a single route's own burst could blow past the cap by itself.
+// This only throttles calls made within one serverless invocation though —
+// it can't see another route's requests landing in a different function
+// instance at the same moment, which pnl/gst/cashflow all firing as
+// independent effects used to do (now fixed client-side by awaiting them one
+// after another instead — see the Finance-tab effects in studio/page.tsx).
+// Kept a little under the real cap (not at 4/5) for headroom against any
+// other Xero call — an invoice send, say — landing at the same instant.
+const MAX_CONCURRENT_XERO_CALLS = 3
 let activeXeroCalls = 0
 const xeroQueue: (() => void)[] = []
 

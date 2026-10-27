@@ -461,10 +461,10 @@ export default function StudioPortal() {
       if (!res.ok) { notify('Could not switch organisation: ' + (data.error || 'unknown'), 'error'); return }
       notify(`Now using — ${data.tenantName}`, 'success')
       setXeroOrgsOpen(false)
-      loadXeroStatus()
-      loadPnl(pnlMonths)
-      loadGst()
-      loadCashflow()
+      await loadXeroStatus()
+      await loadPnl(pnlMonths)
+      await loadGst()
+      await loadCashflow()
     } finally {
       setSwitchingOrg(false)
     }
@@ -515,19 +515,27 @@ export default function StudioPortal() {
       window.history.replaceState({}, '', window.location.pathname + window.location.hash)
     }
   }, [])
-  useEffect(() => { if (activeView === 'finance' && xeroStatus?.connected) loadPnl(pnlMonths) }, [activeView, xeroStatus?.connected, pnlMonths])
-  useEffect(() => { if (activeView === 'finance' && xeroStatus?.connected) loadGst() }, [activeView, xeroStatus?.connected])
-  useEffect(() => { if (activeView === 'finance' && xeroStatus?.connected) loadCashflow() }, [activeView, xeroStatus?.connected])
+  // pnl/gst/cashflow each hit a separate serverless function on Xero's side,
+  // so a per-request concurrency cap inside one of them does nothing to stop
+  // it overlapping with the Xero calls another one is making at the very same
+  // moment — which is exactly what firing all three as independent effects
+  // did, still bursting past Xero's 5-concurrent-request limit as three
+  // separate bursts landing together. Running them one after another instead
+  // of in parallel means only one route's calls are ever in flight at a time.
+  useEffect(() => {
+    if (activeView !== 'finance' || !xeroStatus?.connected) return
+    ;(async () => { await loadPnl(pnlMonths); await loadGst(); await loadCashflow() })()
+  }, [activeView, xeroStatus?.connected, pnlMonths])
   // Keeps the Finance tab reasonably live instead of only ever reflecting
   // whatever Xero looked like the moment the tab was opened — only runs
   // while actually on that tab and connected, so it doesn't burn API calls
   // in the background on other views.
   useEffect(() => {
     if (activeView !== 'finance' || !xeroStatus?.connected) return
-    const id = setInterval(() => {
-      loadPnl(pnlMonths, true)
-      loadGst(true)
-      loadCashflow(true)
+    const id = setInterval(async () => {
+      await loadPnl(pnlMonths, true)
+      await loadGst(true)
+      await loadCashflow(true)
     }, 60000)
     return () => clearInterval(id)
   }, [activeView, xeroStatus?.connected, pnlMonths])
