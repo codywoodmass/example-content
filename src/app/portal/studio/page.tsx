@@ -356,6 +356,9 @@ export default function StudioPortal() {
   const [weeklyTargetDraft, setWeeklyTargetDraft] = useState('')
   const [editingTarget, setEditingTarget] = useState(false)
   const [savingTarget, setSavingTarget] = useState(false)
+  const [expensesExpanded, setExpensesExpanded] = useState(false)
+  const [draftInvoicesExpanded, setDraftInvoicesExpanded] = useState(false)
+  const [outstandingInvoicesExpanded, setOutstandingInvoicesExpanded] = useState(false)
 
   async function loadXeroStatus() {
     const res = await xeroAuthedFetch('/api/xero/status')
@@ -641,10 +644,11 @@ export default function StudioPortal() {
       // Any non-archived project with a linked folder counts — not just ones
       // the studio has manually advanced to a late pipeline stage, since
       // content can land in Drive well before that (and the point of this
-      // widget is to surface it the moment it does). Refined below once the
-      // actual Drive activity comes back, so the freshest folders sort first.
+      // widget is to surface it the moment it does). Every project now gets
+      // an auto-created Drive folder on creation though, so most candidates
+      // here are empty at first — don't show anything until the activity
+      // check below confirms which folders actually have content in them.
       const deliveryCandidates = projects.filter((p: any) => p.drive_url && !p.archived)
-      setRecentDeliveries(deliveryCandidates.slice(0, 10))
       loadRecentDeliveriesActivity(deliveryCandidates)
       setScheduleProjects(projects.filter((p: any) => !p.archived))
 
@@ -680,8 +684,10 @@ export default function StudioPortal() {
   // modifiedTime on edit, but a client's folder is almost always just having
   // new files dropped in), falling back one level into a subfolder the same
   // way StudioDriveThumb does when a folder holds only a subfolder and no
-  // files directly. Projects with no Drive data available yet keep their
-  // place rather than being dropped, since just having a url qualifies.
+  // files directly. Folders with nothing in them yet (e.g. the empty folder
+  // auto-created the moment a project is made) are dropped entirely rather
+  // than just sorted last, so this only ever shows projects content has
+  // actually landed in.
   async function loadRecentDeliveriesActivity(candidates: any[]) {
     const withActivity = await Promise.all(candidates.map(async (p: any) => {
       try {
@@ -699,8 +705,9 @@ export default function StudioPortal() {
         return { ...p, _driveActivity: '' }
       }
     }))
-    withActivity.sort((a, b) => (b._driveActivity || '').localeCompare(a._driveActivity || ''))
-    setRecentDeliveries(withActivity.slice(0, 10))
+    const withContent = withActivity.filter(p => p._driveActivity)
+    withContent.sort((a, b) => (b._driveActivity || '').localeCompare(a._driveActivity || ''))
+    setRecentDeliveries(withContent.slice(0, 10))
   }
 
   // Any project without a Drive folder yet — created from the client's own
@@ -1197,10 +1204,11 @@ export default function StudioPortal() {
               <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 14 }}>Overview</div>
               <div className="ec-form-grid-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 28 }}>
                 {[
-                  { label: 'Active projects', value: dashProjects.length, sub: (() => {
+                  { label: 'Active projects', value: dashProjects.filter((p: any) => p.stage !== 'Enquiry' && p.stage !== 'Completed').length, sub: (() => {
                     const start = new Date(); start.setHours(0, 0, 0, 0)
                     const end = new Date(start); end.setDate(end.getDate() + 7)
                     const count = dashProjects.filter((p: any) => {
+                      if (p.stage === 'Enquiry' || p.stage === 'Completed') return false
                       const dates = [p.shoot_date, ...((p.shoot_dates || []).map((d: any) => d.date))].filter(Boolean)
                       return dates.some((ds: string) => { const d = new Date(ds + 'T12:00:00'); return d >= start && d < end })
                     }).length
@@ -2212,7 +2220,11 @@ export default function StudioPortal() {
                   {(() => {
                     const monthlyAll = pnl.monthly || []
                     const thisMonth = monthlyAll[monthlyAll.length - 1]
-                    const monthToDate = thisMonth?.revenue || 0
+                    // Xero's recognised revenue alone understates how close this month
+                    // actually is to target — it only counts posted/sent invoices, not
+                    // work currently in progress or sitting as an unsent Xero draft, both
+                    // of which are already committed revenue in all but name.
+                    const monthToDate = (thisMonth?.revenue || 0) + pipelineTotal
                     const monthlyTarget = weeklyTarget != null ? weeklyTarget * 4.345 : null
                     const now = new Date()
                     const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
@@ -2250,6 +2262,7 @@ export default function StudioPortal() {
                               <div style={{ height: '100%', width: `${Math.min(100, pctAchieved || 0)}%`, background: (pctAchieved || 0) >= 100 ? 'rgba(100,200,130,0.7)' : 'rgba(100,150,220,0.6)', borderRadius: 3 }} />
                             </div>
                             <div style={{ fontSize: 10.5, color: 'rgba(200,194,187,0.3)' }}>{daysLeft > 0 ? `Need ~$${Math.round(requiredWeekly || 0).toLocaleString()}/week for the rest of this month to hit target` : 'Month complete'}</div>
+                            {pipelineTotal > 0 && <div style={{ fontSize: 10.5, color: 'rgba(210,175,80,0.7)', marginTop: 4 }}>Includes ${Math.round(pipelineTotal).toLocaleString()} from projects in progress and sent to invoicing, not yet recognised by Xero</div>}
                           </>
                         )}
                       </div>
@@ -2348,7 +2361,11 @@ export default function StudioPortal() {
 
                   {sectionLabel('Performance')}
                   {(() => {
-                    const shotProjects = dashProjects.filter((p: any) => p.amount && p.shoot_date)
+                    // Every project sent to invoicing, not just the ones already
+                    // paid — a draft or sent-awaiting-payment invoice is still a
+                    // real shoot at a real price, and excluding those understated
+                    // this average versus what's actually been quoted and billed.
+                    const shotProjects = dashProjects.filter((p: any) => p.amount && p.invoice_id)
                     const avgPerShoot = shotProjects.length ? shotProjects.reduce((s: number, p: any) => s + p.amount, 0) / shotProjects.length : 0
                     const now = new Date()
                     const bookedWithin = (days: number) => {
@@ -2454,13 +2471,24 @@ export default function StudioPortal() {
                     </div>
                     <div style={s.panel}>
                       <div style={{ padding: '14px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)' }}><span style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>Expenses</span></div>
-                      {(pnl.expensesBreakdown || []).map((row: any) => (
-                        <div key={row.label} style={{ padding: '10px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.06)' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}><div style={{ fontSize: 12, color: '#C8C2BB' }}>{row.label}</div><div style={{ fontSize: 13, color: 'rgba(210,90,90,0.85)' }}>−${row.amount.toLocaleString()}</div></div>
-                          <div style={{ height: 3, background: 'rgba(200,194,187,0.06)', borderRadius: 2 }}><div style={{ height: '100%', width: `${pnl.expensesTotal ? Math.min(100, (row.amount / pnl.expensesTotal) * 100) : 0}%`, background: 'rgba(210,90,90,0.5)', borderRadius: 2 }} /></div>
-                        </div>
-                      ))}
-                      {(pnl.expensesBreakdown || []).length === 0 && <div style={{ padding: '10px 18px', fontSize: 12, color: 'rgba(200,194,187,0.25)' }}>No expense lines this period</div>}
+                      {(() => {
+                        const rows = pnl.expensesBreakdown || []
+                        const visible = expensesExpanded ? rows : rows.slice(0, 4)
+                        return (
+                          <>
+                            {visible.map((row: any) => (
+                              <div key={row.label} style={{ padding: '10px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.06)' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}><div style={{ fontSize: 12, color: '#C8C2BB' }}>{row.label}</div><div style={{ fontSize: 13, color: 'rgba(210,90,90,0.85)' }}>−${row.amount.toLocaleString()}</div></div>
+                                <div style={{ height: 3, background: 'rgba(200,194,187,0.06)', borderRadius: 2 }}><div style={{ height: '100%', width: `${pnl.expensesTotal ? Math.min(100, (row.amount / pnl.expensesTotal) * 100) : 0}%`, background: 'rgba(210,90,90,0.5)', borderRadius: 2 }} /></div>
+                              </div>
+                            ))}
+                            {rows.length === 0 && <div style={{ padding: '10px 18px', fontSize: 12, color: 'rgba(200,194,187,0.25)' }}>No expense lines this period</div>}
+                            {rows.length > 4 && (
+                              <button onClick={() => setExpensesExpanded(e => !e)} style={{ width: '100%', textAlign: 'center', padding: '8px 18px', fontSize: 11, color: 'rgba(200,194,187,0.4)', background: 'transparent', border: 'none', borderBottom: '0.5px solid rgba(200,194,187,0.06)', cursor: 'pointer', fontFamily: 'inherit' }}>{expensesExpanded ? 'Show less' : `Show all (${rows.length})`}</button>
+                            )}
+                          </>
+                        )
+                      })()}
                       <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 18px', background: 'rgba(61,71,86,0.15)' }}><div style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>Total expenses</div><div style={{ fontSize: 15, fontWeight: 500, color: 'rgba(210,90,90,0.85)' }}>−${(pnl.expensesTotal || 0).toLocaleString()}</div></div>
                     </div>
                   </div>
@@ -2538,13 +2566,13 @@ export default function StudioPortal() {
                     // when it only counted outstanding bills. A trailing 6-month average of
                     // real Xero P&L expenses — independent of the Trends 3/6/12mo toggle, so
                     // this baseline doesn't shift just because someone clicked that elsewhere
-                    // — turned into a weekly figure is a much closer approximation of what
-                    // actually goes out most weeks.
+                    // — turned into a fortnightly figure is a much closer approximation of
+                    // what actually goes out most fortnights.
                     const baselineWindow = (pnl.monthly || []).slice(-6)
                     const avgMonthlyRevenue = baselineWindow.length ? baselineWindow.reduce((s: number, m: any) => s + m.revenue, 0) / baselineWindow.length : 0
                     const avgMonthlyExpense = baselineWindow.length ? baselineWindow.reduce((s: number, m: any) => s + (m.revenue - m.net), 0) / baselineWindow.length : 0
-                    const WEEKS_PER_MONTH = 4.345
-                    const weeklyRecurringExpense = avgMonthlyExpense / WEEKS_PER_MONTH
+                    const FORTNIGHTS_PER_MONTH = 30.44 / 14
+                    const fortnightlyRecurringExpense = avgMonthlyExpense / FORTNIGHTS_PER_MONTH
 
                     // GST at NZ's 15% rate on net (revenue − expenses) for the filing
                     // period that's due, rather than a figure parsed out of a Xero report
@@ -2557,7 +2585,7 @@ export default function StudioPortal() {
                     let running = cashflow.hasBalance ? (weeks[0]?.opening ?? 0) : 0
                     const merged = weeks.map((w: any, i: number) => {
                       const booked = bookedByWeek[i] || 0
-                      const expectedOut = w.expectedOut + weeklyRecurringExpense
+                      const expectedOut = w.expectedOut + fortnightlyRecurringExpense
                       const gstAmount = w.gstPeriodDue ? gstForPeriod : 0
                       const opening = running
                       const closing = opening + w.expectedIn + (w.expectedInDraft || 0) + booked - expectedOut - gstAmount
@@ -2576,15 +2604,15 @@ export default function StudioPortal() {
                         <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 980 }}>
                           <thead>
                             <tr>
-                              {['Week', cashflow.hasBalance ? 'Opening' : null, 'Invoiced in (Xero)', 'Draft invoices (Xero)', 'Booked (not yet invoiced)', 'Expected out', 'GST (15%)', cashflow.hasBalance ? 'Closing' : null].filter(Boolean).map(h => (
-                                <th key={h as string} style={{ fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.3)', padding: '10px 14px', textAlign: h === 'Week' ? 'left' : 'right', borderBottom: '0.5px solid rgba(200,194,187,0.09)', fontWeight: 400, whiteSpace: 'nowrap' }}>{h}</th>
+                              {['Fortnight', cashflow.hasBalance ? 'Opening' : null, 'Invoiced in (Xero)', 'Draft invoices (Xero)', 'Booked (not yet invoiced)', 'Expected out', 'GST (15%)', cashflow.hasBalance ? 'Closing' : null].filter(Boolean).map(h => (
+                                <th key={h as string} style={{ fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.3)', padding: '10px 14px', textAlign: h === 'Fortnight' ? 'left' : 'right', borderBottom: '0.5px solid rgba(200,194,187,0.09)', fontWeight: 400, whiteSpace: 'nowrap' }}>{h}</th>
                               ))}
                             </tr>
                           </thead>
                           <tbody>
                             {merged.map((w: any, i: number) => (
                               <tr key={w.weekStart}>
-                                <td style={{ padding: '9px 14px', borderBottom: '0.5px solid rgba(200,194,187,0.06)', fontSize: 12, color: 'rgba(200,194,187,0.6)', whiteSpace: 'nowrap' }}>{new Date(w.weekStart + 'T12:00:00').toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' })}{i === 0 ? ' (this wk)' : ''}</td>
+                                <td style={{ padding: '9px 14px', borderBottom: '0.5px solid rgba(200,194,187,0.06)', fontSize: 12, color: 'rgba(200,194,187,0.6)', whiteSpace: 'nowrap' }}>{new Date(w.weekStart + 'T12:00:00').toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' })} – {new Date(w.weekEnd + 'T12:00:00').toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' })}{i === 0 ? ' (this fortnight)' : ''}</td>
                                 {cashflow.hasBalance && <td style={{ padding: '9px 14px', borderBottom: '0.5px solid rgba(200,194,187,0.06)', fontSize: 12, color: '#C8C2BB', textAlign: 'right' }}>${Math.round(w.opening).toLocaleString()}</td>}
                                 <td style={{ padding: '9px 14px', borderBottom: '0.5px solid rgba(200,194,187,0.06)', fontSize: 12, color: 'rgba(100,200,130,0.85)', textAlign: 'right' }}>{w.expectedIn ? '+$' + Math.round(w.expectedIn).toLocaleString() : '—'}</td>
                                 <td style={{ padding: '9px 14px', borderBottom: '0.5px solid rgba(200,194,187,0.06)', fontSize: 12, color: w.expectedInDraft ? 'rgba(210,175,80,0.85)' : 'rgba(200,194,187,0.25)', textAlign: 'right' }}>{w.expectedInDraft ? '+$' + Math.round(w.expectedInDraft).toLocaleString() : '—'}</td>
@@ -2597,7 +2625,7 @@ export default function StudioPortal() {
                           </tbody>
                         </table>
                         <div style={{ padding: '10px 14px', fontSize: 9.5, color: 'rgba(200,194,187,0.25)', borderTop: '0.5px solid rgba(200,194,187,0.06)' }}>
-                          "Invoiced in" is real outstanding Xero invoices, assumed paid on their due date. "Draft invoices" are sitting in Xero but not yet sent/approved — bucketed by due date if set, otherwise issue date, so treat this column as lower-confidence than "Invoiced in". "Booked" is confirmed portal work with no invoice yet (by delivery/shoot date) — money not yet billed, so its timing is a rougher guess. "Expected out" is outstanding Xero bills plus a weekly estimate (trailing 6mo average ÷ 4.345) for recurring costs like rent, wages and subscriptions, which mostly don't pass through Xero's Bills module at all. GST is 15% of (revenue − expenses) for the period that's due, from the same P&L figures. Doesn't include income tax, which isn't tracked here. Treat as a guide, not a guarantee.
+                          Bucketed fortnightly, not weekly, since most clients pay on the 20th of the month. "Invoiced in" is real outstanding Xero invoices, assumed paid on their due date. "Draft invoices" are sitting in Xero but not yet sent/approved — bucketed by due date if set, otherwise issue date, so treat this column as lower-confidence than "Invoiced in". "Booked" is confirmed portal work with no invoice yet (by delivery/shoot date) — money not yet billed, so its timing is a rougher guess. "Expected out" is outstanding Xero bills plus a fortnightly estimate (trailing 6mo average ÷ 2.17) for recurring costs like rent, wages and subscriptions, which mostly don't pass through Xero's Bills module at all. GST is 15% of (revenue − expenses) for the period that's due, from the same P&L figures. Doesn't include income tax, which isn't tracked here. Treat as a guide, not a guarantee.
                         </div>
                       </div>
                     </div>
@@ -2616,7 +2644,7 @@ export default function StudioPortal() {
                       </div>
                       {outstandingItems.length === 0 ? (
                         <div style={{ padding: '14px 18px', fontSize: 12, color: 'rgba(200,194,187,0.25)' }}>Nothing outstanding</div>
-                      ) : outstandingItems.map((inv: any) => (
+                      ) : (outstandingInvoicesExpanded ? outstandingItems : outstandingItems.slice(0, 4)).map((inv: any) => (
                         <div key={inv.invoiceId} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.06)' }}>
                           <div style={{ width: 28, height: 28, borderRadius: '50%', background: inv.overdue ? 'rgba(210,90,90,0.12)' : 'rgba(210,175,80,0.12)', color: inv.overdue ? 'rgba(210,90,90,0.9)' : 'rgba(210,175,80,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 600, flexShrink: 0 }}>{(inv.contact || '?').charAt(0).toUpperCase()}</div>
                           <div style={{ flex: 1, minWidth: 0 }}>
@@ -2626,6 +2654,9 @@ export default function StudioPortal() {
                           <div style={{ fontSize: 13, fontWeight: 500, color: inv.overdue ? 'rgba(210,90,90,0.9)' : 'rgba(210,175,80,0.85)', whiteSpace: 'nowrap' }}>${inv.amountDue.toLocaleString()}</div>
                         </div>
                       ))}
+                      {outstandingItems.length > 4 && (
+                        <button onClick={() => setOutstandingInvoicesExpanded(e => !e)} style={{ width: '100%', textAlign: 'center', padding: '8px 18px', fontSize: 11, color: 'rgba(200,194,187,0.4)', background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>{outstandingInvoicesExpanded ? 'Show less' : `Show all (${outstandingItems.length})`}</button>
+                      )}
                     </div>
                     <div style={s.panel}>
                       <div style={{ padding: '14px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)' }}>
@@ -2636,7 +2667,7 @@ export default function StudioPortal() {
                       </div>
                       {draftInvoiceItems.length === 0 ? (
                         <div style={{ padding: '14px 18px', fontSize: 12, color: 'rgba(200,194,187,0.25)' }}>No drafts sitting in Xero</div>
-                      ) : draftInvoiceItems.map((inv: any) => (
+                      ) : (draftInvoicesExpanded ? draftInvoiceItems : draftInvoiceItems.slice(0, 4)).map((inv: any) => (
                         <div key={inv.invoiceId} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.06)' }}>
                           <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(210,175,80,0.12)', color: 'rgba(210,175,80,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 600, flexShrink: 0 }}>{(inv.contact || '?').charAt(0).toUpperCase()}</div>
                           <div style={{ flex: 1, minWidth: 0 }}>
@@ -2646,6 +2677,9 @@ export default function StudioPortal() {
                           <div style={{ fontSize: 13, fontWeight: 500, color: 'rgba(210,175,80,0.85)', whiteSpace: 'nowrap' }}>${inv.total.toLocaleString()}</div>
                         </div>
                       ))}
+                      {draftInvoiceItems.length > 4 && (
+                        <button onClick={() => setDraftInvoicesExpanded(e => !e)} style={{ width: '100%', textAlign: 'center', padding: '8px 18px', fontSize: 11, color: 'rgba(200,194,187,0.4)', background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>{draftInvoicesExpanded ? 'Show less' : `Show all (${draftInvoiceItems.length})`}</button>
+                      )}
                     </div>
                     <div style={s.panel}>
                       <div style={{ padding: '14px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)' }}><span style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>Recent payments</span></div>

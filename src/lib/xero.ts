@@ -53,31 +53,56 @@ export async function requireStudioUser(req: NextRequest): Promise<
 
 // Reads the stored connection, refreshing the access token first if it's near expiry.
 // Xero rotates refresh tokens on every use, so the new one is persisted immediately.
-export async function getValidXeroToken(supabase: SupabaseClient): Promise<{ accessToken: string; tenantId: string; tenantName: string | null } | null> {
+// `force` skips the local expiry check and refreshes regardless — for when a real
+// Xero API call came back 401 even though our cached expires_at looked fine (e.g. the
+// token was invalidated on Xero's side, or a concurrent request already rotated the
+// refresh token from under us). Trusting the stale local expiry in that case just
+// repeats the same 401 on every subsequent load until expires_at finally catches up.
+export async function getValidXeroToken(supabase: SupabaseClient, force = false): Promise<{ accessToken: string; tenantId: string; tenantName: string | null } | null> {
   const { data: conn } = await supabase.from('xero_connection').select('*').order('connected_at', { ascending: false }).limit(1).maybeSingle()
   if (!conn) return null
 
   const expiresAt = new Date(conn.expires_at).getTime()
-  if (expiresAt - Date.now() > 60_000) return { accessToken: conn.access_token, tenantId: conn.tenant_id, tenantName: conn.tenant_name }
+  if (!force && expiresAt - Date.now() > 60_000) return { accessToken: conn.access_token, tenantId: conn.tenant_id, tenantName: conn.tenant_name }
 
-  const basic = Buffer.from(`${process.env.XERO_CLIENT_ID}:${process.env.XERO_CLIENT_SECRET}`).toString('base64')
-  const res = await fetch('https://identity.xero.com/connect/token', {
-    method: 'POST',
-    headers: { Authorization: `Basic ${basic}`, 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: conn.refresh_token }),
-  })
-  if (!res.ok) {
-    console.error('Xero token refresh failed:', res.status, await res.text().catch(() => ''))
-    return null
+  const existing = inFlightRefresh.get(conn.id)
+  if (existing) return existing
+
+  const refreshPromise = (async () => {
+    const basic = Buffer.from(`${process.env.XERO_CLIENT_ID}:${process.env.XERO_CLIENT_SECRET}`).toString('base64')
+    const res = await fetch('https://identity.xero.com/connect/token', {
+      method: 'POST',
+      headers: { Authorization: `Basic ${basic}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: conn.refresh_token }),
+    })
+    if (!res.ok) {
+      console.error('Xero token refresh failed:', res.status, await res.text().catch(() => ''))
+      return null
+    }
+    const tokens = await res.json()
+    const newExpiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString()
+    await supabase.from('xero_connection').update({
+      access_token: tokens.access_token, refresh_token: tokens.refresh_token, expires_at: newExpiresAt,
+    }).eq('id', conn.id)
+
+    return { accessToken: tokens.access_token, tenantId: conn.tenant_id, tenantName: conn.tenant_name }
+  })()
+
+  inFlightRefresh.set(conn.id, refreshPromise)
+  try {
+    return await refreshPromise
+  } finally {
+    inFlightRefresh.delete(conn.id)
   }
-  const tokens = await res.json()
-  const newExpiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString()
-  await supabase.from('xero_connection').update({
-    access_token: tokens.access_token, refresh_token: tokens.refresh_token, expires_at: newExpiresAt,
-  }).eq('id', conn.id)
-
-  return { accessToken: tokens.access_token, tenantId: conn.tenant_id, tenantName: conn.tenant_name }
 }
+
+// The P&L page kicks off pnl/gst/cashflow/status requests together, each independently
+// calling getValidXeroToken — if the token happens to be near expiry, all of them would
+// otherwise race to redeem the same single-use refresh_token at once. Xero only honours
+// the first redemption; the rest get invalid_grant. De-duping concurrent refreshes within
+// this process (serverless instances are warm across requests in quick succession) means
+// only one actually hits Xero, and everyone else just awaits its result.
+const inFlightRefresh = new Map<string, Promise<{ accessToken: string; tenantId: string; tenantName: string | null } | null>>()
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 

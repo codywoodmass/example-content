@@ -101,16 +101,13 @@ async function getCashFlow(accessToken: string, tenantId: string, monthCount: nu
   }))
 }
 
-export async function GET(req: NextRequest) {
-  const auth = await requireStudioUser(req)
-  if (!auth.ok) return auth.response
-
-  const token = await getValidXeroToken(auth.supabase)
-  if (!token) return NextResponse.json({ connected: false })
-
-  const monthsParam = parseInt(req.nextUrl.searchParams.get('months') || '6', 10)
-  const months = [3, 6, 12].includes(monthsParam) ? monthsParam : 6
-
+// Runs the whole report fetch with a given token. Pulled out of the handler so a
+// 401 (our cached expires_at said the token was fine, but Xero disagrees — e.g. it
+// was invalidated on Xero's side, or lost a refresh-token rotation race) can force
+// a real refresh and retry the entire thing once, instead of returning a dead-end
+// "Xero report request failed" that would just repeat on every reload until
+// expires_at happened to catch up.
+async function loadReport(accessToken: string, tenantId: string, months: number) {
   // The monthly breakdown, cash flow (6 calls) and outstanding invoices don't
   // depend on the financial-year start date, so kick them off immediately instead
   // of waiting on the main YTD report — this alone roughly halves wall-clock time
@@ -122,20 +119,23 @@ export async function GET(req: NextRequest) {
   // whole panel. 11 is the real ceiling, giving 12 data points (this month +
   // 11 trailing) — one short of a full year-ago comparison, which the client
   // already guards for (n >= 13) rather than showing a wrong number.
-  const monthlyPromise = xeroFetch(token.accessToken, token.tenantId, `/api.xro/2.0/Reports/ProfitAndLoss?periods=11&timeframe=MONTH`)
+  const monthlyPromise = xeroFetch(accessToken, tenantId, `/api.xro/2.0/Reports/ProfitAndLoss?periods=11&timeframe=MONTH`)
     .then(res => res.ok ? parseMonthly(res.data?.Reports?.[0]?.Rows || []) : [])
     .catch((e) => { console.error('Xero monthly P&L error:', e); return [] })
-  const cashFlowPromise = getCashFlow(token.accessToken, token.tenantId, months)
+  const cashFlowPromise = getCashFlow(accessToken, tenantId, months)
     .catch((e) => { console.error('Xero cash flow error:', e); return [] })
-  const outstandingPromise = getOutstandingInvoices(token.accessToken, token.tenantId)
-  const recentPaymentsPromise = getRecentPayments(token.accessToken, token.tenantId)
-  const draftInvoicesPromise = getDraftInvoices(token.accessToken, token.tenantId)
+  const outstandingPromise = getOutstandingInvoices(accessToken, tenantId)
+  const recentPaymentsPromise = getRecentPayments(accessToken, tenantId)
+  const draftInvoicesPromise = getDraftInvoices(accessToken, tenantId)
 
-  const fyStart = await getFinancialYearStart(token.accessToken, token.tenantId)
+  const fyStart = await getFinancialYearStart(accessToken, tenantId)
   const todayStr = toDateStr(new Date())
-  const revenueByClientPromise = getRevenueByClient(token.accessToken, token.tenantId, fyStart, todayStr)
-  const { ok, status, data } = await xeroFetch(token.accessToken, token.tenantId, `/api.xro/2.0/Reports/ProfitAndLoss?fromDate=${fyStart}&toDate=${todayStr}`)
-  if (!ok) return NextResponse.json({ connected: true, error: data?.Message || 'Xero report request failed' }, { status })
+  const revenueByClientPromise = getRevenueByClient(accessToken, tenantId, fyStart, todayStr)
+  const { ok, status, data } = await xeroFetch(accessToken, tenantId, `/api.xro/2.0/Reports/ProfitAndLoss?fromDate=${fyStart}&toDate=${todayStr}`)
+  if (!ok) {
+    console.error('Xero P&L report error:', status, JSON.stringify(data))
+    return { ok: false as const, status, data }
+  }
 
   const rows: any[] = data?.Reports?.[0]?.Rows || []
   let revenue = { items: [] as any[], total: 0 }
@@ -165,20 +165,48 @@ export async function GET(req: NextRequest) {
 
   const [monthly, cashFlow, outstandingInvoices, recentPayments, revenueByClient, draftInvoices] = await Promise.all([monthlyPromise, cashFlowPromise, outstandingPromise, recentPaymentsPromise, revenueByClientPromise, draftInvoicesPromise])
 
-  return NextResponse.json({
-    connected: true,
-    reportDate: data?.Reports?.[0]?.ReportDate,
-    revenueTotal: revenue.total,
-    expensesTotal: expenses.total,
-    netProfit,
-    revenueBreakdown: revenue.items,
-    expensesBreakdown: expenses.items,
-    monthly,
-    cashFlow,
-    outstandingInvoices,
-    recentPayments: recentPayments.items,
-    recentPaymentsError: recentPayments.error,
-    revenueByClient,
-    draftInvoices,
-  })
+  return {
+    ok: true as const,
+    body: {
+      connected: true,
+      reportDate: data?.Reports?.[0]?.ReportDate,
+      revenueTotal: revenue.total,
+      expensesTotal: expenses.total,
+      netProfit,
+      revenueBreakdown: revenue.items,
+      expensesBreakdown: expenses.items,
+      monthly,
+      cashFlow,
+      outstandingInvoices,
+      recentPayments: recentPayments.items,
+      recentPaymentsError: recentPayments.error,
+      revenueByClient,
+      draftInvoices,
+    },
+  }
+}
+
+export async function GET(req: NextRequest) {
+  const auth = await requireStudioUser(req)
+  if (!auth.ok) return auth.response
+
+  let token = await getValidXeroToken(auth.supabase)
+  if (!token) return NextResponse.json({ connected: false })
+
+  const monthsParam = parseInt(req.nextUrl.searchParams.get('months') || '6', 10)
+  const months = [3, 6, 12].includes(monthsParam) ? monthsParam : 6
+
+  let result = await loadReport(token.accessToken, token.tenantId, months)
+  if (!result.ok && result.status === 401) {
+    token = await getValidXeroToken(auth.supabase, true)
+    if (!token) return NextResponse.json({ connected: false, staleConnection: true })
+    result = await loadReport(token.accessToken, token.tenantId, months)
+  }
+  if (!result.ok) {
+    const data = result.data as any
+    const detail = data?.Message || data?.Detail || data?.Title
+    return NextResponse.json({ connected: true, error: detail ? `Xero report request failed: ${detail}` : `Xero report request failed (status ${result.status})` }, { status: result.status })
+  }
+
+  return NextResponse.json(result.body)
 }

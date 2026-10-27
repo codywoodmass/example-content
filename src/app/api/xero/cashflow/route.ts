@@ -13,23 +13,39 @@ export async function GET(req: NextRequest) {
   const auth = await requireStudioUser(req)
   if (!auth.ok) return auth.response
 
-  const token = await getValidXeroToken(auth.supabase)
+  let token = await getValidXeroToken(auth.supabase)
   if (!token) return NextResponse.json({ connected: false })
 
   const today = new Date()
   today.setHours(0, 0, 0, 0)
 
-  const [bank, ar, ap, gst, draftAr] = await Promise.all([
-    getBankBalance(token.accessToken, token.tenantId, toDateStr(today)),
-    getOutstandingInvoices(token.accessToken, token.tenantId, 'ACCREC'),
-    getOutstandingInvoices(token.accessToken, token.tenantId, 'ACCPAY'),
-    getGstSchedule(token.accessToken, token.tenantId),
-    getDraftInvoices(token.accessToken, token.tenantId, 'ACCREC'),
+  // bank.needsReconnect below covers a 401 on this specific call (see
+  // getBankBalance) — but if some other call in this batch 401s instead because
+  // our cached expires_at said the token was fine when Xero disagreed (lost a
+  // refresh-token rotation race, or Xero invalidated it directly), force a real
+  // refresh and retry the whole batch once rather than quietly returning zeros.
+  const fetchAll = (accessToken: string, tenantId: string) => Promise.all([
+    getBankBalance(accessToken, tenantId, toDateStr(today)),
+    getOutstandingInvoices(accessToken, tenantId, 'ACCREC'),
+    getOutstandingInvoices(accessToken, tenantId, 'ACCPAY'),
+    getGstSchedule(accessToken, tenantId),
+    getDraftInvoices(accessToken, tenantId, 'ACCREC'),
   ])
 
-  const weeks = Array.from({ length: 13 }, (_, i) => {
-    const start = new Date(today.getTime() + i * 7 * DAY_MS)
-    const end = new Date(start.getTime() + 6 * DAY_MS)
+  let [bank, ar, ap, gst, draftAr] = await fetchAll(token.accessToken, token.tenantId)
+  if (bank.needsReconnect) {
+    const refreshed = await getValidXeroToken(auth.supabase, true)
+    if (refreshed) {
+      token = refreshed
+      ;[bank, ar, ap, gst, draftAr] = await fetchAll(token.accessToken, token.tenantId)
+    }
+  }
+
+  // Fortnightly, not weekly — most clients pay on the 20th of the month, so a
+  // weekly bucket just chopped a single payment cycle into meaningless slices.
+  const weeks = Array.from({ length: 8 }, (_, i) => {
+    const start = new Date(today.getTime() + i * 14 * DAY_MS)
+    const end = new Date(start.getTime() + 13 * DAY_MS)
     return { start, end }
   })
 

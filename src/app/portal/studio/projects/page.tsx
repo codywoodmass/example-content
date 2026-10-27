@@ -200,6 +200,12 @@ function ProjectsPageInner() {
   const [uploadingAttachment, setUploadingAttachment] = useState(false)
   const [previewAttachment, setPreviewAttachment] = useState<{ name: string; url: string; size: number } | null>(null)
   const [calendarSyncTimer, setCalendarSyncTimer] = useState<any>(null)
+  const [showMeetingModal, setShowMeetingModal] = useState(false)
+  const [meetingProjectId, setMeetingProjectId] = useState('')
+  const [meetingDate, setMeetingDate] = useState('')
+  const [meetingStartTime, setMeetingStartTime] = useState('')
+  const [meetingEndTime, setMeetingEndTime] = useState('')
+  const [bookingMeeting, setBookingMeeting] = useState(false)
 
   // Keeps the Google Calendar event in step whenever the shoot date or time is
   // edited — only once a project actually has a synced event, or is past Enquiry
@@ -911,6 +917,54 @@ function ProjectsPageInner() {
     }
   }
 
+  // Separate from createCalendarEventForProject — this books a planning/scoping
+  // call about an already-confirmed project rather than putting the shoot itself
+  // on the calendar, so it doesn't touch calendar_event_id or shoot_date at all.
+  async function bookPlanningMeeting() {
+    const project = projects.find(p => p.id === meetingProjectId)
+    if (!project || !meetingDate || !meetingStartTime || !meetingEndTime) return
+    setBookingMeeting(true)
+    try {
+      const res = await fetch('/api/calendar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: `Example Content — Planning call: ${project.client || project.title}`,
+          date: meetingDate,
+          startTime: meetingStartTime,
+          endTime: meetingEndTime,
+          clientEmail: project.email,
+          location: project.address || '',
+          description: `Planning call for ${project.client || project.email}'s shoot — ${project.title}`,
+        }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        notify('Planning meeting booked and added to Google Calendar', 'success')
+        setShowMeetingModal(false)
+        setMeetingProjectId('')
+        setMeetingDate('')
+        setMeetingStartTime('')
+        setMeetingEndTime('')
+      } else if (data.error === 'Not authenticated') {
+        const authRes = await fetch('/api/calendar?action=auth_url')
+        const { url } = await authRes.json()
+        window.open(url, '_blank', 'width=500,height=600')
+        function onFocus() {
+          window.removeEventListener('focus', onFocus)
+          bookPlanningMeeting()
+        }
+        window.addEventListener('focus', onFocus)
+      } else {
+        notify('Calendar error: ' + data.error, 'error')
+      }
+    } catch (e) {
+      console.error(e)
+      notify('Failed to book meeting', 'error')
+    }
+    setBookingMeeting(false)
+  }
+
   async function sendToInvoice(project: Project) {
     if (!project.amount) { notify('Set an amount for this project before sending it to invoice.', 'error'); return }
     setSendingInvoice(true)
@@ -1199,6 +1253,7 @@ function ProjectsPageInner() {
             ))}
           </div>
           )}
+          <button onClick={() => setShowMeetingModal(true)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 16px', borderRadius: 3, background: 'transparent', color: 'rgba(200,194,187,0.7)', border: '0.5px solid rgba(200,194,187,0.2)', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>📅 Book a meeting</button>
           <button onClick={() => setShowNewModal(true)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 16px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>+ New project</button>
         </div>
       </div>
@@ -1294,6 +1349,38 @@ function ProjectsPageInner() {
       )}
 
       {/* NEW PROJECT MODAL */}
+      {showMeetingModal && (() => {
+        const bookableProjects = projects.filter(p => !p.archived && p.stage !== 'Enquiry' && p.stage !== 'Completed')
+        const selected = bookableProjects.find(p => p.id === meetingProjectId)
+        return (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+            <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 10, padding: 28, width: '100%', maxWidth: 440 }}>
+              <div style={{ fontSize: 14, fontWeight: 500, color: '#fff', marginBottom: 4 }}>Book a meeting</div>
+              <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', marginBottom: 20 }}>Schedule a planning call with a client to talk through their upcoming shoot.</div>
+              <div style={{ marginBottom: 14 }}>
+                <label style={lbl}>Project</label>
+                <select style={inp} value={meetingProjectId} onChange={e => setMeetingProjectId(e.target.value)}>
+                  <option value="">Select a project...</option>
+                  {bookableProjects.map(p => <option key={p.id} value={p.id}>{p.title} — {p.client}</option>)}
+                </select>
+              </div>
+              <div className="ec-form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 20 }}>
+                <div><label style={lbl}>Date</label><input type="date" style={inp} value={meetingDate} onChange={e => setMeetingDate(e.target.value)} /></div>
+                <div><label style={lbl}>Start</label><input type="time" style={inp} value={meetingStartTime} onChange={e => setMeetingStartTime(e.target.value)} /></div>
+                <div><label style={lbl}>End</label><input type="time" style={inp} value={meetingEndTime} onChange={e => setMeetingEndTime(e.target.value)} /></div>
+              </div>
+              {selected && !selected.email && (
+                <div style={{ fontSize: 11, color: 'rgba(210,175,80,0.85)', marginBottom: 14 }}>This project has no client email on file — the event will be created without inviting the client.</div>
+              )}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+                <button onClick={() => setShowMeetingModal(false)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, background: 'transparent', color: 'rgba(200,194,187,0.4)', border: '0.5px solid rgba(200,194,187,0.15)', cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+                <button onClick={bookPlanningMeeting} disabled={bookingMeeting || !meetingProjectId || !meetingDate || !meetingStartTime || !meetingEndTime} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, background: bookingMeeting || !meetingProjectId || !meetingDate || !meetingStartTime || !meetingEndTime ? 'rgba(200,194,187,0.1)' : '#C8C2BB', color: bookingMeeting || !meetingProjectId || !meetingDate || !meetingStartTime || !meetingEndTime ? 'rgba(200,194,187,0.3)' : '#111', border: 'none', cursor: bookingMeeting || !meetingProjectId || !meetingDate || !meetingStartTime || !meetingEndTime ? 'not-allowed' : 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>{bookingMeeting ? 'Booking...' : 'Book meeting'}</button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
       {showNewModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 100, display: 'flex', alignItems: modalFullscreen ? 'stretch' : 'center', justifyContent: 'center', padding: modalFullscreen ? 0 : 20 }}>
           <div style={{ background: '#1A1F28', border: modalFullscreen ? 'none' : '0.5px solid rgba(200,194,187,0.15)', borderRadius: modalFullscreen ? 0 : 10, padding: 28, width: '100%', maxWidth: modalFullscreen ? '100%' : 720, maxHeight: modalFullscreen ? '100vh' : '90vh', overflowY: 'auto' as const }}>

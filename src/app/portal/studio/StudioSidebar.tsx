@@ -17,6 +17,7 @@ const NAV = [
   { label: 'Team', items: [
     { id: 'team', label: 'Team & Time', href: '/portal/studio/team', view: '' },
     { id: 'equipment', label: 'Equipment', href: '/portal/studio/equipment', view: '' },
+    { id: 'archive', label: 'Archive', href: '/portal/studio/archive', view: '' },
   ]},
   { label: 'Finance', items: [
     { id: 'finance', label: 'P&L Overview', href: '', view: 'finance' },
@@ -159,7 +160,7 @@ export default function StudioSidebar({ active, onViewChange }: { active?: strin
                   } else if (item.href) {
                     router.push(item.href)
                   }
-                }} style={{ display: 'flex', alignItems: 'center', width: '100%', padding: '8px 10px', borderRadius: 5, fontSize: 12, color: active === item.id ? '#C8C2BB' : 'rgba(200,194,187,0.38)', background: active === item.id ? 'rgba(61,71,86,0.4)' : 'transparent', border: active === item.id ? '0.5px solid rgba(200,194,187,0.09)' : '0.5px solid transparent', cursor: 'pointer', marginBottom: 1, textAlign: 'left', fontFamily: 'inherit' }}>
+                }} style={{ display: 'flex', alignItems: 'center', width: '100%', padding: '8px 10px', borderRadius: 5, fontSize: 12, color: active === item.id ? '#fff' : 'rgba(255,255,255,0.65)', background: active === item.id ? 'rgba(61,71,86,0.4)' : 'transparent', border: active === item.id ? '0.5px solid rgba(200,194,187,0.09)' : '0.5px solid transparent', cursor: 'pointer', marginBottom: 1, textAlign: 'left', fontFamily: 'inherit' }}>
                   {item.label}
                 </button>
               ))}
