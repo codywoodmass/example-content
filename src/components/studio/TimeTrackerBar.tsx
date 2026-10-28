@@ -4,7 +4,7 @@ import { elapsedLabel, ActiveTimer } from '@/lib/timeTracking'
 
 type TrackableProject = { id: string; title: string; stage: string; archived?: boolean }
 
-const ACTIVE_STAGES = ['Post-Production']
+const ACTIVE_STAGES = ['Post-Production', 'Revisions', 'Awaiting Confirmation']
 
 export default function TimeTrackerBar({
   projects, person, mine, others, now, busy, onStart, onStop,
@@ -58,7 +58,7 @@ export default function TimeTrackerBar({
             onClick={() => setOpen(o => !o)}
             style={{ fontSize: 11, padding: '7px 10px', borderRadius: 5, background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', color: 'rgba(200,194,187,0.6)', fontFamily: 'inherit', outline: 'none', cursor: !ready || trackable.length === 0 ? 'not-allowed' : 'pointer' }}
           >
-            {!ready ? 'Loading...' : trackable.length === 0 ? 'No post-production projects' : `▾ Start tracking (${trackable.length})`}
+            {!ready ? 'Loading...' : trackable.length === 0 ? 'No trackable projects' : `▾ Start tracking (${trackable.length})`}
           </button>
           {open && (
             <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 4, width: 320, maxHeight: 360, display: 'flex', flexDirection: 'column', background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 6, boxShadow: '0 8px 24px rgba(0,0,0,0.4)', zIndex: 50, overflow: 'hidden' }}>
