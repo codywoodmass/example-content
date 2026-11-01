@@ -732,6 +732,7 @@ export default function ClientPortal() {
   const [selectedDel, setSelectedDel] = useState<any>(null)
   const [selectedSubDel, setSelectedSubDel] = useState<any>(null)
   const [selectedAddons, setSelectedAddons] = useState<any[]>([])
+  const [showPhotoOnlyWarning, setShowPhotoOnlyWarning] = useState(false)
   const [preferredDate, setPreferredDate] = useState("")
   const [propertyAddress, setPropertyAddress] = useState("")
   const [addressSuggestions, setAddressSuggestions] = useState<any[]>([])
@@ -1854,10 +1855,40 @@ export default function ClientPortal() {
                       </div>
                     ))}
                   </div>
+                  {(() => {
+                    const photoPackageSelected = selectedAddons.some(a => a.name === PHOTO_PACKAGE.name)
+                    return (
+                      <div onClick={togglePhotoPackage} style={{ border: `0.5px solid ${photoPackageSelected ? 'rgba(210,175,80,0.5)' : 'rgba(210,175,80,0.25)'}`, borderRadius: 8, padding: '16px 18px', cursor: 'pointer', background: photoPackageSelected ? 'rgba(210,175,80,0.08)' : 'rgba(210,175,80,0.03)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 14, marginBottom: 20 }}>
+                        <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                          <div style={{ width: 18, height: 18, borderRadius: 4, border: `1px solid ${photoPackageSelected ? 'rgba(210,175,80,0.8)' : 'rgba(210,175,80,0.3)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2, background: photoPackageSelected ? 'rgba(210,175,80,0.2)' : 'transparent' }}>{photoPackageSelected && <span style={{ fontSize: 11, color: 'rgba(210,175,80,0.9)' }}>✓</span>}</div>
+                          <div>
+                            <div style={{ fontSize: 13, fontWeight: 500, color: '#fff', marginBottom: 3 }}>+ Add Photo Package <span style={{ fontWeight: 400, color: 'rgba(200,194,187,0.4)', textTransform: 'none', letterSpacing: 0 }}>(only available alongside a video package above)</span></div>
+                            <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.45)' }}>{PHOTO_PACKAGE.desc}</div>
+                          </div>
+                        </div>
+                        <div style={{ fontSize: 16, fontWeight: 600, color: 'rgba(210,175,80,0.9)', flexShrink: 0 }}>${PHOTO_PACKAGE.price}</div>
+                      </div>
+                    )
+                  })()}
                   <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 16, borderTop: '0.5px solid rgba(200,194,187,0.09)' }}>
                     <button onClick={() => setBookingStep(1)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>← Back</button>
-                    <button onClick={() => selectedShoot && setBookingStep(4)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, background: selectedShoot ? '#C8C2BB' : 'rgba(200,194,187,0.1)', color: selectedShoot ? '#111' : 'rgba(200,194,187,0.2)', border:'none', cursor: selectedShoot ? 'pointer' : 'not-allowed', fontWeight: 500, fontFamily: 'inherit' }}>Continue →</button>
+                    <button onClick={() => {
+                      if (!selectedShoot) {
+                        if (selectedAddons.some(a => a.name === PHOTO_PACKAGE.name)) setShowPhotoOnlyWarning(true)
+                        return
+                      }
+                      setBookingStep(4)
+                    }} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, background: selectedShoot ? '#C8C2BB' : 'rgba(200,194,187,0.1)', color: selectedShoot ? '#111' : 'rgba(200,194,187,0.2)', border:'none', cursor: selectedShoot ? 'pointer' : 'not-allowed', fontWeight: 500, fontFamily: 'inherit' }}>Continue →</button>
                   </div>
+                  {showPhotoOnlyWarning && (
+                    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }} onClick={() => setShowPhotoOnlyWarning(false)}>
+                      <div onClick={e => e.stopPropagation()} style={{ background: '#1A1F28', border: '0.5px solid rgba(210,175,80,0.3)', borderRadius: 10, padding: '28px 30px', maxWidth: 380, width: '100%', textAlign: 'center' }}>
+                        <div style={{ fontSize: 14, fontWeight: 500, color: '#fff', marginBottom: 10 }}>Video package needed</div>
+                        <div style={{ fontSize: 13, color: 'rgba(200,194,187,0.55)', lineHeight: 1.6, marginBottom: 22 }}>We can only offer photos alongside our video packages, not individually. Please select a video package.</div>
+                        <button onClick={() => setShowPhotoOnlyWarning(false)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '10px 24px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>Got it</button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -2028,40 +2059,26 @@ export default function ClientPortal() {
               {bookingStep === 4 && (
                 <div>
                   <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 6 }}>Add-ons <span style={{ color: 'rgba(200,194,187,0.2)', fontSize: 10, textTransform: 'none', letterSpacing: 0, marginLeft: 8 }}>Optional — select any that apply</span></div>
-                  {selectedCat === 'property' && (() => {
-                    const photoPackageSelected = selectedAddons.some(a => a.name === PHOTO_PACKAGE.name)
-                    return (
-                      <div style={{ marginBottom: 20 }}>
-                        <div onClick={togglePhotoPackage} style={{ border: `0.5px solid ${photoPackageSelected ? 'rgba(210,175,80,0.5)' : 'rgba(210,175,80,0.25)'}`, borderRadius: 8, padding: '16px 18px', cursor: 'pointer', background: photoPackageSelected ? 'rgba(210,175,80,0.08)' : 'rgba(210,175,80,0.03)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 14 }}>
-                          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-                            <div style={{ width: 18, height: 18, borderRadius: 4, border: `1px solid ${photoPackageSelected ? 'rgba(210,175,80,0.8)' : 'rgba(210,175,80,0.3)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2, background: photoPackageSelected ? 'rgba(210,175,80,0.2)' : 'transparent' }}>{photoPackageSelected && <span style={{ fontSize: 11, color: 'rgba(210,175,80,0.9)' }}>✓</span>}</div>
-                            <div>
-                              <div style={{ fontSize: 13, fontWeight: 500, color: '#fff', marginBottom: 3 }}>+ Add Photo Package</div>
-                              <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.45)' }}>{PHOTO_PACKAGE.desc}</div>
+                  {selectedCat === 'property' && selectedAddons.some(a => a.name === PHOTO_PACKAGE.name) && (
+                    <div style={{ marginBottom: 20 }}>
+                      <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(210,175,80,0.7)', marginBottom: 10 }}>Photo Package add-ons</div>
+                      <div className="ec-grid-resp" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10 }}>
+                        {photoPackageAddons.map(addon => {
+                          const selected = selectedAddons.find(a => a.name === addon.name)
+                          return (
+                            <div key={addon.name} onClick={() => toggleAddon(addon)} style={{ border: `0.5px solid ${selected ? 'rgba(210,175,80,0.45)' : 'rgba(200,194,187,0.09)'}`, borderRadius: 6, padding: '13px 15px', cursor: 'pointer', background: selected ? 'rgba(210,175,80,0.06)' : '#1A1F28', display: 'flex', gap: 10 }}>
+                              <div style={{ width: 17, height: 17, borderRadius: 3, border: `1px solid ${selected ? 'rgba(210,175,80,0.7)' : 'rgba(200,194,187,0.2)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, background: selected ? 'rgba(210,175,80,0.15)' : 'transparent', marginTop: 1 }}>{selected && <span style={{ fontSize: 10, color: 'rgba(210,175,80,0.9)' }}>✓</span>}</div>
+                              <div>
+                                <div style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB', marginBottom: 2 }}>{addon.name}</div>
+                                <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', marginBottom: 4 }}>+${addon.price} + GST</div>
+                                <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.3)', lineHeight: 1.4 }}>{addon.desc}</div>
+                              </div>
                             </div>
-                          </div>
-                          <div style={{ fontSize: 16, fontWeight: 600, color: 'rgba(210,175,80,0.9)', flexShrink: 0 }}>${PHOTO_PACKAGE.price}</div>
-                        </div>
-                        {photoPackageSelected && (
-                          <div className="ec-grid-resp" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginTop: 10 }}>
-                            {photoPackageAddons.map(addon => {
-                              const selected = selectedAddons.find(a => a.name === addon.name)
-                              return (
-                                <div key={addon.name} onClick={() => toggleAddon(addon)} style={{ border: `0.5px solid ${selected ? 'rgba(210,175,80,0.45)' : 'rgba(200,194,187,0.09)'}`, borderRadius: 6, padding: '13px 15px', cursor: 'pointer', background: selected ? 'rgba(210,175,80,0.06)' : '#1A1F28', display: 'flex', gap: 10 }}>
-                                  <div style={{ width: 17, height: 17, borderRadius: 3, border: `1px solid ${selected ? 'rgba(210,175,80,0.7)' : 'rgba(200,194,187,0.2)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, background: selected ? 'rgba(210,175,80,0.15)' : 'transparent', marginTop: 1 }}>{selected && <span style={{ fontSize: 10, color: 'rgba(210,175,80,0.9)' }}>✓</span>}</div>
-                                  <div>
-                                    <div style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB', marginBottom: 2 }}>{addon.name}</div>
-                                    <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', marginBottom: 4 }}>+${addon.price} + GST</div>
-                                    <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.3)', lineHeight: 1.4 }}>{addon.desc}</div>
-                                  </div>
-                                </div>
-                              )
-                            })}
-                          </div>
-                        )}
+                          )
+                        })}
                       </div>
-                    )
-                  })()}
+                    </div>
+                  )}
                   <div className="ec-grid-resp" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 20 }}>
                     {addons.map(addon => {
                       const selected = selectedAddons.find(a => a.name === addon.name)
