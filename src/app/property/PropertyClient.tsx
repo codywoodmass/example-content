@@ -127,7 +127,7 @@ export default function PropertyPage() {
       {/* WORK */}
       <div style={{ padding: '0 clamp(20px, 5vw, 48px) clamp(56px, 10vw, 90px)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16, marginBottom: 32 }}>
-          <h2 style={{ fontSize: 'clamp(24px, 4vw, 34px)', fontWeight: 400, color: '#fff', margin: 0, fontFamily: "'Bebas Neue', sans-serif", textTransform: 'uppercase' }}>Recent property work</h2>
+          <h2 style={{ fontSize: 'clamp(24px, 4vw, 34px)', fontWeight: 400, color: '#fff', margin: 0, fontFamily: "'Bebas Neue', sans-serif", textTransform: 'uppercase' }}>Recent {category.toLowerCase()} work</h2>
           <div style={{ display: 'flex', gap: 10 }}>
             {CATEGORIES.map(cat => (
               <button
