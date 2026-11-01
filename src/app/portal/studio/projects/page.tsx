@@ -107,6 +107,7 @@ const STAGES =['Enquiry', 'Pre-Production', 'Shooting', 'Post-Production', 'Revi
 // Mirrors the client-facing property packages in portal/client/page.tsx so a manually
 // added property job records the same package name + price the client would pick.
 const PROPERTY_PACKAGES = [
+  { name: 'Property Ad', price: 690 },
   { name: 'Content Campaign Package', price: 890 },
   { name: 'The Walkthrough Package', price: 890 },
   { name: 'Lifestyle and Living Package', price: 1280 },

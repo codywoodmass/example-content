@@ -1002,6 +1002,16 @@ export default function ClientPortal() {
 
   const propertyShootPackages = [
     {
+      name: 'Property Ad', price: 690,
+      tag: 'Quick & trending',
+      description: 'A punchy 20–30s property ad built for social — fast turnaround, big impact.',
+      includes: ['20–30s engaging/trending property ad', 'Optional agent introduction', 'Up to 1.5hrs filming', 'Vertical & landscape formats', 'Carousel', 'Full creative control by Example Content'],
+      deliverables: [
+        { name: 'Property Ad (20–30s)', price: 0, includes: ['1x engaging/trending property ad', 'Optional agent introduction', 'Vertical & landscape formats', 'Google Drive delivery'] },
+        { name: 'Carousel', price: 0, includes: ['1x branded property carousel', 'Google Drive delivery'] },
+      ]
+    },
+    {
       name: 'Content Campaign Package', price: 890,
       tag: 'Campaign package',
       description: "Give us direction or just let us do the work creating ads for your property. Campaigns comprise of momentum and this load of content does exactly that.",
