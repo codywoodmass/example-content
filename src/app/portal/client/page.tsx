@@ -1860,22 +1860,29 @@ export default function ClientPortal() {
                         )}
                       </div>
                     ))}
-                  </div>
-                  {(() => {
-                    const photoPackageSelected = selectedAddons.some(a => a.name === PHOTO_PACKAGE.name)
-                    return (
-                      <div onClick={togglePhotoPackage} style={{ border: `0.5px solid ${photoPackageSelected ? 'rgba(210,175,80,0.5)' : 'rgba(210,175,80,0.25)'}`, borderRadius: 8, padding: '16px 18px', cursor: 'pointer', background: photoPackageSelected ? 'rgba(210,175,80,0.08)' : 'rgba(210,175,80,0.03)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 14, marginBottom: 20 }}>
-                        <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-                          <div style={{ width: 18, height: 18, borderRadius: 4, border: `1px solid ${photoPackageSelected ? 'rgba(210,175,80,0.8)' : 'rgba(210,175,80,0.3)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2, background: photoPackageSelected ? 'rgba(210,175,80,0.2)' : 'transparent' }}>{photoPackageSelected && <span style={{ fontSize: 11, color: 'rgba(210,175,80,0.9)' }}>✓</span>}</div>
-                          <div>
-                            <div style={{ fontSize: 13, fontWeight: 500, color: '#fff', marginBottom: 3 }}>+ Add Photo Package <span style={{ fontWeight: 400, color: 'rgba(200,194,187,0.4)', textTransform: 'none', letterSpacing: 0 }}>(only available alongside a video package above)</span></div>
-                            <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.45)' }}>{PHOTO_PACKAGE.desc}</div>
+                    {(() => {
+                      const photoPackageSelected = selectedAddons.some(a => a.name === PHOTO_PACKAGE.name)
+                      return (
+                        <div onClick={togglePhotoPackage} style={{ border:`0.5px solid ${photoPackageSelected ? 'rgba(210,175,80,0.5)' : 'rgba(210,175,80,0.2)'}`, borderRadius:12, padding:'22px 24px', cursor:'pointer', background: photoPackageSelected ? 'linear-gradient(135deg, rgba(56,46,20,0.5) 0%, rgba(22,27,38,0.98) 100%)' : 'linear-gradient(135deg, rgba(26,31,40,0.9) 0%, rgba(18,22,30,0.95) 100%)', position:'relative', transition:'all 0.2s', boxShadow: photoPackageSelected ? '0 0 30px rgba(210,175,80,0.05) inset' : 'none', overflow:'hidden' }}>
+                          <div style={{ position:'absolute', top:0, left:0, right:0, height:'1px', background: photoPackageSelected ? 'linear-gradient(90deg, transparent, rgba(210,175,80,0.3), transparent)' : 'linear-gradient(90deg, transparent, rgba(200,194,187,0.06), transparent)' }} />
+                          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:14 }}>
+                            <div>
+                              <div style={{ fontSize:9, letterSpacing:'0.14em', textTransform:'uppercase', color:'rgba(210,175,80,0.7)', marginBottom:6, display:'flex', alignItems:'center', gap:5 }}><span style={{ width:4, height:4, borderRadius:'50%', background:'rgba(210,175,80,0.7)', display:'inline-block' }} />Add-on — needs a video package too</div>
+                              <div style={{ fontSize:16, fontWeight:600, color:'#fff', letterSpacing:'-0.01em' }}>{PHOTO_PACKAGE.name}</div>
+                            </div>
+                            <div style={{ display:'flex', alignItems:'center', gap:8, flexShrink:0, marginLeft:16 }}>
+                              {photoPackageSelected && <div style={{ width:20, height:20, borderRadius:'50%', background:'rgba(210,175,80,0.9)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, boxShadow:'0 0 12px rgba(210,175,80,0.3)' }}><span style={{ fontSize:10, color:'#111', fontWeight:700 }}>✓</span></div>}
+                              <div style={{ textAlign:'right' }}>
+                                <div style={{ fontSize:24, fontWeight:700, color:'#fff', letterSpacing:'-0.03em', lineHeight:1 }}>${PHOTO_PACKAGE.price.toLocaleString()}</div>
+                                <div style={{ fontSize:9, color:'rgba(200,194,187,0.3)', letterSpacing:'0.08em', marginTop:2 }}>+ GST</div>
+                              </div>
+                            </div>
                           </div>
+                          <div style={{ fontSize:12, color:'rgba(200,194,187,0.45)', lineHeight:1.7 }}>{PHOTO_PACKAGE.desc}</div>
                         </div>
-                        <div style={{ fontSize: 16, fontWeight: 600, color: 'rgba(210,175,80,0.9)', flexShrink: 0 }}>${PHOTO_PACKAGE.price}</div>
-                      </div>
-                    )
-                  })()}
+                      )
+                    })()}
+                  </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 16, borderTop: '0.5px solid rgba(200,194,187,0.09)' }}>
                     <button onClick={() => setBookingStep(1)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>← Back</button>
                     <button onClick={() => {
