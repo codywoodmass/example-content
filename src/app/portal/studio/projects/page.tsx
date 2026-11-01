@@ -85,6 +85,11 @@ function getEmbedInfo(input: string): { platform: string; embedUrl: string } | n
 }
 type TimeEntry = { id: string; project_id: string; phase: string; hours: number; person: string | null; entry_date: string; note: string | null; created_at: string; started_at: string | null; ended_at: string | null; billable: boolean }
 const TIME_PHASES = ['Pre-Production', 'Shooting', 'Editing']
+// Cody's own rate card for the "what should I charge" calculator on the Time
+// Tracking tab — studio-only (see userRole gate), has nothing to do with what
+// was actually quoted/invoiced for the job.
+const HOURLY_RATES: Record<string, number> = { 'Pre-Production': 50, 'Shooting': 150, 'Editing': 100 }
+const TRAVEL_RATE_PER_KM = 1.17
 
 function briefTemplate(title: string): string {
   const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -166,6 +171,7 @@ type Project = {
   shooter: string | null
   editor: string | null
   references: ReferenceItem[]
+  travel_km: number | null
 }
 
 function attachmentIcon(name: string): string {
@@ -181,6 +187,16 @@ function ProjectsPageInner() {
   const router = useRouter()
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
+  // Gates the suggested-charge calculator on the Time Tracking tab — Cody's
+  // own rate card, not something an editor (e.g. Fin) should see.
+  const [userRole, setUserRole] = useState<string | null>(null)
+  useEffect(() => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!session) return
+      const { data: profile } = await supabase.from('profiles').select('role').eq('id', session.user.id).maybeSingle()
+      setUserRole(profile?.role || null)
+    })
+  }, [])
   const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban')
   const [showNewModal, setShowNewModal] = useState(false)
   const [filterCat, setFilterCat] = useState('All')
@@ -193,7 +209,7 @@ function ProjectsPageInner() {
   const modalProjectRef = useRef<Project | null>(null)
   useEffect(() => { modalProjectRef.current = modalProject }, [modalProject])
   const [modalEditing, setModalEditing] = useState(false)
-  const [modalTab, setModalTab] = useState<'overview' | 'brief' | 'time'>('overview')
+  const [modalTab, setModalTab] = useState<'overview' | 'brief' | 'internal' | 'attachments' | 'time'>('overview')
   useEffect(() => { setModalTab('overview') }, [modalProject?.id])
   const [modalSaving, setModalSaving] = useState(false)
   const [modalSaved, setModalSaved] = useState(false)
@@ -244,6 +260,13 @@ function ProjectsPageInner() {
         shoot_window_start: updatedProject.shoot_window_start || null, shoot_window_end: updatedProject.shoot_window_end || null,
         progress: updatedProject.progress, editor_notes: updatedProject.editor_notes,
         amount: updatedProject.amount === '' ? null : updatedProject.amount,
+        // These three drive inputs already called triggerAutoSave but were
+        // missing from this whitelist, so picking a shooter/editor or editing
+        // Notes looked like it saved (optimistic local state updated) but
+        // silently never persisted — reverting on next load.
+        shooter: updatedProject.shooter || null, editor: updatedProject.editor || null,
+        general_notes: updatedProject.general_notes,
+        travel_km: updatedProject.travel_km === '' ? null : updatedProject.travel_km,
       }).eq('id', updatedProject.id)
       // Merge in only the fields this function actually persists above — not
       // the whole stale updatedProject snapshot. calendar_event_id in
@@ -263,6 +286,9 @@ function ProjectsPageInner() {
         shoot_window_start: updatedProject.shoot_window_start || null, shoot_window_end: updatedProject.shoot_window_end || null,
         progress: updatedProject.progress, editor_notes: updatedProject.editor_notes,
         amount: updatedProject.amount === '' ? null : updatedProject.amount,
+        shooter: updatedProject.shooter || null, editor: updatedProject.editor || null,
+        general_notes: updatedProject.general_notes,
+        travel_km: updatedProject.travel_km === '' ? null : updatedProject.travel_km,
       } : proj))
       setModalSaved(true)
       setTimeout(() => setModalSaved(false), 2000)
@@ -1522,30 +1548,6 @@ function ProjectsPageInner() {
                   ) : <div style={{ fontSize: 12, color: 'rgba(200,194,187,0.25)' }}>—</div>}
                 </div>
               </div>
-              <div style={{ marginBottom: 20, background: 'rgba(100,150,220,0.06)', border: '0.5px solid rgba(100,150,220,0.2)', borderRadius: 6, padding: '14px 16px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                  <div style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(100,150,220,0.85)' }}>Attachments ({modalProject.attachment_urls?.length || 0})</div>
-                  <label style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '5px 10px', borderRadius: 3, border: '0.5px solid rgba(100,150,220,0.3)', color: uploadingAttachment ? 'rgba(100,150,220,0.4)' : 'rgba(100,150,220,0.85)', cursor: uploadingAttachment ? 'default' : 'pointer', fontFamily: 'inherit' }}>
-                    {uploadingAttachment ? 'Uploading...' : '+ Add'}
-                    <input type="file" multiple disabled={uploadingAttachment} style={{ display: 'none' }} onChange={e => { if (e.target.files && e.target.files.length > 0) addProjectAttachments(modalProject, e.target.files); e.target.value = '' }} />
-                  </label>
-                </div>
-                {(!modalProject.attachment_urls || modalProject.attachment_urls.length === 0) ? (
-                  <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.3)' }}>No attachments yet</div>
-                ) : (
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                    {modalProject.attachment_urls.map((a, ai) => (
-                      <div key={ai} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#C8C2BB', background: 'rgba(200,194,187,0.06)', border: '0.5px solid rgba(200,194,187,0.12)', borderRadius: 4, padding: '6px 6px 6px 10px', maxWidth: 260 }}>
-                        <span onClick={() => setPreviewAttachment(a)} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', overflow: 'hidden' }}>
-                          <span>{attachmentIcon(a.name)}</span>
-                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.name}</span>
-                        </span>
-                        <button onClick={() => removeProjectAttachment(modalProject, a.url)} style={{ fontSize: 12, color: 'rgba(210,90,90,0.6)', background: 'transparent', border: 'none', cursor: 'pointer', flexShrink: 0, padding: '0 2px' }}>✕</button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
               {previewAttachment && (() => {
                 const ext = previewAttachment.name.split('.').pop()?.toLowerCase() || ''
                 const isImg = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic'].includes(ext)
@@ -1576,7 +1578,7 @@ function ProjectsPageInner() {
                 )
               })()}
               <div style={{ display: 'flex', gap: 4, marginBottom: 20, borderBottom: '0.5px solid rgba(200,194,187,0.09)' }}>
-                {[{ id: 'overview', label: 'Job' }, { id: 'brief', label: 'Brief' }, { id: 'time', label: 'Time' }].map(tab => (
+                {[{ id: 'overview', label: 'Job' }, { id: 'brief', label: 'Brief' }, { id: 'internal', label: 'Internal' }, { id: 'attachments', label: 'Attachments' }, { id: 'time', label: 'Time Tracking' }].map(tab => (
                   <button key={tab.id} onClick={() => setModalTab(tab.id as any)} style={{ fontSize: 12, padding: '10px 14px', background: 'transparent', border: 'none', borderBottom: `2px solid ${modalTab === tab.id ? '#C8C2BB' : 'transparent'}`, color: modalTab === tab.id ? '#C8C2BB' : 'rgba(200,194,187,0.35)', cursor: 'pointer', fontFamily: 'inherit', marginBottom: -1 }}>{tab.label}</button>
                 ))}
               </div>
@@ -1611,23 +1613,35 @@ function ProjectsPageInner() {
                 {[{ label: 'Shoot date', key: 'shoot_date' as const }, { label: 'Draft due', key: 'draft_due' as const }, { label: 'Delivery date', key: 'delivery_due' as const }].map(({ label, key }) => (
                   <div key={key}>
                     <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>{label}</div>
-                    <input type="date" value={modalProject[key] || ''} onChange={e => setModalProject(p => { const u = p ? { ...p, [key]: e.target.value } : p; if (u) { triggerAutoSave(u); if (key === 'shoot_date') triggerCalendarSync(u) } return u })} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '8px 10px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }} />
-                    {key === 'shoot_date' && (
-                      <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
-                        <input type="time" value={modalProject.shoot_window_start || ''} onChange={e => setModalProject(p => { const u = p ? { ...p, shoot_window_start: e.target.value } : p; if (u) { triggerAutoSave(u); triggerCalendarSync(u) } return u })} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '6px 8px', fontSize: 11, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }} />
-                        <input type="time" value={modalProject.shoot_window_end || ''} onChange={e => setModalProject(p => { const u = p ? { ...p, shoot_window_end: e.target.value } : p; if (u) { triggerAutoSave(u); triggerCalendarSync(u) } return u })} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '6px 8px', fontSize: 11, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }} />
+                    {modalEditing ? (
+                      <>
+                        <input type="date" value={modalProject[key] || ''} onChange={e => setModalProject(p => { const u = p ? { ...p, [key]: e.target.value } : p; if (u) { triggerAutoSave(u); if (key === 'shoot_date') triggerCalendarSync(u) } return u })} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '8px 10px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }} />
+                        {key === 'shoot_date' && (
+                          <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+                            <input type="time" value={modalProject.shoot_window_start || ''} onChange={e => setModalProject(p => { const u = p ? { ...p, shoot_window_start: e.target.value } : p; if (u) { triggerAutoSave(u); triggerCalendarSync(u) } return u })} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '6px 8px', fontSize: 11, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }} />
+                            <input type="time" value={modalProject.shoot_window_end || ''} onChange={e => setModalProject(p => { const u = p ? { ...p, shoot_window_end: e.target.value } : p; if (u) { triggerAutoSave(u); triggerCalendarSync(u) } return u })} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '6px 8px', fontSize: 11, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }} />
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <div style={{ fontSize: 13, color: '#C8C2BB' }}>
+                        {modalProject[key] ? new Date(modalProject[key] + 'T12:00:00').toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
+                        {key === 'shoot_date' && modalProject.shoot_window_start && <span style={{ color: 'rgba(200,194,187,0.4)' }}>{' · ' + formatTime12(modalProject.shoot_window_start)}{modalProject.shoot_window_end ? '–' + formatTime12(modalProject.shoot_window_end) : ''}</span>}
                       </div>
                     )}
                   </div>
                 ))}
               </div>
+              {(modalEditing || (modalProject.shoot_dates || []).length > 0) && (
               <div style={{ marginBottom: 20 }}>
-                <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: 10 }}>
-                  <button onClick={addShootDate} style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '4px 10px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>+ Add date</button>
-                </div>
+                {modalEditing && (
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: 10 }}>
+                    <button onClick={addShootDate} style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '4px 10px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>+ Add date</button>
+                  </div>
+                )}
                 {(modalProject.shoot_dates || []).length > 0 && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {(modalProject.shoot_dates || []).map(d => (
+                    {(modalProject.shoot_dates || []).map(d => modalEditing ? (
                       <div key={d.id} className="ec-shoot-date-row" style={{ display: 'grid', gridTemplateColumns: '1fr 100px 100px 1fr 24px', gap: 8, alignItems: 'center', background: 'rgba(200,194,187,0.03)', border: '0.5px solid rgba(200,194,187,0.07)', borderRadius: 5, padding: '8px 10px' }}>
                         <input type="date" value={d.date} onChange={e => updateShootDate(d.id, 'date', e.target.value)} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '6px 8px', fontSize: 11, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }} />
                         <select value={d.start_time} onChange={e => updateShootDate(d.id, 'start_time', e.target.value)} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '6px 8px', fontSize: 11, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }}>
@@ -1641,10 +1655,17 @@ function ProjectsPageInner() {
                         <input value={d.notes} onChange={e => updateShootDate(d.id, 'notes', e.target.value)} placeholder="Notes — e.g. exterior, level 2..." style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '6px 8px', fontSize: 11, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }} />
                         <button onClick={() => removeShootDate(d.id)} style={{ fontSize: 13, color: 'rgba(210,90,90,0.6)', background: 'transparent', border: 'none', cursor: 'pointer' }}>✕</button>
                       </div>
+                    ) : (
+                      <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', background: 'rgba(200,194,187,0.03)', border: '0.5px solid rgba(200,194,187,0.07)', borderRadius: 5, fontSize: 12, color: '#C8C2BB' }}>
+                        <span>{d.date ? new Date(d.date + 'T12:00:00').toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' }) : '—'}</span>
+                        {(d.start_time || d.end_time) && <span style={{ color: 'rgba(200,194,187,0.4)' }}>{d.start_time ? formatTime12(d.start_time) : ''}{d.end_time ? '–' + formatTime12(d.end_time) : ''}</span>}
+                        {d.notes && <span style={{ color: 'rgba(200,194,187,0.4)' }}>— {d.notes}</span>}
+                      </div>
                     ))}
                   </div>
                 )}
               </div>
+              )}
               {modalProject.deliverables && (
                 <div style={{ marginBottom: 20 }}>
                   <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 10 }}>Packages & deliverables</div>
@@ -1678,44 +1699,6 @@ function ProjectsPageInner() {
                   </div>
                 </div>
               )}
-              <div style={{ marginBottom: 20 }}>
-                <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 10 }}>References</div>
-                {(modalProject.references || []).length > 0 && (
-                  <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 14, marginBottom: 14 }}>
-                    {modalProject.references.map(ref => {
-                      const embed = getEmbedInfo(ref.url)
-                      return (
-                        <div key={ref.id} style={{ width: 'calc(50% - 7px)', minWidth: 260, background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.08)', borderRadius: 6, overflow: 'hidden' }}>
-                          {/* Instagram's embed includes its header + caption, not
-                              just the video, so it needs a taller box than the
-                              plain 16:9 players — a fixed height with its own
-                              scroll is safer than clipping it. */}
-                          <div style={{ position: 'relative' as const, width: '100%', aspectRatio: embed?.platform === 'Instagram' ? undefined : '16/9', height: embed?.platform === 'Instagram' ? 460 : undefined, background: '#000', overflow: 'auto' }}>
-                            {embed ? (
-                              <iframe src={embed.embedUrl} style={embed.platform === 'Instagram' ? { width: '100%', height: '100%', border: 'none' } : { position: 'absolute' as const, inset: 0, width: '100%', height: '100%', border: 'none' }} allow="autoplay; fullscreen; picture-in-picture" allowFullScreen />
-                            ) : (
-                              <div style={{ position: 'absolute' as const, inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: 'rgba(200,194,187,0.3)' }}>Unsupported link</div>
-                            )}
-                          </div>
-                          <div style={{ padding: 10 }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                              <a href={ref.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'rgba(100,150,220,0.8)', textDecoration: 'none' }}>{embed?.platform || 'Link'} ↗</a>
-                              <button onClick={() => removeReference(ref.id)} style={{ fontSize: 13, color: 'rgba(210,90,90,0.6)', background: 'transparent', border: 'none', cursor: 'pointer', lineHeight: 1 }}>✕</button>
-                            </div>
-                            <textarea value={ref.note} onChange={e => updateReferenceNote(ref.id, e.target.value)} placeholder="What's this reference for?" style={{ width: '100%', background: 'rgba(0,0,0,0.2)', border: '0.5px solid rgba(200,194,187,0.08)', borderRadius: 4, padding: '7px 9px', fontSize: 11, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', lineHeight: 1.5, resize: 'vertical' as const, minHeight: 48, boxSizing: 'border-box' as const }} />
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const }}>
-                  <input value={newRefUrl} onChange={e => setNewRefUrl(e.target.value)} placeholder="Paste a YouTube, Vimeo, Facebook or Instagram link (or embed code)..." style={{ flex: '2 1 260px', background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.08)', borderRadius: 4, padding: '8px 10px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }} />
-                  <input value={newRefNote} onChange={e => setNewRefNote(e.target.value)} placeholder="Note (optional)" style={{ flex: '1 1 160px', background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.08)', borderRadius: 4, padding: '8px 10px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }} />
-                  <button disabled={!newRefUrl.trim()} onClick={() => { addReference(newRefUrl.trim(), newRefNote.trim()); setNewRefUrl(''); setNewRefNote('') }} style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: newRefUrl.trim() ? 'rgba(200,194,187,0.7)' : 'rgba(200,194,187,0.25)', background: 'transparent', cursor: newRefUrl.trim() ? 'pointer' : 'not-allowed', fontFamily: 'inherit', flexShrink: 0 }}>+ Add</button>
-                </div>
-              </div>
-              <div style={{ height: 1, background: 'rgba(200,194,187,0.07)', margin: '4px 0 20px' }} />
               {projectFeedback.filter(f => f.source !== 'studio').length > 0 && (
                 <div style={{ marginBottom: 20 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
@@ -1754,55 +1737,123 @@ function ProjectsPageInner() {
                 </div>
               )}
               <div style={{ marginBottom: 20 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                  <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)' }}>Internal feedback</div>
-                  {projectFeedback.filter(f => f.source === 'studio' && f.status !== 'resolved').length > 0 && (
-                    <span style={{ fontSize: 10, color: 'rgba(200,194,187,0.3)' }}>{projectFeedback.filter(f => f.source === 'studio' && f.status !== 'resolved').length} pending</span>
-                  )}
-                </div>
-                {projectFeedback.filter(f => f.source === 'studio').length > 0 && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 10 }}>
-                    {projectFeedback.filter(f => f.source === 'studio').map((fb: any) => (
-                      <div key={fb.id} style={{ background: fb.status === 'resolved' ? 'rgba(200,194,187,0.03)' : 'rgba(100,150,220,0.05)', border: `0.5px solid ${fb.status === 'resolved' ? 'rgba(200,194,187,0.08)' : 'rgba(100,150,220,0.2)'}`, borderRadius: 5, padding: '10px 12px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                          <span style={{ fontSize: 10, color: fb.assigned_to ? 'rgba(100,150,220,0.9)' : 'rgba(200,194,187,0.35)' }}>{fb.assigned_to ? `Assigned to ${fb.assigned_to}` : 'Unassigned'}</span>
-                          {fb.status === 'resolved' ? (
-                            <span style={{ fontSize: 9, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'rgba(100,200,130,0.8)' }}>✓ Resolved</span>
-                          ) : (
-                            <button onClick={() => resolveFeedbackGroup([fb.id])} style={{ fontSize: 9, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '3px 8px', borderRadius: 3, border: '0.5px solid rgba(210,175,80,0.3)', color: 'rgba(210,175,80,0.9)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Mark resolved</button>
-                          )}
-                        </div>
-                        <div style={{ fontSize: 12, color: 'rgba(200,194,187,0.7)', lineHeight: 1.5, opacity: fb.status === 'resolved' ? 0.5 : 1 }}>{fb.message}</div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-                  <textarea value={newFeedbackMsg} onChange={e => setNewFeedbackMsg(e.target.value)} placeholder="Log feedback received by email or elsewhere..." style={{ flex: 1, background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.08)', borderRadius: 4, padding: '8px 10px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', lineHeight: 1.5, resize: 'vertical' as const, minHeight: 36 }} />
-                  <select value={newFeedbackAssignee} onChange={e => setNewFeedbackAssignee(e.target.value)} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '8px 10px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', flexShrink: 0, width: 130 }}>
-                    <option value="">Unassigned</option>
-                    {teamOptions.map(t => <option key={t.name} value={t.name}>{t.name}</option>)}
-                  </select>
-                  <button disabled={addingFeedback || !newFeedbackMsg.trim()} onClick={() => addInternalFeedback(modalProject)} style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 3, border: '0.5px solid rgba(100,150,220,0.3)', color: 'rgba(100,150,220,0.9)', background: 'rgba(100,150,220,0.08)', cursor: addingFeedback || !newFeedbackMsg.trim() ? 'not-allowed' : 'pointer', fontFamily: 'inherit', flexShrink: 0, opacity: addingFeedback || !newFeedbackMsg.trim() ? 0.5 : 1 }}>{addingFeedback ? 'Adding...' : 'Add'}</button>
-                </div>
-              </div>
-              <div style={{ marginBottom: 20 }}>
                 {parseLabeledNotes(modalProject.general_notes).length > 1 && (
                   <div style={{ marginBottom: 14 }}>
                     <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>Client brief</div>
                     <div style={{ background: 'rgba(200,194,187,0.04)', borderRadius: 4, padding: '2px 12px', border: '0.5px solid rgba(200,194,187,0.08)' }}><LabeledNotes text={modalProject.general_notes} /></div>
                   </div>
                 )}
-                <div style={{ marginBottom: 14 }}>
-                  <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>Notes</div>
-                  <textarea value={modalProject.general_notes || ''} onChange={e => setModalProject(p => { const u = p ? { ...p, general_notes: e.target.value } : p; if (u) triggerAutoSave(u); return u })} style={{ width: '100%', background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.08)', borderRadius: 4, padding: '10px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', lineHeight: 1.7, resize: 'vertical' as const, minHeight: 80 }} placeholder="General notes..." />
-                </div>
                 <div>
-                  <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>Editor notes</div>
-                  <textarea value={modalProject.editor_notes || ''} onChange={e => setModalProject(p => { const u = p ? { ...p, editor_notes: e.target.value } : p; if (u) triggerAutoSave(u); return u })} style={{ width: '100%', background: 'rgba(100,150,220,0.03)', border: '0.5px solid rgba(100,150,220,0.12)', borderRadius: 4, padding: '10px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', lineHeight: 1.7, resize: 'vertical' as const, minHeight: 80 }} placeholder="Editor notes..." />
+                  <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>Studio notes</div>
+                  <textarea value={modalProject.general_notes || ''} onChange={e => setModalProject(p => { const u = p ? { ...p, general_notes: e.target.value } : p; if (u) triggerAutoSave(u); return u })} style={{ width: '100%', background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.08)', borderRadius: 4, padding: '10px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', lineHeight: 1.7, resize: 'vertical' as const, minHeight: 80 }} placeholder="General notes..." />
+                  <div style={{ fontSize: 10, color: 'rgba(200,194,187,0.3)', marginTop: 5 }}>Starts as a copy of the client brief above — edit freely for your own ongoing notes, it won't change what's shown as the original brief.</div>
                 </div>
               </div>
               </>
+              )}
+              {modalTab === 'internal' && (
+                <div>
+                  {projectFeedback.filter(f => f.source !== 'studio').length > 0 && (
+                    <div style={{ marginBottom: 20 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                        <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)' }}>Client feedback</div>
+                        <span style={{ fontSize: 10, color: 'rgba(200,194,187,0.3)' }}>{projectFeedback.filter(f => f.source !== 'studio' && f.status !== 'resolved').length} pending</span>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        {groupFeedback(projectFeedback.filter(f => f.source !== 'studio')).map(group => {
+                          const first = group[0]
+                          const allResolved = group.every((f: any) => f.status === 'resolved')
+                          const pendingIds = group.filter((f: any) => f.status !== 'resolved').map((f: any) => f.id)
+                          return (
+                            <div key={`${first.file_id}|${first.client_email}|${first.created_at}`} style={{ background: allResolved ? 'rgba(200,194,187,0.03)' : 'rgba(210,175,80,0.05)', border: `0.5px solid ${allResolved ? 'rgba(200,194,187,0.08)' : 'rgba(210,175,80,0.2)'}`, borderRadius: 5, padding: '10px 12px' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                                <div style={{ fontSize: 11, fontWeight: 500, color: '#C8C2BB' }}>
+                                  {first.client_name || first.client_email} · <span style={{ color: 'rgba(200,194,187,0.4)', fontWeight: 400 }}>{first.file_name}{group.length > 1 ? ` · Change request — ${group.length} items` : ` @ ${formatFeedbackTimestamp(first.timestamp_seconds)}`}</span>
+                                </div>
+                                {allResolved ? (
+                                  <span style={{ fontSize: 9, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'rgba(100,200,130,0.8)' }}>✓ Resolved</span>
+                                ) : (
+                                  <button onClick={() => resolveFeedbackGroup(pendingIds)} style={{ fontSize: 9, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '3px 8px', borderRadius: 3, border: '0.5px solid rgba(210,175,80,0.3)', color: 'rgba(210,175,80,0.9)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>{group.length > 1 ? 'Mark all resolved' : 'Mark resolved'}</button>
+                                )}
+                              </div>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                {group.map((fb: any) => (
+                                  <div key={fb.id} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', opacity: fb.status === 'resolved' ? 0.5 : 1 }}>
+                                    {group.length > 1 && <span style={{ fontSize: 10, fontWeight: 700, color: '#C8C2BB', background: 'rgba(200,194,187,0.08)', borderRadius: 3, padding: '2px 6px', flexShrink: 0 }}>{formatFeedbackTimestamp(fb.timestamp_seconds)}</span>}
+                                    <div style={{ fontSize: 12, color: 'rgba(200,194,187,0.7)', lineHeight: 1.5 }}>{fb.message}</div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+                  <div style={{ marginBottom: 20 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                      <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)' }}>Internal feedback</div>
+                      {projectFeedback.filter(f => f.source === 'studio' && f.status !== 'resolved').length > 0 && (
+                        <span style={{ fontSize: 10, color: 'rgba(200,194,187,0.3)' }}>{projectFeedback.filter(f => f.source === 'studio' && f.status !== 'resolved').length} pending</span>
+                      )}
+                    </div>
+                    {projectFeedback.filter(f => f.source === 'studio').length > 0 && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 10 }}>
+                        {projectFeedback.filter(f => f.source === 'studio').map((fb: any) => (
+                          <div key={fb.id} style={{ background: fb.status === 'resolved' ? 'rgba(200,194,187,0.03)' : 'rgba(100,150,220,0.05)', border: `0.5px solid ${fb.status === 'resolved' ? 'rgba(200,194,187,0.08)' : 'rgba(100,150,220,0.2)'}`, borderRadius: 5, padding: '10px 12px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                              <span style={{ fontSize: 10, color: fb.assigned_to ? 'rgba(100,150,220,0.9)' : 'rgba(200,194,187,0.35)' }}>{fb.assigned_to ? `Assigned to ${fb.assigned_to}` : 'Unassigned'}</span>
+                              {fb.status === 'resolved' ? (
+                                <span style={{ fontSize: 9, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'rgba(100,200,130,0.8)' }}>✓ Resolved</span>
+                              ) : (
+                                <button onClick={() => resolveFeedbackGroup([fb.id])} style={{ fontSize: 9, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '3px 8px', borderRadius: 3, border: '0.5px solid rgba(210,175,80,0.3)', color: 'rgba(210,175,80,0.9)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Mark resolved</button>
+                              )}
+                            </div>
+                            <div style={{ fontSize: 12, color: 'rgba(200,194,187,0.7)', lineHeight: 1.5, opacity: fb.status === 'resolved' ? 0.5 : 1 }}>{fb.message}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                      <textarea value={newFeedbackMsg} onChange={e => setNewFeedbackMsg(e.target.value)} placeholder="Log feedback received by email or elsewhere..." style={{ flex: 1, background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.08)', borderRadius: 4, padding: '8px 10px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', lineHeight: 1.5, resize: 'vertical' as const, minHeight: 36 }} />
+                      <select value={newFeedbackAssignee} onChange={e => setNewFeedbackAssignee(e.target.value)} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '8px 10px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', flexShrink: 0, width: 130 }}>
+                        <option value="">Unassigned</option>
+                        {teamOptions.map(t => <option key={t.name} value={t.name}>{t.name}</option>)}
+                      </select>
+                      <button disabled={addingFeedback || !newFeedbackMsg.trim()} onClick={() => addInternalFeedback(modalProject)} style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 3, border: '0.5px solid rgba(100,150,220,0.3)', color: 'rgba(100,150,220,0.9)', background: 'rgba(100,150,220,0.08)', cursor: addingFeedback || !newFeedbackMsg.trim() ? 'not-allowed' : 'pointer', fontFamily: 'inherit', flexShrink: 0, opacity: addingFeedback || !newFeedbackMsg.trim() ? 0.5 : 1 }}>{addingFeedback ? 'Adding...' : 'Add'}</button>
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>Editor notes</div>
+                    <textarea value={modalProject.editor_notes || ''} onChange={e => setModalProject(p => { const u = p ? { ...p, editor_notes: e.target.value } : p; if (u) triggerAutoSave(u); return u })} style={{ width: '100%', background: 'rgba(100,150,220,0.03)', border: '0.5px solid rgba(100,150,220,0.12)', borderRadius: 4, padding: '10px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', lineHeight: 1.7, resize: 'vertical' as const, minHeight: 80 }} placeholder="Editor notes..." />
+                  </div>
+                </div>
+              )}
+              {modalTab === 'attachments' && (
+                <div style={{ background: 'rgba(100,150,220,0.06)', border: '0.5px solid rgba(100,150,220,0.2)', borderRadius: 6, padding: '14px 16px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                    <div style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(100,150,220,0.85)' }}>Attachments ({modalProject.attachment_urls?.length || 0})</div>
+                    <label style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '5px 10px', borderRadius: 3, border: '0.5px solid rgba(100,150,220,0.3)', color: uploadingAttachment ? 'rgba(100,150,220,0.4)' : 'rgba(100,150,220,0.85)', cursor: uploadingAttachment ? 'default' : 'pointer', fontFamily: 'inherit' }}>
+                      {uploadingAttachment ? 'Uploading...' : '+ Add'}
+                      <input type="file" multiple disabled={uploadingAttachment} style={{ display: 'none' }} onChange={e => { if (e.target.files && e.target.files.length > 0) addProjectAttachments(modalProject, e.target.files); e.target.value = '' }} />
+                    </label>
+                  </div>
+                  {(!modalProject.attachment_urls || modalProject.attachment_urls.length === 0) ? (
+                    <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.3)' }}>No attachments yet</div>
+                  ) : (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                      {modalProject.attachment_urls.map((a, ai) => (
+                        <div key={ai} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#C8C2BB', background: 'rgba(200,194,187,0.06)', border: '0.5px solid rgba(200,194,187,0.12)', borderRadius: 4, padding: '6px 6px 6px 10px', maxWidth: 260 }}>
+                          <span onClick={() => setPreviewAttachment(a)} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', overflow: 'hidden' }}>
+                            <span>{attachmentIcon(a.name)}</span>
+                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.name}</span>
+                          </span>
+                          <button onClick={() => removeProjectAttachment(modalProject, a.url)} style={{ fontSize: 12, color: 'rgba(210,90,90,0.6)', background: 'transparent', border: 'none', cursor: 'pointer', flexShrink: 0, padding: '0 2px' }}>✕</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               )}
               {modalTab === 'brief' && (
                 <div style={{ marginBottom: 20 }}>
@@ -1892,6 +1943,42 @@ function ProjectsPageInner() {
                   <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
                     <button onClick={() => navigator.clipboard.writeText(briefEditorRef.current?.innerText || '')} style={{ fontSize: 10, color: 'rgba(200,194,187,0.35)', background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>Copy plain text</button>
                   </div>
+                  <div style={{ height: 1, background: 'rgba(200,194,187,0.07)', margin: '24px 0 20px' }} />
+                  <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 10 }}>References</div>
+                  {(modalProject.references || []).length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 14, marginBottom: 14 }}>
+                      {modalProject.references.map(ref => {
+                        const embed = getEmbedInfo(ref.url)
+                        return (
+                          <div key={ref.id} style={{ width: 'calc(50% - 7px)', minWidth: 260, background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.08)', borderRadius: 6, overflow: 'hidden' }}>
+                            {/* Instagram's embed includes its header + caption, not
+                                just the video, so it needs a taller box than the
+                                plain 16:9 players — a fixed height with its own
+                                scroll is safer than clipping it. */}
+                            <div style={{ position: 'relative' as const, width: '100%', aspectRatio: embed?.platform === 'Instagram' ? undefined : '16/9', height: embed?.platform === 'Instagram' ? 460 : undefined, background: '#000', overflow: 'auto' }}>
+                              {embed ? (
+                                <iframe src={embed.embedUrl} style={embed.platform === 'Instagram' ? { width: '100%', height: '100%', border: 'none' } : { position: 'absolute' as const, inset: 0, width: '100%', height: '100%', border: 'none' }} allow="autoplay; fullscreen; picture-in-picture" allowFullScreen />
+                              ) : (
+                                <div style={{ position: 'absolute' as const, inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: 'rgba(200,194,187,0.3)' }}>Unsupported link</div>
+                              )}
+                            </div>
+                            <div style={{ padding: 10 }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                                <a href={ref.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'rgba(100,150,220,0.8)', textDecoration: 'none' }}>{embed?.platform || 'Link'} ↗</a>
+                                <button onClick={() => removeReference(ref.id)} style={{ fontSize: 13, color: 'rgba(210,90,90,0.6)', background: 'transparent', border: 'none', cursor: 'pointer', lineHeight: 1 }}>✕</button>
+                              </div>
+                              <textarea value={ref.note} onChange={e => updateReferenceNote(ref.id, e.target.value)} placeholder="What's this reference for?" style={{ width: '100%', background: 'rgba(0,0,0,0.2)', border: '0.5px solid rgba(200,194,187,0.08)', borderRadius: 4, padding: '7px 9px', fontSize: 11, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', lineHeight: 1.5, resize: 'vertical' as const, minHeight: 48, boxSizing: 'border-box' as const }} />
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const }}>
+                    <input value={newRefUrl} onChange={e => setNewRefUrl(e.target.value)} placeholder="Paste a YouTube, Vimeo, Facebook or Instagram link (or embed code)..." style={{ flex: '2 1 260px', background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.08)', borderRadius: 4, padding: '8px 10px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }} />
+                    <input value={newRefNote} onChange={e => setNewRefNote(e.target.value)} placeholder="Note (optional)" style={{ flex: '1 1 160px', background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.08)', borderRadius: 4, padding: '8px 10px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }} />
+                    <button disabled={!newRefUrl.trim()} onClick={() => { addReference(newRefUrl.trim(), newRefNote.trim()); setNewRefUrl(''); setNewRefNote('') }} style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: newRefUrl.trim() ? 'rgba(200,194,187,0.7)' : 'rgba(200,194,187,0.25)', background: 'transparent', cursor: newRefUrl.trim() ? 'pointer' : 'not-allowed', fontFamily: 'inherit', flexShrink: 0 }}>+ Add</button>
+                  </div>
                 </div>
               )}
               {modalTab === 'time' && (() => {
@@ -1949,6 +2036,45 @@ function ProjectsPageInner() {
                     {effectiveRate != null && (
                       <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', marginBottom: 20 }}>Effective hourly rate: <span style={{ color: '#C8C2BB', fontWeight: 500 }}>${effectiveRate.toFixed(0)}/hr</span> (${modalProject.amount?.toLocaleString()} ÷ {totalHours}h)</div>
                     )}
+                    {userRole === 'studio' && (() => {
+                      const travelKm = modalProject.travel_km ?? 0
+                      const travelCost = travelKm * TRAVEL_RATE_PER_KM
+                      const phaseCosts = byPhase.map(({ phase, hours }) => ({ phase, hours, rate: HOURLY_RATES[phase] || 0, cost: hours * (HOURLY_RATES[phase] || 0) }))
+                      const suggestedTotal = phaseCosts.reduce((s, p) => s + p.cost, 0) + travelCost
+                      const diff = modalProject.amount != null ? modalProject.amount - suggestedTotal : null
+                      return (
+                        <div style={{ marginBottom: 20, background: 'rgba(210,175,80,0.05)', border: '0.5px solid rgba(210,175,80,0.2)', borderRadius: 6, padding: '14px 16px' }}>
+                          <div style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(210,175,80,0.85)', marginBottom: 10 }}>Suggested charge — your rate card</div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
+                            {phaseCosts.filter(p => p.hours > 0).map(p => (
+                              <div key={p.phase} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'rgba(200,194,187,0.6)' }}>
+                                <span>{p.phase} — {p.hours}h @ ${p.rate}/hr</span>
+                                <span style={{ color: '#C8C2BB' }}>${p.cost.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+                              </div>
+                            ))}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, color: 'rgba(200,194,187,0.6)' }}>
+                              <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                Travel —
+                                <input type="number" min="0" step="1" value={modalProject.travel_km ?? ''} onChange={e => setModalProject(p => { const u = p ? { ...p, travel_km: e.target.value === '' ? null : parseFloat(e.target.value) } : p; if (u) triggerAutoSave(u); return u })} placeholder="0" style={{ width: 60, background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '4px 6px', fontSize: 11, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }} />
+                                km @ ${TRAVEL_RATE_PER_KM}/km
+                              </span>
+                              <span style={{ color: '#C8C2BB' }}>${travelCost.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+                            </div>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 10, borderTop: '0.5px solid rgba(210,175,80,0.15)' }}>
+                            <span style={{ fontSize: 13, fontWeight: 500, color: '#C8C2BB' }}>Suggested total</span>
+                            <span style={{ fontSize: 16, fontWeight: 600, color: 'rgba(210,175,80,0.95)' }}>${suggestedTotal.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+                          </div>
+                          {diff != null && Math.abs(diff) > 1 && (
+                            <div style={{ fontSize: 11, color: diff < 0 ? 'rgba(210,90,90,0.8)' : 'rgba(100,200,130,0.8)', marginTop: 6 }}>
+                              {diff < 0
+                                ? `$${Math.abs(diff).toLocaleString(undefined, { maximumFractionDigits: 0 })} below your rate card — actually charged $${modalProject.amount!.toLocaleString()}`
+                                : `$${diff.toLocaleString(undefined, { maximumFractionDigits: 0 })} above your rate card — actually charged $${modalProject.amount!.toLocaleString()}`}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })()}
                     {packageEstimate && (
                       <div style={{ marginBottom: 20 }}>
                         <div style={{ fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 8 }}>Estimate vs actual — {packageMatch![1].trim()}</div>
