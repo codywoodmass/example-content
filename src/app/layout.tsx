@@ -2,6 +2,18 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 
+// Every portal page (studio and client) already styles itself with
+// fontFamily: 'Inter, sans-serif' inline, but nothing ever actually loaded
+// Inter as a real font file — every browser was silently falling back to
+// its own OS default sans-serif the whole time, which is exactly why the
+// two portals could end up looking inconsistent (different OS/browser
+// combos render different fallback fonts). A plain Google Fonts stylesheet
+// link (not next/font's scoped class/variable) registers the real "Inter"
+// family under that literal name, so every existing inline fontFamily:
+// 'Inter, sans-serif' across the whole app resolves to the real font with
+// no per-page changes needed.
+const INTER_FONT_HREF = "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap";
+
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -93,6 +105,9 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} ${spaceGrotesk.variable} h-full antialiased`}
     >
       <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link rel="stylesheet" href={INTER_FONT_HREF} />
         <script
           type="application/ld+json"
           // eslint-disable-next-line react/no-danger
