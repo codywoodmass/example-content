@@ -630,6 +630,21 @@ function DriveFolder({ project, clientEmail, clientName }: { project: any; clien
 
 // Lets a client add as many reference URLs as they need, one at a time,
 // instead of trying to cram several links into a single-line text input.
+// A handful of Details-step fields are optional and most bookings don't need
+// them — ticking the box is what reveals the textarea, instead of showing
+// several empty optional textareas by default on every single booking.
+function CheckboxReveal({ label, checked, onToggle, children }: { label: string; checked: boolean; onToggle: () => void; children: React.ReactNode }) {
+  return (
+    <div style={{ marginTop: 16 }}>
+      <div onClick={onToggle} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+        <div style={{ width: 17, height: 17, borderRadius: 3, border: `1px solid ${checked ? '#C8C2BB' : 'rgba(200,194,187,0.25)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, background: checked ? 'rgba(200,194,187,0.15)' : 'transparent' }}>{checked && <span style={{ fontSize: 10, color: '#C8C2BB' }}>✓</span>}</div>
+        <label style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#fff', cursor: 'pointer' }}>{label}</label>
+      </div>
+      {checked && <div style={{ marginTop: 8 }}>{children}</div>}
+    </div>
+  )
+}
+
 function ReferenceLinksInput({ links, onAdd, onRemove, placeholder }: { links: string[]; onAdd: (v: string) => void; onRemove: (i: number) => void; placeholder: string }) {
   const [draft, setDraft] = React.useState('')
   function add() {
@@ -722,6 +737,12 @@ export default function ClientPortal() {
   const [addressSuggestions, setAddressSuggestions] = useState<any[]>([])
   const [showAddressSuggestions, setShowAddressSuggestions] = useState(false)
   const [addressDebounce, setAddressDebounce] = useState<any>(null)
+  // Captured from the picked Mapbox suggestion so the travel fee can be
+  // calculated without a second geocode call in the common case — see
+  // handleAddressChange's fallback geocode for when the client types an
+  // address without ever clicking a suggestion.
+  const [propertyCoords, setPropertyCoords] = useState<{ lat: number; lng: number } | null>(null)
+  const [travelFee, setTravelFee] = useState(0)
   const [bookingNotes, setBookingNotes] = useState("")
   const [accessNotes, setAccessNotes] = useState("")
   const [clientContactName, setClientContactName] = useState("")
@@ -733,6 +754,15 @@ export default function ClientPortal() {
   const [preferredTime, setPreferredTime] = useState("")
   const [propertyLiveDate, setPropertyLiveDate] = useState("")
   const [shotList, setShotList] = useState("• \n• \n• \n• \n• ")
+  const [propertyFeatures, setPropertyFeatures] = useState('')
+  // These four fields on the Details step are optional and most bookings
+  // don't need them — ticking the box is what reveals the textbox, rather
+  // than showing four empty textareas by default regardless of whether the
+  // client has anything to put in them.
+  const [showBriefField, setShowBriefField] = useState(false)
+  const [showTalentField, setShowTalentField] = useState(false)
+  const [showShotListField, setShowShotListField] = useState(false)
+  const [showPropertyFeaturesField, setShowPropertyFeaturesField] = useState(false)
   const [twilightDate, setTwilightDate] = useState("")
   const [twilightTime, setTwilightTime] = useState("")
   // Property Ad is filmed in one orientation, not both like the other
@@ -1062,6 +1092,11 @@ export default function ClientPortal() {
 
   function handleAddressChange(val: string) {
     setPropertyAddress(val)
+    // The coords (and whatever travel fee was calculated from them) belong
+    // to the previous address text — stale the moment it's edited again, so
+    // the review step doesn't keep showing a fee for an address that's since
+    // changed underneath it.
+    setPropertyCoords(null)
     if (addressDebounce) clearTimeout(addressDebounce)
     setAddressDebounce(setTimeout(() => searchAddresses(val), 350))
   }
@@ -1070,7 +1105,64 @@ export default function ClientPortal() {
     setPropertyAddress(feature.place_name)
     setAddressSuggestions([])
     setShowAddressSuggestions(false)
+    // Mapbox returns center as [lng, lat].
+    if (Array.isArray(feature.center) && feature.center.length === 2) {
+      setPropertyCoords({ lat: feature.center[1], lng: feature.center[0] })
+    }
   }
+
+  // Catches an address typed in full without ever clicking a suggestion —
+  // selectAddress (the normal path) never fires for that, so there'd
+  // otherwise be no coordinates to calculate a travel fee from at all.
+  async function geocodePropertyAddressIfNeeded() {
+    if (propertyCoords || !propertyAddress.trim()) return
+    try {
+      const res = await fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(propertyAddress)}.json?country=NZ&types=address&access_token=${process.env.NEXT_PUBLIC_MAPBOX_TOKEN}&limit=1`)
+      const data = await res.json()
+      const center = data.features?.[0]?.center
+      if (Array.isArray(center) && center.length === 2) setPropertyCoords({ lat: center[1], lng: center[0] })
+    } catch (e) { console.error('Travel fee geocode error:', e) }
+  }
+
+  // Straight-line distance, not driving distance — close enough for a
+  // location-based travel fee without needing a second (paid, rate-limited)
+  // Directions API call on top of the geocode this already does.
+  function haversineKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
+    const R = 6371
+    const dLat = (b.lat - a.lat) * Math.PI / 180
+    const dLng = (b.lng - a.lng) * Math.PI / 180
+    const s = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * Math.PI / 180) * Math.cos(b.lat * Math.PI / 180) * Math.sin(dLng / 2) ** 2
+    return R * 2 * Math.atan2(Math.sqrt(s), Math.sqrt(1 - s))
+  }
+
+  // Auckland and Hamilton CBD reference points (Auckland's match the ones
+  // already used for the dashboard weather widget, for one consistent
+  // "where's the CBD" answer across the app). Hamilton's free zone isn't a
+  // clean radius in reality (it runs out to named suburbs — Dinsdale,
+  // Peacocke, Tamahere, Greenhill — in different directions and distances),
+  // so 10km is an approximation of where those sit relative to the CBD, not
+  // a precise boundary match. Whichever city is closer to the address is the
+  // one its free-zone radius applies — anywhere else in NZ this will still
+  // produce a number (measured against the nearer of the two), just one
+  // that's increasingly a rough estimate the further out it gets.
+  const AUCKLAND_CBD = { lat: -36.8485, lng: 174.7633 }
+  const HAMILTON_CBD = { lat: -37.7870, lng: 175.2793 }
+  const AUCKLAND_FREE_RADIUS_KM = 16
+  const HAMILTON_FREE_RADIUS_KM = 10
+  const TRAVEL_RATE_PER_KM = 1
+
+  function calculatePropertyTravelFee(coords: { lat: number; lng: number }) {
+    const dAkl = haversineKm(coords, AUCKLAND_CBD)
+    const dHam = haversineKm(coords, HAMILTON_CBD)
+    const nearest = dAkl <= dHam ? { dist: dAkl, freeRadius: AUCKLAND_FREE_RADIUS_KM } : { dist: dHam, freeRadius: HAMILTON_FREE_RADIUS_KM }
+    if (nearest.dist < nearest.freeRadius) return 0
+    return Math.round(nearest.dist * TRAVEL_RATE_PER_KM)
+  }
+
+  useEffect(() => {
+    if (propertyCoords) { setTravelFee(calculatePropertyTravelFee(propertyCoords)); return }
+    setTravelFee(0)
+  }, [propertyCoords])
 
   function toggleAddon(addon: any) {
     setSelectedAddons(prev =>
@@ -1080,8 +1172,19 @@ export default function ClientPortal() {
     )
   }
 
+  // Dropping the base Photo Package should drop anything that only makes
+  // sense on top of it too — "10 Additional Photos" with no base package
+  // selected doesn't mean anything.
+  function togglePhotoPackage() {
+    setSelectedAddons(prev => {
+      const has = prev.find(a => a.name === PHOTO_PACKAGE.name)
+      if (has) return prev.filter(a => a.name !== PHOTO_PACKAGE.name && !photoPackageAddons.some(pa => pa.name === a.name))
+      return [...prev, PHOTO_PACKAGE]
+    })
+  }
+
   const addonTotal = selectedAddons.reduce((sum, a) => sum + a.price, 0)
-  const grandTotal = (selectedShoot?.price || 0) + (selectedDel?.price || 0) + addonTotal
+  const grandTotal = (selectedShoot?.price || 0) + (selectedDel?.price || 0) + addonTotal + (selectedCat === 'property' ? travelFee : 0)
 
   const propertyShootPackages = [
     {
@@ -1152,18 +1255,31 @@ export default function ClientPortal() {
     { name: 'Single Social Reel', price: 140, includes: ['1x social reel', 'Vertical or landscape', 'Google Drive delivery'] },
     { name: 'Stills Pack', price: 240, includes: ['20-30 edited stills', 'High-res + web-res', 'Google Drive delivery'] },
   ]
+  // Travel used to be two flat-rate addons (Raglan, Morrinsville/Whatawhata) —
+  // replaced by an auto-calculated fee based on the entered property address
+  // (see calculatePropertyTravelFee), so those are gone from this list and
+  // the fee shows as its own line at review instead of something to select.
   const propertyAddons = [
     { name: 'Property Ad (5-8s)', price: 150, desc: '1x short-form property ad from the shoot (5-8s)' },
     { name: 'Additional Lifestyle Filming (1hr)', price: 175, desc: 'An extra hour of lifestyle filming with talent' },
-    { name: 'Additional 20s Reel', price: 250, desc: 'An edited reel consisting of footage from the shoot (20s)' },
+    { name: 'Additional 20s Reel', price: 300, desc: 'An edited reel consisting of footage from the shoot (20s)' },
     { name: 'Additional 40s Reel', price: 400, desc: 'An edited reel consisting of footage from the shoot (40s)' },
     { name: '8-10 Slide Instagram Carousel', price: 100, desc: 'Visually engaging property showcase carousel' },
-    { name: 'Open Home Story', price: 80, desc: 'Short-form story content for open home promotion' },
+    { name: 'Open home stories', price: 80, desc: 'Includes 5 backgrounds for Open Home posts' },
     { name: 'Twilight Shoot', price: 350, desc: 'Golden hour & dusk exterior shoot' },
-    { name: 'Travel Flat Rate — Raglan', price: 150, desc: 'Flat travel rate for shoots in Raglan' },
-    { name: 'Travel Flat Rate — Morrinsville, Whatawhata', price: 60, desc: 'Flat travel rate for shoots in Morrinsville or Whatawhata' },
     { name: 'Property Content Creative Planning', price: 80, desc: 'Dedicated creative planning session for your property content' },
     { name: 'Pre Shoot Property Site Visit', price: 80, desc: 'In-person site visit ahead of the shoot (within Hamilton/Auckland)' },
+  ]
+  // Photo Package is deliberately kept out of propertyShootPackages/propertyAddons
+  // — it's only ever offered alongside an existing video package, not as a
+  // standalone product (yet), so it gets its own toggle card on the add-ons
+  // step instead of sitting in either list.
+  const PHOTO_PACKAGE = { name: 'Photo Package', price: 450, desc: '25-35 photos + 3 drone photos' }
+  // Only make sense once the base Photo Package is actually added.
+  const photoPackageAddons = [
+    { name: 'Lifestyle Agent Photo Shoot', price: 150, desc: 'A styled lifestyle photo shoot with the listing agent' },
+    { name: '10 Additional Photos', price: 150, desc: '10 more edited photos on top of the Photo Package' },
+    { name: '5 Additional Drone Photos', price: 120, desc: '5 more edited drone photos on top of the Photo Package' },
   ]
   const commercialAddons = [
     { name: 'Additional Talent', price: 220, desc: 'Extra on-screen talent sourced by Example Content' },
@@ -1256,7 +1372,7 @@ export default function ClientPortal() {
           ].map(item => {
             const active = activeView === item.id
             return (
-              <button key={item.id} onClick={() => { setMobileMenuOpen(false); setActiveView(item.id); setBookingStep(1); setSelectedCat(''); setSelectedShoot(null); setSelectedDel(null); setSelectedAddons([]); setTcAccepted(false); setPreferredDate(''); setDraftDue(''); setDeliveryDue(''); setBookingNotes(''); setAccessNotes(''); setPropertyAddress(''); setProjectType(''); setProjectTitle(''); setProjectDescription(''); setTargetAudience(''); setKeyMessage(''); setTalentDetails(''); setBriefDeliverables([{ id: '1', name: '', quantity: 1, duration: '', formats: [], notes: '' }]); setDateFlexible(false); setShootDuration(''); setReferenceLinks([]); setBudgetRange(''); setBookingAttachments([]); setTwilightDate(''); setTwilightTime('') }} style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 11, width: '100%', padding: '11px 14px 11px 17px', borderRadius: 6, fontSize: 13, letterSpacing: '0.01em', fontWeight: active ? 600 : 500, color: active ? '#fff' : 'rgba(255,255,255,0.65)', background: active ? 'rgba(61,71,86,0.4)' : 'transparent', border: active ? '0.5px solid rgba(200,194,187,0.15)' : '0.5px solid transparent', cursor: 'pointer', marginBottom: 4, textAlign: 'left', fontFamily: 'inherit' }}>
+              <button key={item.id} onClick={() => { setMobileMenuOpen(false); setActiveView(item.id); setBookingStep(1); setSelectedCat(''); setSelectedShoot(null); setSelectedDel(null); setSelectedAddons([]); setTcAccepted(false); setPreferredDate(''); setDraftDue(''); setDeliveryDue(''); setBookingNotes(''); setAccessNotes(''); setPropertyAddress(''); setProjectType(''); setProjectTitle(''); setProjectDescription(''); setTargetAudience(''); setKeyMessage(''); setTalentDetails(''); setBriefDeliverables([{ id: '1', name: '', quantity: 1, duration: '', formats: [], notes: '' }]); setDateFlexible(false); setShootDuration(''); setReferenceLinks([]); setBudgetRange(''); setBookingAttachments([]); setTwilightDate(''); setTwilightTime(''); setPropertyFeatures(''); setShowBriefField(false); setShowTalentField(false); setShowShotListField(false); setShowPropertyFeaturesField(false); setPropertyCoords(null); setTravelFee(0) }} style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 11, width: '100%', padding: '11px 14px 11px 17px', borderRadius: 6, fontSize: 13, letterSpacing: '0.01em', fontWeight: active ? 600 : 500, color: active ? '#fff' : 'rgba(255,255,255,0.65)', background: active ? 'rgba(61,71,86,0.4)' : 'transparent', border: active ? '0.5px solid rgba(200,194,187,0.15)' : '0.5px solid transparent', cursor: 'pointer', marginBottom: 4, textAlign: 'left', fontFamily: 'inherit' }}>
                 {active && <span style={{ position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)', width: 2.5, height: 15, borderRadius: 2, background: '#C8C2BB' }} />}
                 <item.Icon size={17} style={{ flexShrink: 0, opacity: active ? 1 : 0.75 }} />
                 {item.label}
@@ -1912,6 +2028,40 @@ export default function ClientPortal() {
               {bookingStep === 4 && (
                 <div>
                   <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 6 }}>Add-ons <span style={{ color: 'rgba(200,194,187,0.2)', fontSize: 10, textTransform: 'none', letterSpacing: 0, marginLeft: 8 }}>Optional — select any that apply</span></div>
+                  {selectedCat === 'property' && (() => {
+                    const photoPackageSelected = selectedAddons.some(a => a.name === PHOTO_PACKAGE.name)
+                    return (
+                      <div style={{ marginBottom: 20 }}>
+                        <div onClick={togglePhotoPackage} style={{ border: `0.5px solid ${photoPackageSelected ? 'rgba(210,175,80,0.5)' : 'rgba(210,175,80,0.25)'}`, borderRadius: 8, padding: '16px 18px', cursor: 'pointer', background: photoPackageSelected ? 'rgba(210,175,80,0.08)' : 'rgba(210,175,80,0.03)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 14 }}>
+                          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                            <div style={{ width: 18, height: 18, borderRadius: 4, border: `1px solid ${photoPackageSelected ? 'rgba(210,175,80,0.8)' : 'rgba(210,175,80,0.3)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2, background: photoPackageSelected ? 'rgba(210,175,80,0.2)' : 'transparent' }}>{photoPackageSelected && <span style={{ fontSize: 11, color: 'rgba(210,175,80,0.9)' }}>✓</span>}</div>
+                            <div>
+                              <div style={{ fontSize: 13, fontWeight: 500, color: '#fff', marginBottom: 3 }}>+ Add Photo Package</div>
+                              <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.45)' }}>{PHOTO_PACKAGE.desc}</div>
+                            </div>
+                          </div>
+                          <div style={{ fontSize: 16, fontWeight: 600, color: 'rgba(210,175,80,0.9)', flexShrink: 0 }}>${PHOTO_PACKAGE.price}</div>
+                        </div>
+                        {photoPackageSelected && (
+                          <div className="ec-grid-resp" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginTop: 10 }}>
+                            {photoPackageAddons.map(addon => {
+                              const selected = selectedAddons.find(a => a.name === addon.name)
+                              return (
+                                <div key={addon.name} onClick={() => toggleAddon(addon)} style={{ border: `0.5px solid ${selected ? 'rgba(210,175,80,0.45)' : 'rgba(200,194,187,0.09)'}`, borderRadius: 6, padding: '13px 15px', cursor: 'pointer', background: selected ? 'rgba(210,175,80,0.06)' : '#1A1F28', display: 'flex', gap: 10 }}>
+                                  <div style={{ width: 17, height: 17, borderRadius: 3, border: `1px solid ${selected ? 'rgba(210,175,80,0.7)' : 'rgba(200,194,187,0.2)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, background: selected ? 'rgba(210,175,80,0.15)' : 'transparent', marginTop: 1 }}>{selected && <span style={{ fontSize: 10, color: 'rgba(210,175,80,0.9)' }}>✓</span>}</div>
+                                  <div>
+                                    <div style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB', marginBottom: 2 }}>{addon.name}</div>
+                                    <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', marginBottom: 4 }}>+${addon.price} + GST</div>
+                                    <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.3)', lineHeight: 1.4 }}>{addon.desc}</div>
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })()}
                   <div className="ec-grid-resp" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 20 }}>
                     {addons.map(addon => {
                       const selected = selectedAddons.find(a => a.name === addon.name)
@@ -1946,15 +2096,15 @@ export default function ClientPortal() {
                   {/* Contact info — always shown first, pre-filled from the account where possible */}
                   <div className="ec-grid-resp" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, marginBottom: 14 }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      <label style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)' }}>Listing agent name</label>
+                      <label style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#fff' }}>Listing agent name</label>
                       <input value={clientContactName} onChange={e => setClientContactName(e.target.value)} placeholder="e.g. Jessica Moore" style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }} />
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      <label style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)' }}>Your email</label>
+                      <label style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#fff' }}>Your email</label>
                       <input type="email" value={clientEmail2} onChange={e => setClientEmail2(e.target.value)} placeholder="your@email.com" style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }} />
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      <label style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)' }}>Phone number</label>
+                      <label style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#fff' }}>Phone number</label>
                       <input type="tel" value={clientPhone} onChange={e => setClientPhone(e.target.value)} placeholder="021 123 4567" style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }} />
                     </div>
                   </div>
@@ -1963,9 +2113,14 @@ export default function ClientPortal() {
                   {selectedCat === 'property' && (
                     <div className="ec-grid-resp" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6, gridColumn: 'span 2' }}>
-                        <label style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)' }}>Property address</label>
+                        <label style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#fff' }}>Property address</label>
                         <div style={{ position: 'relative' }}>
-                          <input value={propertyAddress} onChange={e => handleAddressChange(e.target.value)} onBlur={() => setTimeout(() => setShowAddressSuggestions(false), 200)} placeholder="Start typing an address..." style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }} />
+                          <input value={propertyAddress} onChange={e => handleAddressChange(e.target.value)} onBlur={() => { setTimeout(() => setShowAddressSuggestions(false), 200); geocodePropertyAddressIfNeeded() }} placeholder="Start typing an address..." style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }} />
+                          {propertyAddress.trim() && selectedCat === 'property' && (
+                            <div style={{ fontSize: 10, color: 'rgba(200,194,187,0.35)', marginTop: 6 }}>
+                              {!propertyCoords ? 'Calculating travel fee...' : travelFee > 0 ? `Travel fee: $${travelFee} + GST (auto-calculated from address)` : 'No travel fee — within the free zone'}
+                            </div>
+                          )}
                           {showAddressSuggestions && addressSuggestions.length > 0 && (
                             <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, zIndex: 50, overflow: 'hidden', marginTop: 4 }}>
                               {addressSuggestions.map((s: any, i: number) => (
@@ -1978,13 +2133,13 @@ export default function ClientPortal() {
                         </div>
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        <label style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)' }}>Property type</label>
+                        <label style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#fff' }}>Property type</label>
                         <select style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }}>
                           <option value=''>Select type...</option><option>Standard Residential</option><option>High End Residential</option><option>Lifestyle Property</option><option>Townhouse</option><option>Section</option>
                         </select>
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        <label style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)' }}>Access / key notes</label>
+                        <label style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#fff' }}>Access / key notes</label>
                         <input value={accessNotes} onChange={e => setAccessNotes(e.target.value)} placeholder="e.g. Key in lockbox, call owner on arrival" style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }} />
                       </div>
                     </div>
@@ -1993,7 +2148,7 @@ export default function ClientPortal() {
                   {/* Dates — always shown */}
                   <div className="ec-grid-resp" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, marginBottom: 14 }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      <label style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)' }}>Preferred shoot date</label>
+                      <label style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#fff' }}>Preferred shoot date</label>
                       <div style={{ display:'flex', gap:10 }}>
                         <input type="date" value={preferredDate} onChange={e => setPreferredDate(e.target.value)} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', flex:1 }} />
                         <select value={preferredTime} onChange={e => setPreferredTime(e.target.value)} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }}>
@@ -2003,34 +2158,36 @@ export default function ClientPortal() {
                       </div>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      <label style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)' }}>Property going live</label>
+                      <label style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#fff' }}>Property going live</label>
                       <input type="date" value={propertyLiveDate} onChange={e => setPropertyLiveDate(e.target.value)} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }} />
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      <label style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)' }}>Final delivery needed by</label>
+                      <label style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#fff' }}>Final delivery needed by</label>
                       <input type="date" value={deliveryDue} onChange={e => setDeliveryDue(e.target.value)} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }} />
                     </div>
                   </div>
 
                   {/* Notes */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14 }}>
-                    <label style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)' }}>Brief, storyline & special requirements</label>
-                    <textarea rows={4} value={bookingNotes} onChange={e => setBookingNotes(e.target.value)} placeholder="Style references, key features, specific requirements, timeline notes, or a suggested storyline — e.g. A warm family home nestled in a quiet cul-de-sac..." style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', resize: 'vertical', lineHeight: 1.65 }} />
-                    <div style={{ marginTop:16 }}>
-                      <label style={{ fontSize:10, letterSpacing:'0.12em', textTransform:'uppercase', color:'rgba(200,194,187,0.4)', display:'block', marginBottom:6 }}>Talent required</label>
+                    <CheckboxReveal label="Brief/Concept" checked={showBriefField} onToggle={() => setShowBriefField(v => !v)}>
+                      <textarea rows={4} value={bookingNotes} onChange={e => setBookingNotes(e.target.value)} placeholder="Style references, key features, specific requirements, timeline notes, or a suggested storyline — e.g. A warm family home nestled in a quiet cul-de-sac..." style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', resize: 'vertical', lineHeight: 1.65, width: '100%' }} />
+                    </CheckboxReveal>
+                    <CheckboxReveal label="Property Features" checked={showPropertyFeaturesField} onToggle={() => setShowPropertyFeaturesField(v => !v)}>
+                      <textarea rows={4} value={propertyFeatures} onChange={e => setPropertyFeatures(e.target.value)} placeholder="Anything worth calling out — pool, view, renovated kitchen, home office, etc." style={{ background:'rgba(200,194,187,0.04)', border:'0.5px solid rgba(200,194,187,0.09)', borderRadius:4, padding:'9px 12px', fontSize:12, color:'#C8C2BB', fontFamily:'inherit', outline:'none', resize:'vertical', lineHeight:1.65, width:'100%' }} />
+                    </CheckboxReveal>
+                    <CheckboxReveal label="Talent required" checked={showTalentField} onToggle={() => setShowTalentField(v => !v)}>
                       <textarea rows={3} value={talentDetails} onChange={e => setTalentDetails(e.target.value)} placeholder="Describe the talent needed on shoot (e.g. homeowner walk-through, 2 lifestyle models), and whether you're providing/sourcing the talent yourself or need us to source it" style={{ background:'rgba(200,194,187,0.04)', border:'0.5px solid rgba(200,194,187,0.09)', borderRadius:4, padding:'9px 12px', fontSize:12, color:'#C8C2BB', fontFamily:'inherit', outline:'none', resize:'vertical', lineHeight:1.65, width:'100%' }} />
-                    </div>
-                    <div style={{ marginTop:16 }}>
-                      <label style={{ fontSize:10, letterSpacing:'0.12em', textTransform:'uppercase', color:'rgba(200,194,187,0.4)', display:'block', marginBottom:6 }}>Talent / lifestyle suggested shot list</label>
+                    </CheckboxReveal>
+                    <CheckboxReveal label="Suggested Shot List" checked={showShotListField} onToggle={() => setShowShotListField(v => !v)}>
                       <textarea rows={6} value={shotList} onChange={e => setShotList(e.target.value)} style={{ background:'rgba(200,194,187,0.04)', border:'0.5px solid rgba(200,194,187,0.09)', borderRadius:4, padding:'9px 12px', fontSize:12, color:'#C8C2BB', fontFamily:'inherit', outline:'none', resize:'vertical', lineHeight:1.75, width:'100%' }} />
-                    </div>
+                    </CheckboxReveal>
                     <div style={{ marginTop:16 }}>
-                      <label style={{ fontSize:10, letterSpacing:'0.12em', textTransform:'uppercase', color:'rgba(200,194,187,0.4)', display:'block', marginBottom:6 }}>Reference links</label>
+                      <label style={{ fontSize:10, letterSpacing:'0.12em', textTransform:'uppercase', color:'#fff', display:'block', marginBottom:6 }}>Reference links</label>
                       <ReferenceLinksInput links={referenceLinks} onAdd={addReferenceLink} onRemove={removeReferenceLink} placeholder="Paste a link to a property you'd like to use as a reference, then + Add" />
                     </div>
                     {(selectedShoot?.name === 'Media Release Package' || selectedAddons.some((a: any) => a.name === 'Twilight Shoot')) && (
                       <div style={{ marginTop:16 }}>
-                        <label style={{ fontSize:10, letterSpacing:'0.12em', textTransform:'uppercase', color:'rgba(200,194,187,0.4)', display:'block', marginBottom:6 }}>Twilight shoot — date & time requested</label>
+                        <label style={{ fontSize:10, letterSpacing:'0.12em', textTransform:'uppercase', color:'#fff', display:'block', marginBottom:6 }}>Twilight shoot — date & time requested</label>
                         <div style={{ display:'flex', gap:10 }}>
                           <input type="date" value={twilightDate} onChange={e => setTwilightDate(e.target.value)} style={{ background:'rgba(200,194,187,0.04)', border:'0.5px solid rgba(200,194,187,0.09)', borderRadius:4, padding:'9px 12px', fontSize:12, color:'#C8C2BB', fontFamily:'inherit', outline:'none', flex:1 }} />
                           <select value={twilightTime} onChange={e => setTwilightTime(e.target.value)} style={{ background:'rgba(200,194,187,0.04)', border:'0.5px solid rgba(200,194,187,0.09)', borderRadius:4, padding:'9px 12px', fontSize:12, color:'#C8C2BB', fontFamily:'inherit', outline:'none' }}>
@@ -2042,7 +2199,7 @@ export default function ClientPortal() {
                     )}
                     {selectedShoot?.name === 'Property Ad' && (
                       <div style={{ marginTop:16 }}>
-                        <label style={{ fontSize:10, letterSpacing:'0.12em', textTransform:'uppercase', color:'rgba(200,194,187,0.4)', display:'block', marginBottom:6 }}>Filming orientation</label>
+                        <label style={{ fontSize:10, letterSpacing:'0.12em', textTransform:'uppercase', color:'#fff', display:'block', marginBottom:6 }}>Filming orientation</label>
                         <select value={filmingOrientation} onChange={e => setFilmingOrientation(e.target.value)} style={{ background:'rgba(200,194,187,0.04)', border:'0.5px solid rgba(200,194,187,0.09)', borderRadius:4, padding:'9px 12px', fontSize:12, color:'#C8C2BB', fontFamily:'inherit', outline:'none', width:'100%' }}>
                           <option value='Horizontal'>Horizontal</option>
                           <option value='Vertical'>Vertical</option>
@@ -2082,6 +2239,7 @@ export default function ClientPortal() {
                       ...(selectedShoot?.name === 'Property Ad' ? [{ key: 'Filming orientation', val: filmingOrientation }] : []),
                       { key: 'Deliverable package', val: `${selectedDel?.name} — $${selectedDel?.price} + GST` },
                       { key: 'Add-ons', val: selectedAddons.length ? selectedAddons.map(a => `${a.name} (+$${a.price})`).join(', ') : 'None' },
+                      ...(travelFee > 0 ? [{ key: 'Travel fee', val: `$${travelFee} + GST (auto-calculated from address)` }] : []),
                       { key: 'Preferred date', val: 'TBC — confirmed within 24 hrs' },
                       { key: 'Attachments', val: bookingAttachments.length ? `${bookingAttachments.length} file${bookingAttachments.length !== 1 ? 's' : ''} attached` : 'None' },
                     ]).map(({ key, val }) => (
@@ -2167,17 +2325,19 @@ export default function ClientPortal() {
                           property_live_date: propertyLiveDate || null,
                           address: propertyAddress,
                           notes: [
-                            bookingNotes ? 'Brief: ' + bookingNotes : '',
+                            bookingNotes ? 'Brief/Concept: ' + bookingNotes : '',
+                            propertyFeatures ? 'Property features: ' + propertyFeatures : '',
                             accessNotes ? 'Access: ' + accessNotes : '',
                             talentDetails ? 'Talent required: ' + talentDetails : '',
-                            shotList.replace(/[•\s]/g, '') ? 'Talent/lifestyle shot list:\n' + shotList : '',
+                            shotList.replace(/[•\s]/g, '') ? 'Suggested shot list:\n' + shotList : '',
                             referenceLinks.length ? 'References: ' + referenceLinks.join(', ') : '',
                             (twilightDate || twilightTime) ? 'Twilight shoot requested: ' + (twilightDate ? new Date(twilightDate + 'T12:00:00').toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' }) : 'date TBC') + (twilightTime ? ' at ' + formatTime12(twilightTime) : '') : '',
                             selectedShoot?.name === 'Property Ad' ? 'Filming orientation: ' + filmingOrientation : '',
+                            travelFee > 0 ? `Travel fee: $${travelFee} + GST (auto-calculated from property address)` : '',
                             clientPhone ? 'Phone: ' + clientPhone : '',
                           ].filter(Boolean).join('\n\n'),
-                          total: `$${((selectedShoot?.price || 0) + (selectedDel?.price || 0) + selectedAddons.reduce((s: number, a: any) => s + a.price, 0)).toLocaleString()} + GST`,
-                          total_price: (selectedShoot?.price || 0) + (selectedDel?.price || 0) + selectedAddons.reduce((s: number, a: any) => s + a.price, 0),
+                          total: `$${grandTotal.toLocaleString()} + GST`,
+                          total_price: grandTotal,
                           tc_accepted: true,
                           status: 'pending',
                           attachment_urls: bookingAttachments,
@@ -2219,9 +2379,11 @@ export default function ClientPortal() {
                           { label: 'Filming orientation', value: selectedShoot?.name === 'Property Ad' ? filmingOrientation : '' },
                           { label: 'Deliverables', value: selectedDel?.name },
                           { label: 'Add-ons', value: selectedAddons.length ? selectedAddons.map(a => a.name).join(', ') : 'None' },
+                          { label: 'Travel fee', value: travelFee > 0 ? `$${travelFee} + GST (auto-calculated)` : '' },
                           { label: 'Address', value: propertyAddress },
                           { label: 'Preferred date', value: preferredDate ? preferredDate + (preferredTime ? ' at ' + formatTime12(preferredTime) : '') : 'TBC' },
                           { label: 'Notes', value: bookingNotes },
+                          { label: 'Property features', value: propertyFeatures },
                           { label: 'Attachments', value: bookingAttachments.map(a => `${a.name}: ${a.url}`).join('\n') },
                         ]
                         await fetch('/api/notify-booking', {
