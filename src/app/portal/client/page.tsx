@@ -711,6 +711,11 @@ export default function ClientPortal() {
   const [shotList, setShotList] = useState("• \n• \n• \n• \n• ")
   const [twilightDate, setTwilightDate] = useState("")
   const [twilightTime, setTwilightTime] = useState("")
+  // Property Ad is filmed in one orientation, not both like the other
+  // packages — defaults to Horizontal unless the client explicitly switches
+  // it, since that's the more common pick for this package's use (listing
+  // sites, TV screens) and shouldn't require an extra click to get.
+  const [filmingOrientation, setFilmingOrientation] = useState('Horizontal')
   const [deliveryDue, setDeliveryDue] = useState("")
   const [bookingAttachments, setBookingAttachments] = useState<{ name: string; url: string; size: number }[]>([])
   const [uploadingAttachment, setUploadingAttachment] = useState(false)
@@ -1005,9 +1010,9 @@ export default function ClientPortal() {
       name: 'Property Ad', price: 690,
       tag: 'Quick & trending',
       description: 'A punchy 20–30s property ad built for social — fast turnaround, big impact.',
-      includes: ['20–30s engaging/trending property ad', 'Optional agent introduction', 'Up to 1.5hrs filming', 'Vertical & landscape formats', 'Carousel', 'Full creative control by Example Content'],
+      includes: ['20–30s engaging/trending property ad', 'Optional agent introduction', 'Up to 1.5hrs filming', 'Filmed in vertical or horizontal', 'Carousel', 'Full creative control by Example Content'],
       deliverables: [
-        { name: 'Property Ad (20–30s)', price: 0, includes: ['1x engaging/trending property ad', 'Optional agent introduction', 'Vertical & landscape formats', 'Google Drive delivery'] },
+        { name: 'Property Ad (20–30s)', price: 0, includes: ['1x engaging/trending property ad', 'Optional agent introduction', 'Filmed vertical or horizontal (your choice)', 'Google Drive delivery'] },
         { name: 'Carousel', price: 0, includes: ['1x branded property carousel', 'Google Drive delivery'] },
       ]
     },
@@ -1956,6 +1961,15 @@ export default function ClientPortal() {
                         </div>
                       </div>
                     )}
+                    {selectedShoot?.name === 'Property Ad' && (
+                      <div style={{ marginTop:16 }}>
+                        <label style={{ fontSize:10, letterSpacing:'0.12em', textTransform:'uppercase', color:'rgba(200,194,187,0.4)', display:'block', marginBottom:6 }}>Filming orientation</label>
+                        <select value={filmingOrientation} onChange={e => setFilmingOrientation(e.target.value)} style={{ background:'rgba(200,194,187,0.04)', border:'0.5px solid rgba(200,194,187,0.09)', borderRadius:4, padding:'9px 12px', fontSize:12, color:'#C8C2BB', fontFamily:'inherit', outline:'none', width:'100%' }}>
+                          <option value='Horizontal'>Horizontal</option>
+                          <option value='Vertical'>Vertical</option>
+                        </select>
+                      </div>
+                    )}
                     <div style={{ marginTop:16 }}>
                       <AttachmentUploader attachments={bookingAttachments} uploading={uploadingAttachment} onUpload={uploadBookingAttachments} onRemove={removeBookingAttachment} />
                       <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.3)', marginTop: 8, lineHeight: 1.5 }}>The more information provided the more we have to execute the best content possible.</div>
@@ -1986,6 +2000,7 @@ export default function ClientPortal() {
                     ] : [
                       { key: 'Category', val: 'Property & Architecture' },
                       { key: 'Shoot package', val: `${selectedShoot?.name} — $${selectedShoot?.price?.toLocaleString()} + GST` },
+                      ...(selectedShoot?.name === 'Property Ad' ? [{ key: 'Filming orientation', val: filmingOrientation }] : []),
                       { key: 'Deliverable package', val: `${selectedDel?.name} — $${selectedDel?.price} + GST` },
                       { key: 'Add-ons', val: selectedAddons.length ? selectedAddons.map(a => `${a.name} (+$${a.price})`).join(', ') : 'None' },
                       { key: 'Preferred date', val: 'TBC — confirmed within 24 hrs' },
@@ -2079,6 +2094,7 @@ export default function ClientPortal() {
                             shotList.replace(/[•\s]/g, '') ? 'Talent/lifestyle shot list:\n' + shotList : '',
                             referenceLinks.length ? 'References: ' + referenceLinks.join(', ') : '',
                             (twilightDate || twilightTime) ? 'Twilight shoot requested: ' + (twilightDate ? new Date(twilightDate + 'T12:00:00').toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' }) : 'date TBC') + (twilightTime ? ' at ' + formatTime12(twilightTime) : '') : '',
+                            selectedShoot?.name === 'Property Ad' ? 'Filming orientation: ' + filmingOrientation : '',
                             clientPhone ? 'Phone: ' + clientPhone : '',
                           ].filter(Boolean).join('\n\n'),
                           total: `$${((selectedShoot?.price || 0) + (selectedDel?.price || 0) + selectedAddons.reduce((s: number, a: any) => s + a.price, 0)).toLocaleString()} + GST`,
@@ -2121,6 +2137,7 @@ export default function ClientPortal() {
                         ] : [
                           { label: 'Listing agent', value: clientContactName },
                           { label: 'Package', value: selectedShoot?.name ? `${selectedShoot.name} — $${selectedShoot.price?.toLocaleString()} + GST` : '' },
+                          { label: 'Filming orientation', value: selectedShoot?.name === 'Property Ad' ? filmingOrientation : '' },
                           { label: 'Deliverables', value: selectedDel?.name },
                           { label: 'Add-ons', value: selectedAddons.length ? selectedAddons.map(a => a.name).join(', ') : 'None' },
                           { label: 'Address', value: propertyAddress },
