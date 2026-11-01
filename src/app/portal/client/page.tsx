@@ -1157,7 +1157,13 @@ export default function ClientPortal() {
     const dHam = haversineKm(coords, HAMILTON_CBD)
     const nearest = dAkl <= dHam ? { dist: dAkl, freeRadius: AUCKLAND_FREE_RADIUS_KM } : { dist: dHam, freeRadius: HAMILTON_FREE_RADIUS_KM }
     if (nearest.dist < nearest.freeRadius) return 0
-    return Math.round(nearest.dist * TRAVEL_RATE_PER_KM)
+    // Covers the full trip out to the property, then only the part of the
+    // trip back that's still outside the free radius — the crew drives the
+    // whole distance out regardless, but once they're back inside the free
+    // zone that remaining leg is ordinary local driving again, not billable
+    // travel. Charging the one-way distance alone under-covered the return.
+    const billableKm = nearest.dist + (nearest.dist - nearest.freeRadius)
+    return Math.round(billableKm * TRAVEL_RATE_PER_KM)
   }
 
   useEffect(() => {
