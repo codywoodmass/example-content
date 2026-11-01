@@ -6,8 +6,8 @@ import SiteFooter from '@/components/public/SiteFooter'
 import { WORK_PROJECTS, PropertyType, WorkProject } from '@/lib/workProjects'
 
 const STATS = [
-  { value: '10+', label: 'Years in property & architectural film' },
-  { value: '1,000s', label: 'Properties photographed & filmed' },
+  { value: '10+', label: "Years filming and photography NZ's finest homes" },
+  { value: 'Thousands', label: 'Properties photographed & filmed' },
   { value: 'Bare land → completed', label: 'Every stage, sunrise to sunset' },
 ]
 
