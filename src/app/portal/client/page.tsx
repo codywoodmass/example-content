@@ -1008,55 +1008,55 @@ export default function ClientPortal() {
   const propertyShootPackages = [
     {
       name: 'Property Ad', price: 690,
-      tag: 'Quick & trending',
-      description: 'A punchy 20–30s property ad built for social — fast turnaround, big impact.',
-      includes: ['20–30s engaging/trending property ad', 'Optional agent introduction', 'Up to 1.5hrs filming', 'Filmed in vertical or horizontal', 'Carousel', 'Full creative control by Example Content'],
+      tag: 'Engaging - Great value for money',
+      description: 'A punchy 20–30s property ad built for social — big impact.',
+      includes: ['20–30s engaging/trending property ad', 'Optional agent introduction', 'Up to 1.5hrs filming', 'Filmed in vertical or horizontal', 'Full creative control by Example Content', '8-10 Slide Instagram Carousel'],
       deliverables: [
         { name: 'Property Ad (20–30s)', price: 0, includes: ['1x engaging/trending property ad', 'Optional agent introduction', 'Filmed vertical or horizontal (your choice)', 'Google Drive delivery'] },
-        { name: 'Carousel', price: 0, includes: ['1x branded property carousel', 'Google Drive delivery'] },
+        { name: '8-10 Slide Instagram Carousel', price: 0, includes: ['1x branded property carousel', 'Google Drive delivery'] },
       ]
     },
     {
       name: 'Content Campaign Package', price: 890,
       tag: 'Campaign package',
       description: "Give us direction or just let us do the work creating ads for your property. Campaigns comprise of momentum and this load of content does exactly that.",
-      includes: ['20 Second Ad', '20 Second Property Ad', 'Carousel'],
+      includes: ['20 Second Ad', '20 Second Property Ad', '8-10 Slide Instagram Carousel'],
       allIncluded: true,
       deliverables: [
         { name: 'Ad (20s)', price: 0, includes: ['1x social-optimised video', 'Vertical & landscape formats', 'Google Drive delivery'] },
         { name: 'Property Ad (20s)', price: 0, includes: ['1x property-focused social video', 'Vertical & landscape formats', 'Google Drive delivery'] },
-        { name: 'Carousel (8-10 slides)', price: 0, includes: ['1x branded property carousel', 'Google Drive delivery'] },
+        { name: '8-10 Slide Instagram Carousel', price: 0, includes: ['1x branded property carousel', 'Google Drive delivery'] },
       ]
     },
     {
       name: 'The Walkthrough Package', price: 890,
       tag: 'Our base package',
       description: '60–90s cinematic property tour with a handful of agent lifestyle shots to bring the listing to life.',
-      includes: ['60–90s property tour', 'Agent lifestyle shots', 'Carousel'],
+      includes: ['60–90s property tour', 'Agent lifestyle shots', '8-10 Slide Instagram Carousel'],
       deliverables: [
         { name: 'Walkthrough Film (60–90s)', price: 0, includes: ['1x walkthrough film', 'Google Drive delivery'] },
         { name: '2x Showcase Reels (20s)', price: 0, includes: ['2x 20s showcase reels', 'Vertical & landscape', 'Google Drive delivery'] },
-        { name: 'Carousel', price: 0, includes: ['1x branded property carousel', 'Google Drive delivery'] },
+        { name: '8-10 Slide Instagram Carousel', price: 0, includes: ['1x branded property carousel', 'Google Drive delivery'] },
       ]
     },
     {
       name: 'Lifestyle and Living Package', price: 1280,
       tag: 'The lifestyle showcase',
       description: 'Everything in The Walkthrough Package, plus a full hour of lifestyle filming with talent to elevate the property narrative.',
-      includes: ['60–90s property tour', '1hr lifestyle shoot with talent', 'Agent lifestyle shots', 'Vertical formatting', 'Carousel'],
+      includes: ['60–90s property tour', '1hr lifestyle shoot with talent', 'Agent lifestyle shots', 'Vertical formatting', '8-10 Slide Instagram Carousel'],
       deliverables: [
         { name: 'Showcase Film (60–90s)', price: 0, includes: ['1x cinematic film', 'Vertical & landscape formats', 'Google Drive delivery'] },
         { name: '3x Reels', price: 0, includes: ['3x social reels', 'Vertical & landscape formats', 'Google Drive delivery'] },
-        { name: 'Carousel', price: 0, includes: ['1x branded property carousel', 'Google Drive delivery'] },
+        { name: '8-10 Slide Instagram Carousel', price: 0, includes: ['1x branded property carousel', 'Google Drive delivery'] },
       ]
     },
     {
       name: 'Media Release Package', price: 2480,
       tag: 'Full production',
       description: 'For the most upmarket and desirable homes. Everything you could need to drill home the perfect marketing campaign, showcased only in the best light.',
-      includes: ['Morning, afternoon & twilight shoot', 'Lifestyle shoot + talking to camera', '90 Second Market Leading Property Showcase', '20-30 Second Ad', 'Creative Carousel', '5-8 Second Ad'],
+      includes: ['Morning, afternoon & twilight shoot', 'Lifestyle shoot + talking to camera', '90 Second Market Leading Property Showcase', '20-30 Second Ad', '5-8 Second Ad', '8-10 Slide Instagram Carousel'],
       deliverables: [
-        { name: 'Full Media Release Package', price: 0, includes: ['1x Market-leading property showcase (90s)', '1x Ad (20-30s)', '1x Creative carousel', '1x Ad (5-8s)', 'Google Drive delivery'] },
+        { name: 'Full Media Release Package', price: 0, includes: ['1x Market-leading property showcase (90s)', '1x Ad (20-30s)', '1x Ad (5-8s)', '1x 8-10 Slide Instagram Carousel', 'Google Drive delivery'] },
       ]
     },
   ]
@@ -1079,7 +1079,7 @@ export default function ClientPortal() {
     { name: 'Additional Lifestyle Filming (1hr)', price: 175, desc: 'An extra hour of lifestyle filming with talent' },
     { name: 'Additional 20s Reel', price: 250, desc: 'An edited reel consisting of footage from the shoot (20s)' },
     { name: 'Additional 40s Reel', price: 400, desc: 'An edited reel consisting of footage from the shoot (40s)' },
-    { name: 'Carousel', price: 100, desc: 'Visually engaging property showcase carousel' },
+    { name: '8-10 Slide Instagram Carousel', price: 100, desc: 'Visually engaging property showcase carousel' },
     { name: 'Open Home Story', price: 80, desc: 'Short-form story content for open home promotion' },
     { name: 'Twilight Shoot', price: 350, desc: 'Golden hour & dusk exterior shoot' },
     { name: 'Travel Flat Rate — Raglan', price: 150, desc: 'Flat travel rate for shoots in Raglan' },
@@ -1100,7 +1100,7 @@ export default function ClientPortal() {
   // one, so a client can't end up paying $100 extra for something
   // that's already covered.
   const packageHasCarousel = selectedShoot?.deliverables?.some((d: any) => d.name.toLowerCase().includes('carousel'))
-  const addons = (selectedCat === 'property' ? propertyAddons : commercialAddons).filter(a => !(packageHasCarousel && a.name === 'Carousel'))
+  const addons = (selectedCat === 'property' ? propertyAddons : commercialAddons).filter(a => !(packageHasCarousel && a.name.toLowerCase().includes('carousel')))
 
   const s = { panel: { background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7 } as React.CSSProperties }
   const cInp: React.CSSProperties = { background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }
