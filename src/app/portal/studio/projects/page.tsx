@@ -209,7 +209,7 @@ function ProjectsPageInner() {
   const modalProjectRef = useRef<Project | null>(null)
   useEffect(() => { modalProjectRef.current = modalProject }, [modalProject])
   const [modalEditing, setModalEditing] = useState(false)
-  const [modalTab, setModalTab] = useState<'overview' | 'brief' | 'internal' | 'attachments' | 'time'>('overview')
+  const [modalTab, setModalTab] = useState<'overview' | 'brief' | 'internal' | 'time'>('overview')
   useEffect(() => { setModalTab('overview') }, [modalProject?.id])
   const [modalSaving, setModalSaving] = useState(false)
   const [modalSaved, setModalSaved] = useState(false)
@@ -1578,7 +1578,7 @@ function ProjectsPageInner() {
                 )
               })()}
               <div style={{ display: 'flex', gap: 4, marginBottom: 20, borderBottom: '0.5px solid rgba(200,194,187,0.09)' }}>
-                {[{ id: 'overview', label: 'Job' }, { id: 'brief', label: 'Brief' }, { id: 'internal', label: 'Internal' }, { id: 'attachments', label: 'Attachments' }, { id: 'time', label: 'Time Tracking' }].map(tab => (
+                {[{ id: 'overview', label: 'Job' }, { id: 'brief', label: 'Brief' }, { id: 'internal', label: 'Internal' }, { id: 'time', label: 'Time Tracking' }].map(tab => (
                   <button key={tab.id} onClick={() => setModalTab(tab.id as any)} style={{ fontSize: 12, padding: '10px 14px', background: 'transparent', border: 'none', borderBottom: `2px solid ${modalTab === tab.id ? '#C8C2BB' : 'transparent'}`, color: modalTab === tab.id ? '#C8C2BB' : 'rgba(200,194,187,0.35)', cursor: 'pointer', fontFamily: 'inherit', marginBottom: -1 }}>{tab.label}</button>
                 ))}
               </div>
@@ -1829,38 +1829,74 @@ function ProjectsPageInner() {
                   </div>
                 </div>
               )}
-              {modalTab === 'attachments' && (
-                <div style={{ background: 'rgba(100,150,220,0.06)', border: '0.5px solid rgba(100,150,220,0.2)', borderRadius: 6, padding: '14px 16px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                    <div style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(100,150,220,0.85)' }}>Attachments ({modalProject.attachment_urls?.length || 0})</div>
-                    <label style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '5px 10px', borderRadius: 3, border: '0.5px solid rgba(100,150,220,0.3)', color: uploadingAttachment ? 'rgba(100,150,220,0.4)' : 'rgba(100,150,220,0.85)', cursor: uploadingAttachment ? 'default' : 'pointer', fontFamily: 'inherit' }}>
-                      {uploadingAttachment ? 'Uploading...' : '+ Add'}
-                      <input type="file" multiple disabled={uploadingAttachment} style={{ display: 'none' }} onChange={e => { if (e.target.files && e.target.files.length > 0) addProjectAttachments(modalProject, e.target.files); e.target.value = '' }} />
-                    </label>
-                  </div>
-                  {(!modalProject.attachment_urls || modalProject.attachment_urls.length === 0) ? (
-                    <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.3)' }}>No attachments yet</div>
-                  ) : (
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                      {modalProject.attachment_urls.map((a, ai) => (
-                        <div key={ai} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#C8C2BB', background: 'rgba(200,194,187,0.06)', border: '0.5px solid rgba(200,194,187,0.12)', borderRadius: 4, padding: '6px 6px 6px 10px', maxWidth: 260 }}>
-                          <span onClick={() => setPreviewAttachment(a)} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', overflow: 'hidden' }}>
-                            <span>{attachmentIcon(a.name)}</span>
-                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.name}</span>
-                          </span>
-                          <button onClick={() => removeProjectAttachment(modalProject, a.url)} style={{ fontSize: 12, color: 'rgba(210,90,90,0.6)', background: 'transparent', border: 'none', cursor: 'pointer', flexShrink: 0, padding: '0 2px' }}>✕</button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
               {modalTab === 'brief' && (
                 <div style={{ marginBottom: 20 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                     <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>Internal document · visible to studio only</div>
                     {(briefSaving || briefSaved) && <span style={{ fontSize: 11, color: briefSaving ? 'rgba(210,175,80,0.8)' : 'rgba(100,200,130,0.8)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>{briefSaving ? 'Saving...' : '✓ Saved'}</span>}
                   </div>
+                  {/* REFERENCES */}
+                  <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 10 }}>References</div>
+                  {(modalProject.references || []).length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 14, marginBottom: 14 }}>
+                      {modalProject.references.map(ref => {
+                        const embed = getEmbedInfo(ref.url)
+                        return (
+                          <div key={ref.id} style={{ width: 'calc(50% - 7px)', minWidth: 260, background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.08)', borderRadius: 6, overflow: 'hidden' }}>
+                            {/* Instagram's embed includes its header + caption, not
+                                just the video, so it needs a taller box than the
+                                plain 16:9 players — a fixed height with its own
+                                scroll is safer than clipping it. */}
+                            <div style={{ position: 'relative' as const, width: '100%', aspectRatio: embed?.platform === 'Instagram' ? undefined : '16/9', height: embed?.platform === 'Instagram' ? 460 : undefined, background: '#000', overflow: 'auto' }}>
+                              {embed ? (
+                                <iframe src={embed.embedUrl} style={embed.platform === 'Instagram' ? { width: '100%', height: '100%', border: 'none' } : { position: 'absolute' as const, inset: 0, width: '100%', height: '100%', border: 'none' }} allow="autoplay; fullscreen; picture-in-picture" allowFullScreen />
+                              ) : (
+                                <div style={{ position: 'absolute' as const, inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: 'rgba(200,194,187,0.3)' }}>Unsupported link</div>
+                              )}
+                            </div>
+                            <div style={{ padding: 10 }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                                <a href={ref.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'rgba(100,150,220,0.8)', textDecoration: 'none' }}>{embed?.platform || 'Link'} ↗</a>
+                                <button onClick={() => removeReference(ref.id)} style={{ fontSize: 13, color: 'rgba(210,90,90,0.6)', background: 'transparent', border: 'none', cursor: 'pointer', lineHeight: 1 }}>✕</button>
+                              </div>
+                              <textarea value={ref.note} onChange={e => updateReferenceNote(ref.id, e.target.value)} placeholder="What's this reference for?" style={{ width: '100%', background: 'rgba(0,0,0,0.2)', border: '0.5px solid rgba(200,194,187,0.08)', borderRadius: 4, padding: '7px 9px', fontSize: 11, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', lineHeight: 1.5, resize: 'vertical' as const, minHeight: 48, boxSizing: 'border-box' as const }} />
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const, marginBottom: 20 }}>
+                    <input value={newRefUrl} onChange={e => setNewRefUrl(e.target.value)} placeholder="Paste a YouTube, Vimeo, Facebook or Instagram link (or embed code)..." style={{ flex: '2 1 260px', background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.08)', borderRadius: 4, padding: '8px 10px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }} />
+                    <input value={newRefNote} onChange={e => setNewRefNote(e.target.value)} placeholder="Note (optional)" style={{ flex: '1 1 160px', background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.08)', borderRadius: 4, padding: '8px 10px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }} />
+                    <button disabled={!newRefUrl.trim()} onClick={() => { addReference(newRefUrl.trim(), newRefNote.trim()); setNewRefUrl(''); setNewRefNote('') }} style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: newRefUrl.trim() ? 'rgba(200,194,187,0.7)' : 'rgba(200,194,187,0.25)', background: 'transparent', cursor: newRefUrl.trim() ? 'pointer' : 'not-allowed', fontFamily: 'inherit', flexShrink: 0 }}>+ Add</button>
+                  </div>
+                  {/* ATTACHMENTS */}
+                  <div style={{ background: 'rgba(100,150,220,0.06)', border: '0.5px solid rgba(100,150,220,0.2)', borderRadius: 6, padding: '14px 16px', marginBottom: 20 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                      <div style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(100,150,220,0.85)' }}>Attachments ({modalProject.attachment_urls?.length || 0})</div>
+                      <label style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '5px 10px', borderRadius: 3, border: '0.5px solid rgba(100,150,220,0.3)', color: uploadingAttachment ? 'rgba(100,150,220,0.4)' : 'rgba(100,150,220,0.85)', cursor: uploadingAttachment ? 'default' : 'pointer', fontFamily: 'inherit' }}>
+                        {uploadingAttachment ? 'Uploading...' : '+ Add'}
+                        <input type="file" multiple disabled={uploadingAttachment} style={{ display: 'none' }} onChange={e => { if (e.target.files && e.target.files.length > 0) addProjectAttachments(modalProject, e.target.files); e.target.value = '' }} />
+                      </label>
+                    </div>
+                    {(!modalProject.attachment_urls || modalProject.attachment_urls.length === 0) ? (
+                      <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.3)' }}>No attachments yet</div>
+                    ) : (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                        {modalProject.attachment_urls.map((a, ai) => (
+                          <div key={ai} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#C8C2BB', background: 'rgba(200,194,187,0.06)', border: '0.5px solid rgba(200,194,187,0.12)', borderRadius: 4, padding: '6px 6px 6px 10px', maxWidth: 260 }}>
+                            <span onClick={() => setPreviewAttachment(a)} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', overflow: 'hidden' }}>
+                              <span>{attachmentIcon(a.name)}</span>
+                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.name}</span>
+                            </span>
+                            <button onClick={() => removeProjectAttachment(modalProject, a.url)} style={{ fontSize: 12, color: 'rgba(210,90,90,0.6)', background: 'transparent', border: 'none', cursor: 'pointer', flexShrink: 0, padding: '0 2px' }}>✕</button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ height: 1, background: 'rgba(200,194,187,0.07)', margin: '4px 0 20px' }} />
                   {/* TOOLBAR */}
                   <style>{`
                     .brief-tb-btn { font-family: inherit; cursor: pointer; transition: background 0.12s, color 0.12s, border-color 0.12s; }
@@ -1942,42 +1978,6 @@ function ProjectsPageInner() {
                   />
                   <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
                     <button onClick={() => navigator.clipboard.writeText(briefEditorRef.current?.innerText || '')} style={{ fontSize: 10, color: 'rgba(200,194,187,0.35)', background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>Copy plain text</button>
-                  </div>
-                  <div style={{ height: 1, background: 'rgba(200,194,187,0.07)', margin: '24px 0 20px' }} />
-                  <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 10 }}>References</div>
-                  {(modalProject.references || []).length > 0 && (
-                    <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 14, marginBottom: 14 }}>
-                      {modalProject.references.map(ref => {
-                        const embed = getEmbedInfo(ref.url)
-                        return (
-                          <div key={ref.id} style={{ width: 'calc(50% - 7px)', minWidth: 260, background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.08)', borderRadius: 6, overflow: 'hidden' }}>
-                            {/* Instagram's embed includes its header + caption, not
-                                just the video, so it needs a taller box than the
-                                plain 16:9 players — a fixed height with its own
-                                scroll is safer than clipping it. */}
-                            <div style={{ position: 'relative' as const, width: '100%', aspectRatio: embed?.platform === 'Instagram' ? undefined : '16/9', height: embed?.platform === 'Instagram' ? 460 : undefined, background: '#000', overflow: 'auto' }}>
-                              {embed ? (
-                                <iframe src={embed.embedUrl} style={embed.platform === 'Instagram' ? { width: '100%', height: '100%', border: 'none' } : { position: 'absolute' as const, inset: 0, width: '100%', height: '100%', border: 'none' }} allow="autoplay; fullscreen; picture-in-picture" allowFullScreen />
-                              ) : (
-                                <div style={{ position: 'absolute' as const, inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: 'rgba(200,194,187,0.3)' }}>Unsupported link</div>
-                              )}
-                            </div>
-                            <div style={{ padding: 10 }}>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                                <a href={ref.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'rgba(100,150,220,0.8)', textDecoration: 'none' }}>{embed?.platform || 'Link'} ↗</a>
-                                <button onClick={() => removeReference(ref.id)} style={{ fontSize: 13, color: 'rgba(210,90,90,0.6)', background: 'transparent', border: 'none', cursor: 'pointer', lineHeight: 1 }}>✕</button>
-                              </div>
-                              <textarea value={ref.note} onChange={e => updateReferenceNote(ref.id, e.target.value)} placeholder="What's this reference for?" style={{ width: '100%', background: 'rgba(0,0,0,0.2)', border: '0.5px solid rgba(200,194,187,0.08)', borderRadius: 4, padding: '7px 9px', fontSize: 11, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', lineHeight: 1.5, resize: 'vertical' as const, minHeight: 48, boxSizing: 'border-box' as const }} />
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )}
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const }}>
-                    <input value={newRefUrl} onChange={e => setNewRefUrl(e.target.value)} placeholder="Paste a YouTube, Vimeo, Facebook or Instagram link (or embed code)..." style={{ flex: '2 1 260px', background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.08)', borderRadius: 4, padding: '8px 10px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }} />
-                    <input value={newRefNote} onChange={e => setNewRefNote(e.target.value)} placeholder="Note (optional)" style={{ flex: '1 1 160px', background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.08)', borderRadius: 4, padding: '8px 10px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }} />
-                    <button disabled={!newRefUrl.trim()} onClick={() => { addReference(newRefUrl.trim(), newRefNote.trim()); setNewRefUrl(''); setNewRefNote('') }} style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: newRefUrl.trim() ? 'rgba(200,194,187,0.7)' : 'rgba(200,194,187,0.25)', background: 'transparent', cursor: newRefUrl.trim() ? 'pointer' : 'not-allowed', fontFamily: 'inherit', flexShrink: 0 }}>+ Add</button>
                   </div>
                 </div>
               )}
