@@ -1314,7 +1314,7 @@ export default function ClientPortal() {
   if (loading) return <LoadingScreen />
 
   return (
-    <main style={{ background: '#0E1014', minHeight: '100vh', fontFamily: 'Inter, sans-serif', color: '#C8C2BB', display: 'flex' }}>
+    <main style={{ background: '#0E1014', minHeight: '100vh', fontFamily: 'Plus Jakarta Sans, sans-serif', color: '#C8C2BB', display: 'flex' }}>
       <style>{`
         .ec-client-topbar { display: none; }
         .ec-client-backdrop { display: none; }

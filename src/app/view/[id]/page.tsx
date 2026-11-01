@@ -22,7 +22,7 @@ export default function PublicContentViewer() {
 
   if (loading) {
     return (
-      <main style={{ background: '#0E1014', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Inter, sans-serif' }}>
+      <main style={{ background: '#0E1014', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
         <div style={{ color: 'rgba(200,194,187,0.4)', fontSize: 13 }}>Loading...</div>
       </main>
     )
@@ -30,7 +30,7 @@ export default function PublicContentViewer() {
 
   if (notFound || !project) {
     return (
-      <main style={{ background: '#0E1014', minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', fontFamily: 'Inter, sans-serif', gap: 16, textAlign: 'center', padding: '0 24px' }}>
+      <main style={{ background: '#0E1014', minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', fontFamily: 'Plus Jakarta Sans, sans-serif', gap: 16, textAlign: 'center', padding: '0 24px' }}>
         <img src="/images/Pale_logo_EX.png" alt="Example Content" style={{ height: 36, objectFit: 'contain', opacity: 0.6, marginBottom: 8 }} />
         <div style={{ color: 'rgba(200,194,187,0.5)', fontSize: 14 }}>This link isn't available.</div>
         <div style={{ color: 'rgba(200,194,187,0.3)', fontSize: 12 }}>It may have been removed, or the content hasn't been delivered yet. Contact Example Content if you think this is a mistake.</div>
@@ -39,7 +39,7 @@ export default function PublicContentViewer() {
   }
 
   return (
-    <main style={{ background: '#0E1014', minHeight: '100vh', fontFamily: 'Inter, sans-serif', color: '#C8C2BB' }}>
+    <main style={{ background: '#0E1014', minHeight: '100vh', fontFamily: 'Plus Jakarta Sans, sans-serif', color: '#C8C2BB' }}>
       <div style={{ padding: '18px clamp(20px, 5vw, 40px)', borderBottom: '0.5px solid rgba(200,194,187,0.09)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, background: 'rgba(14,16,20,0.92)', backdropFilter: 'blur(10px)', zIndex: 10 }}>
         <img src="/images/Pale_logo_EX.png" alt="Example Content" style={{ height: 30, objectFit: 'contain' }} />
         <span style={{ fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.3)' }}>Shared with you</span>

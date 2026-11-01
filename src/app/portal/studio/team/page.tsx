@@ -222,7 +222,7 @@ export default function TeamPage() {
   if (!authorized) return <main style={{ background: '#0E1014', minHeight: '100vh' }} />
 
   return (
-    <main style={{ background: '#0E1014', minHeight: '100vh', fontFamily: 'Inter, sans-serif', color: '#C8C2BB', fontSize: 13, display: 'flex' }}>
+    <main style={{ background: '#0E1014', minHeight: '100vh', fontFamily: 'Plus Jakarta Sans, sans-serif', color: '#C8C2BB', fontSize: 13, display: 'flex' }}>
       <ToastHost />
       <ConfirmHost />
       <StudioSidebar active="team" />

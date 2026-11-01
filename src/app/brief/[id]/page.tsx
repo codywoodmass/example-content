@@ -50,7 +50,7 @@ export default function PublicBriefViewer() {
 
   if (loading) {
     return (
-      <main style={{ background: '#0E1014', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Inter, sans-serif' }}>
+      <main style={{ background: '#0E1014', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
         <div style={{ color: 'rgba(200,194,187,0.4)', fontSize: 13 }}>Loading...</div>
       </main>
     )
@@ -58,7 +58,7 @@ export default function PublicBriefViewer() {
 
   if (notFound || !brief) {
     return (
-      <main style={{ background: '#0E1014', minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', fontFamily: 'Inter, sans-serif', gap: 16, textAlign: 'center', padding: '0 24px' }}>
+      <main style={{ background: '#0E1014', minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', fontFamily: 'Plus Jakarta Sans, sans-serif', gap: 16, textAlign: 'center', padding: '0 24px' }}>
         <img src="/images/Pale_logo_EX.png" alt="Example Content" style={{ height: 36, objectFit: 'contain', opacity: 0.6, marginBottom: 8 }} />
         <div style={{ color: 'rgba(200,194,187,0.5)', fontSize: 14 }}>This brief isn't available.</div>
         <div style={{ color: 'rgba(200,194,187,0.3)', fontSize: 12 }}>It may not have been sent yet. Contact Example Content if you think this is a mistake.</div>
@@ -69,7 +69,7 @@ export default function PublicBriefViewer() {
   const d = brief.data || {}
 
   return (
-    <main style={{ background: '#0E1014', minHeight: '100vh', fontFamily: 'Inter, sans-serif', color: '#C8C2BB' }}>
+    <main style={{ background: '#0E1014', minHeight: '100vh', fontFamily: 'Plus Jakarta Sans, sans-serif', color: '#C8C2BB' }}>
       <style>{`@media (max-width: 760px) { .ec-brief-grid { grid-template-columns: 1fr !important; } }`}</style>
       <div style={{ maxWidth: 800, margin: '0 auto', background: '#1A1F28', minHeight: '100vh' }}>
         {/* COVER SECTION */}

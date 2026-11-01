@@ -16,7 +16,7 @@ export default function InvoicePrintPage() {
   }, [data])
 
   if (!data) return (
-    <div style={{ fontFamily: 'Inter, sans-serif', padding: 40, color: '#333' }}>
+    <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', padding: 40, color: '#333' }}>
       <p>No invoice data found. Please go back and click "Export PDF" from the Invoices page.</p>
     </div>
   )
@@ -32,7 +32,7 @@ export default function InvoicePrintPage() {
         }
         * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       `}</style>
-      <div style={{ width: '100vw', minHeight: '100vh', background: '#fff', color: '#111', fontFamily: 'Inter, sans-serif', padding: '64px 72px', boxSizing: 'border-box' }}>
+      <div style={{ width: '100vw', minHeight: '100vh', background: '#fff', color: '#111', fontFamily: 'Plus Jakarta Sans, sans-serif', padding: '64px 72px', boxSizing: 'border-box' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 56 }}>
           <img src="/images/Pale_logo_EX.png" alt="Example Content" style={{ height: 40, objectFit: 'contain', filter: 'invert(1)' }} />
           <div style={{ textAlign: 'right' }}>

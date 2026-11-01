@@ -164,13 +164,13 @@ export default function InvoicesPage() {
   for (const inv of invoices) (grouped[inv.status] || grouped.draft).push(inv)
 
   if (loading) return (
-    <main style={{ background: '#0E1014', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Inter, sans-serif' }}>
+    <main style={{ background: '#0E1014', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
       <div style={{ color: 'rgba(200,194,187,0.4)', fontSize: 13 }}>Loading invoices...</div>
     </main>
   )
 
   return (
-    <main style={{ background: '#0E1014', minHeight: '100vh', fontFamily: 'Inter, sans-serif', color: '#C8C2BB', fontSize: 13, display: 'flex' }}>
+    <main style={{ background: '#0E1014', minHeight: '100vh', fontFamily: 'Plus Jakarta Sans, sans-serif', color: '#C8C2BB', fontSize: 13, display: 'flex' }}>
       <ToastHost />
       <ConfirmHost />
       <StudioSidebar active="invoices" />

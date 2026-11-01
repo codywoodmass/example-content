@@ -31,7 +31,7 @@ export default function QuotePrintPage() {
   }, [data])
 
   if (!data) return (
-    <div style={{ fontFamily: 'Inter, sans-serif', padding: 40, color: '#333' }}>
+    <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', padding: 40, color: '#333' }}>
       <p>No quote data found. Please go back and click "↓ Save as PDF" from the Quote Generator.</p>
     </div>
   )
@@ -51,7 +51,7 @@ export default function QuotePrintPage() {
         }
         * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       `}</style>
-      <div style={{ background: DOC.bg, color: DOC.text, width: '100%', maxWidth: 800, margin: '0 auto', padding: '56px 64px', fontFamily: 'Inter, sans-serif', boxSizing: 'border-box' }}>
+      <div style={{ background: DOC.bg, color: DOC.text, width: '100%', maxWidth: 800, margin: '0 auto', padding: '56px 64px', fontFamily: 'Plus Jakarta Sans, sans-serif', boxSizing: 'border-box' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 40, paddingBottom: 24, borderBottom: `1px solid ${DOC.border}` }}>
           <div>
             <img src="/images/Pale_logo_EX.png" alt="Example Content" style={{ height: 32, objectFit: 'contain', filter: 'invert(1)', opacity: 0.85, marginBottom: 14 }} />

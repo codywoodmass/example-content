@@ -65,12 +65,12 @@ export default function AcceptInvitePage() {
   }
 
   if (checking) {
-    return <main style={{ background: '#0E1014', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Inter, sans-serif', color: 'rgba(200,194,187,0.4)', fontSize: 13 }}>Checking invite...</main>
+    return <main style={{ background: '#0E1014', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Plus Jakarta Sans, sans-serif', color: 'rgba(200,194,187,0.4)', fontSize: 13 }}>Checking invite...</main>
   }
 
   if (!invite || invite.status !== 'pending') {
     return (
-      <main style={{ background: '#0E1014', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Inter, sans-serif' }}>
+      <main style={{ background: '#0E1014', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
         <div style={{ width: '100%', maxWidth: 420, padding: '0 24px', textAlign: 'center' }}>
           <div style={{ fontSize: 18, fontWeight: 500, color: '#fff', marginBottom: 10 }}>{!invite ? 'Invite not found' : 'This invite has already been used'}</div>
           <div style={{ fontSize: 13, color: 'rgba(200,194,187,0.4)', lineHeight: 1.7, marginBottom: 28 }}>{!invite ? "This invite link isn't valid — check it was copied in full, or ask whoever invited you to send a new one." : 'If this was you, just sign in below.'}</div>
@@ -82,7 +82,7 @@ export default function AcceptInvitePage() {
 
   if (awaitingConfirmation) {
     return (
-      <main style={{ background: '#0E1014', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Inter, sans-serif' }}>
+      <main style={{ background: '#0E1014', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
         <div style={{ width: '100%', maxWidth: 420, padding: '0 24px', textAlign: 'center' }}>
           <div style={{ width: 56, height: 56, borderRadius: '50%', border: '1px solid rgba(100,200,130,0.4)', background: 'rgba(100,200,130,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px', fontSize: 24 }}>✓</div>
           <div style={{ fontSize: 18, fontWeight: 500, color: '#fff', marginBottom: 10 }}>Check your email</div>
@@ -94,7 +94,7 @@ export default function AcceptInvitePage() {
   }
 
   return (
-    <main style={{ background: '#0E1014', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Inter, sans-serif' }}>
+    <main style={{ background: '#0E1014', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
       <div style={{ width: '100%', maxWidth: 420, padding: '0 24px' }}>
 
         <div style={{ textAlign: 'center', marginBottom: 40 }}>

@@ -133,7 +133,7 @@ export default function StudioSidebar({ active, onViewChange }: { active?: strin
       {/* BACKDROP */}
       <div className={`ec-studio-backdrop ${menuOpen ? 'open' : ''}`} onClick={() => setMenuOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 55 }} />
 
-      <aside className={`ec-studio-sidebar ${menuOpen ? 'open' : ''}`} style={{ background: '#14181F', borderRight: '0.5px solid rgba(200,194,187,0.09)', display: 'flex', flexDirection: 'column', fontFamily: 'Inter, sans-serif' }}>
+      <aside className={`ec-studio-sidebar ${menuOpen ? 'open' : ''}`} style={{ background: '#14181F', borderRight: '0.5px solid rgba(200,194,187,0.09)', display: 'flex', flexDirection: 'column', fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
         <div style={{ padding: '16px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <img src="/images/Pale_logo_EX.png" alt="Example Content" style={{ height: 44, objectFit: 'contain', maxWidth: 174 }} />
           <button onClick={() => setMenuOpen(false)} aria-label="Close menu" className="ec-studio-sidebar-close" style={{ background: 'transparent', border: 'none', color: 'rgba(200,194,187,0.5)', fontSize: 20, cursor: 'pointer', lineHeight: 1 }}>×</button>

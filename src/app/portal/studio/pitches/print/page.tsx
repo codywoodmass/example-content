@@ -19,7 +19,7 @@ export default function PitchPrintPage() {
   }, [data])
 
   if (!data) return (
-    <div style={{ fontFamily: 'Inter, sans-serif', padding: 40, color: '#333' }}>
+    <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', padding: 40, color: '#333' }}>
       <p>No pitch deck data found. Please go back and click "↓ PDF" from the pitch deck viewer.</p>
     </div>
   )

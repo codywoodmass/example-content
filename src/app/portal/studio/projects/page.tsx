@@ -1232,13 +1232,13 @@ function ProjectsPageInner() {
     )
   }
   if (loading) return (
-    <main style={{ background: '#0E1014', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Inter, sans-serif' }}>
+    <main style={{ background: '#0E1014', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
       <div style={{ color: 'rgba(200,194,187,0.4)', fontSize: 13 }}>Loading projects...</div>
     </main>
   )
 
   return (
-    <main style={{ background: '#0E1014', minHeight: '100vh', fontFamily: 'Inter, sans-serif', color: '#C8C2BB', fontSize: 13, display: 'flex' }}>
+    <main style={{ background: '#0E1014', minHeight: '100vh', fontFamily: 'Plus Jakarta Sans, sans-serif', color: '#C8C2BB', fontSize: 13, display: 'flex' }}>
       <ToastHost />
       <ConfirmHost />
       <StudioSidebar active="projects" />
@@ -1974,7 +1974,7 @@ function ProjectsPageInner() {
                     suppressContentEditableWarning
                     className="brief-editor"
                     onInput={e => { const html = (e.target as HTMLDivElement).innerHTML; setBriefDocContent(html); briefContentRef.current = html; if (modalProject) autoSaveBrief(html, modalProject.id) }}
-                    style={{ background: 'rgba(200,194,187,0.02)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 6, padding: '24px 32px', fontSize: 13, color: '#C8C2BB', fontFamily: 'Inter, sans-serif', lineHeight: 1.8, outline: 'none', minHeight: 420 }}
+                    style={{ background: 'rgba(200,194,187,0.02)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 6, padding: '24px 32px', fontSize: 13, color: '#C8C2BB', fontFamily: 'Plus Jakarta Sans, sans-serif', lineHeight: 1.8, outline: 'none', minHeight: 420 }}
                   />
                   <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
                     <button onClick={() => navigator.clipboard.writeText(briefEditorRef.current?.innerText || '')} style={{ fontSize: 10, color: 'rgba(200,194,187,0.35)', background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>Copy plain text</button>
