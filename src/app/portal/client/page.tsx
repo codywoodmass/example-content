@@ -2,6 +2,7 @@
 import React from 'react'
 import { useEffect, useState } from 'react'
 import { supabase, ensureClientProfile } from '@/lib/supabase'
+import { sendTeamInvite, removeTeamMember, revokeTeamInvite } from '@/lib/clientTeam'
 import { formatTime12, localDateKey, addBusinessDays } from '@/lib/time'
 import { stageLabel } from '@/lib/stages'
 import { useRouter } from 'next/navigation'
@@ -68,6 +69,16 @@ function IconReceipt({ size = 17, color, style }: IconProps) {
       <path d="M6 3h12v18l-2-1.4L14 21l-2-1.4L10 21l-2-1.4L6 21V3z" />
       <line x1="9" y1="8" x2="15" y2="8" />
       <line x1="9" y1="12" x2="15" y2="12" />
+    </svg>
+  )
+}
+function IconUsers({ size = 17, color, style }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" style={{ color, ...style }} {...ICON_BASE}>
+      <circle cx="9" cy="8" r="3.2" />
+      <path d="M3.3 20c.6-3.4 3-5.5 5.7-5.5s5.1 2.1 5.7 5.5" />
+      <path d="M15.5 5.3c1.4.4 2.4 1.7 2.4 3.2 0 1.5-1 2.8-2.4 3.2" />
+      <path d="M16.3 14.7c2.3.5 4 2.4 4.4 5.3" />
     </svg>
   )
 }
@@ -252,7 +263,7 @@ function ProjectThumbSquare({ project }: { project: any }) {
   )
 }
 
-function DriveFolder({ project, clientEmail, clientName }: { project: any; clientEmail?: string; clientName?: string }) {
+function DriveFolder({ project, clientEmail, clientName }: { project: any; clientEmail?: string | null; clientName?: string }) {
   const [files, setFiles] = React.useState<any[]>([])
   const [loading, setLoading] = React.useState(true)
   const [previewFile, setPreviewFile] = React.useState<any>(null)
@@ -679,6 +690,19 @@ function AttachmentUploader({ attachments, uploading, onUpload, onRemove }: { at
 export default function ClientPortal() {
   const router = useRouter()
   const [user, setUser] = useState<any>(null)
+  // The email every project/booking/invoice/notification query below is
+  // actually scoped to — the main account holder's own login email for them,
+  // or the main account's email for a sub-user logged in under their own
+  // separate login (resolved via client_members). Everything that reads or
+  // writes client-owned data should use this, not user?.email directly, or a
+  // sub-user would see/write against their own personal email instead of the
+  // shared account they were invited into.
+  const [accountEmail, setAccountEmail] = useState<string | null>(null)
+  const [teamMembers, setTeamMembers] = useState<{ id: string; member_email: string; member_name: string }[]>([])
+  const [teamInvites, setTeamInvites] = useState<{ id: string; invited_email: string; invited_name: string; created_at: string }[]>([])
+  const [teamInviteName, setTeamInviteName] = useState('')
+  const [teamInviteEmail, setTeamInviteEmail] = useState('')
+  const [sendingTeamInvite, setSendingTeamInvite] = useState(false)
   const [loading, setLoading] = useState(true)
   const [activeView, setActiveView] = useState('dashboard')
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -704,7 +728,7 @@ export default function ClientPortal() {
   const [clientEmail2, setClientEmail2] = useState("")
   const [clientPhone, setClientPhone] = useState("")
   // Pre-fill email from logged in user
-  useEffect(() => { if (user?.email && !clientEmail2) setClientEmail2(user.email) }, [user])
+  useEffect(() => { if (accountEmail && !clientEmail2) setClientEmail2(accountEmail) }, [accountEmail])
   const [draftDue, setDraftDue] = useState("")
   const [preferredTime, setPreferredTime] = useState("")
   const [propertyLiveDate, setPropertyLiveDate] = useState("")
@@ -793,16 +817,46 @@ export default function ClientPortal() {
       if (!session) { router.push('/login'); return }
       setUser(session.user)
       setLoading(false)
-      const email = session.user.email
+      const loginEmail = session.user.email
       // Redirect studio staff to studio portal
-      if (email === 'cody@examplecontent.co.nz') {
+      if (loginEmail === 'cody@examplecontent.co.nz') {
         router.push('/portal/studio')
         return
       }
-      // Load client profile (create one if this is a first login with no profile yet)
-      await ensureClientProfile(session.user)
+      // A sub-user signs in under their own email but should see/act on the
+      // same account as whoever invited them — resolve that here once, up
+      // front, so every query below (and every write elsewhere in this
+      // component) uses the shared account email instead of this login.
+      const { data: membership } = await supabase.from('client_members').select('account_email').eq('member_email', loginEmail || '').eq('status', 'active').maybeSingle()
+      let resolvedAccountEmail = membership?.account_email || null
+      let isSubUser = !!membership
+      if (!resolvedAccountEmail) {
+        // First real login after accepting a team invite — the invite-accept
+        // page only runs supabase.auth.signUp(), it can't write client_members
+        // itself if Supabase required email confirmation first (no session
+        // existed yet at that point). This is where that link actually gets
+        // made, the first time this login shows up with a still-pending
+        // invite addressed to it.
+        const { data: pendingInvite } = await supabase.from('client_invites').select('*').eq('invited_email', loginEmail || '').eq('status', 'pending').maybeSingle()
+        if (pendingInvite) {
+          await supabase.from('client_members').insert([{ account_email: pendingInvite.account_email, member_email: loginEmail, member_name: pendingInvite.invited_name || '', invited_by: pendingInvite.invited_by }])
+          await supabase.from('client_invites').update({ status: 'accepted', accepted_at: new Date().toISOString() }).eq('id', pendingInvite.id)
+          resolvedAccountEmail = pendingInvite.account_email
+          isSubUser = true
+        }
+      }
+      const email = resolvedAccountEmail || loginEmail
+      setAccountEmail(email)
+      // Only the main account holder's first login should create a new
+      // clients1 row — a sub-user's own login email has no business becoming
+      // its own separate client record.
+      if (!isSubUser) await ensureClientProfile(session.user)
       const { data: profile } = await supabase.from('clients1').select('*').eq('email', email).single()
       if (profile) setClientProfile(profile)
+      const { data: members } = await supabase.from('client_members').select('*').eq('account_email', email || '').eq('status', 'active').order('created_at', { ascending: true })
+      if (members) setTeamMembers(members)
+      const { data: invites } = await supabase.from('client_invites').select('*').eq('account_email', email || '').eq('status', 'pending').order('created_at', { ascending: true })
+      if (invites) setTeamInvites(invites)
       // Load projects linked to this client
       const { data: projects } = await supabase.from('projects1').select('*').eq('email', email).eq('archived', false).order('created_at', { ascending: false })
       if (projects) setClientProjects(projects)
@@ -856,6 +910,30 @@ export default function ClientPortal() {
   async function handleSignOut() {
     await supabase.auth.signOut()
     router.push('/login')
+  }
+
+  async function handleSendTeamInvite() {
+    if (!accountEmail || !teamInviteEmail.trim()) return
+    setSendingTeamInvite(true)
+    try {
+      const { invite, error } = await sendTeamInvite({ accountEmail, invitedEmail: teamInviteEmail, invitedName: teamInviteName, invitedBy: user?.email, source: 'client' })
+      if (error) { console.error('Invite error:', error); return }
+      if (invite) setTeamInvites(p => [...p, invite])
+      setTeamInviteName('')
+      setTeamInviteEmail('')
+    } finally {
+      setSendingTeamInvite(false)
+    }
+  }
+
+  async function handleRemoveTeamMember(id: string) {
+    setTeamMembers(p => p.filter(m => m.id !== id))
+    await removeTeamMember(id)
+  }
+
+  async function handleRevokeTeamInvite(id: string) {
+    setTeamInvites(p => p.filter(i => i.id !== id))
+    await revokeTeamInvite(id)
   }
 
   // Client accepts the studio's proposed date/time — a plain DB write, since
@@ -1174,6 +1252,7 @@ export default function ClientPortal() {
             { id: 'library', label: 'My Library', Icon: IconFolder },
             { id: 'pitches', label: 'Our Briefs', Icon: IconDocument },
             { id: 'invoices', label: 'Invoices', Icon: IconReceipt },
+            { id: 'team', label: 'Team', Icon: IconUsers },
           ].map(item => {
             const active = activeView === item.id
             return (
@@ -2043,14 +2122,14 @@ export default function ClientPortal() {
                       try {
                         const { data: newBooking } = await supabase.from('bookings1').insert([selectedCat === 'commercial' ? {
                           client_id: user?.id,
-                          client_name: clientContactName || user?.email,
+                          client_name: clientContactName || accountEmail,
                           category: selectedCat,
                           shoot_package: projectType,
                           deliverables: briefDeliverables.filter(d => d.name).map(d => `${d.quantity}x ${d.name}${d.duration ? ' (' + d.duration + ')' : ''}`).join(', '),
                           addons: '',
                           preferred_date: preferredDate || null,
                           preferred_time: preferredTime || null,
-                          client_email: clientEmail2 || user?.email,
+                          client_email: clientEmail2 || accountEmail,
                           draft_due: null,
                           delivery_due: deliveryDue || null,
                           property_live_date: null,
@@ -2075,14 +2154,14 @@ export default function ClientPortal() {
                           attachment_urls: bookingAttachments,
                         } : {
                           client_id: user?.id,
-                          client_name: clientContactName || user?.email,
+                          client_name: clientContactName || accountEmail,
                           category: selectedCat,
                           shoot_package: selectedShoot?.name || '',
                           deliverables: selectedDel?.name || '',
                           addons: selectedAddons.map((a: any) => a.name).join(', '),
                           preferred_date: preferredDate,
                           preferred_time: preferredTime || null,
-                          client_email: clientEmail2 || user?.email,
+                          client_email: clientEmail2 || accountEmail,
                           draft_due: draftDue || null,
                           delivery_due: deliveryDue || null,
                           property_live_date: propertyLiveDate || null,
@@ -2112,7 +2191,7 @@ export default function ClientPortal() {
                       } catch (e) { console.error('Booking save error:', e) }
                       try {
                         await supabase.from('clients1').upsert([{
-                          email: clientEmail2 || user?.email,
+                          email: clientEmail2 || accountEmail,
                           name: clientContactName || '',
                           phone: clientPhone || null,
                           category: selectedCat === 'property' ? 'Property' : 'Commercial',
@@ -2150,8 +2229,8 @@ export default function ClientPortal() {
                           headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({
                             category: selectedCat,
-                            clientName: clientContactName || user?.email,
-                            clientEmail: clientEmail2 || user?.email,
+                            clientName: clientContactName || accountEmail,
+                            clientEmail: clientEmail2 || accountEmail,
                             title: selectedCat === 'commercial' ? (projectTitle || projectType) : propertyAddress,
                             details: details.filter(d => d.value),
                           }),
@@ -2480,7 +2559,7 @@ export default function ClientPortal() {
                   )
                 ) : (
                   /* FILE VIEW */
-                  <DriveFolder project={libraryProject} clientEmail={user?.email} clientName={clientProfile?.name} />
+                  <DriveFolder project={libraryProject} clientEmail={accountEmail} clientName={clientProfile?.name} />
                 )}
               </div>
             </div>
@@ -2792,6 +2871,70 @@ export default function ClientPortal() {
           )
         })()}
 
+        {activeView === 'team' && (() => {
+          const isSubUser = !!accountEmail && accountEmail !== user?.email
+          return (
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 28px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', background: '#14181F', position: 'sticky', top: 0, zIndex: 10 }}>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 500, color: '#fff' }}>Team</div>
+                  <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', marginTop: 2 }}>People with full access to this account</div>
+                </div>
+                <button onClick={() => setActiveView('dashboard')} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>← Dashboard</button>
+              </div>
+              <div style={{ padding: 28, maxWidth: 640 }}>
+                {isSubUser && (
+                  <div style={{ fontSize: 12, color: 'rgba(210,175,80,0.85)', background: 'rgba(210,175,80,0.08)', border: '0.5px solid rgba(210,175,80,0.25)', borderRadius: 6, padding: '12px 16px', marginBottom: 20, lineHeight: 1.6 }}>
+                    You're signed in as a teammate on this account ({user?.email}) — invites and removals here apply to the whole account, same as the main account holder.
+                  </div>
+                )}
+                <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, overflow: 'hidden', marginBottom: 20 }}>
+                  <div style={{ padding: '13px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>Invite a teammate</div>
+                  <div style={{ padding: 18, display: 'flex', gap: 10, flexWrap: 'wrap' as const }}>
+                    <input value={teamInviteName} onChange={e => setTeamInviteName(e.target.value)} placeholder="Name" style={{ flex: '1 1 160px', background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }} />
+                    <input type="email" value={teamInviteEmail} onChange={e => setTeamInviteEmail(e.target.value)} placeholder="their.email@company.com" style={{ flex: '2 1 220px', background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }} />
+                    <button disabled={sendingTeamInvite || !teamInviteEmail.trim()} onClick={handleSendTeamInvite} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '9px 18px', borderRadius: 3, background: teamInviteEmail.trim() ? '#C8C2BB' : 'rgba(200,194,187,0.1)', color: teamInviteEmail.trim() ? '#111' : 'rgba(200,194,187,0.2)', border: 'none', cursor: teamInviteEmail.trim() ? 'pointer' : 'not-allowed', fontWeight: 500, fontFamily: 'inherit' }}>{sendingTeamInvite ? 'Sending...' : 'Send invite'}</button>
+                  </div>
+                </div>
+                <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, overflow: 'hidden', marginBottom: 20 }}>
+                  <div style={{ padding: '13px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>On this account</div>
+                  <div style={{ padding: '12px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '0.5px solid rgba(200,194,187,0.06)' }}>
+                    <div>
+                      <div style={{ fontSize: 12, color: '#C8C2BB' }}>{clientProfile?.name || accountEmail} <span style={{ color: 'rgba(200,194,187,0.35)', fontWeight: 400 }}>— main account</span></div>
+                      <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>{accountEmail}</div>
+                    </div>
+                  </div>
+                  {teamMembers.length === 0 ? (
+                    <div style={{ padding: '16px 18px', fontSize: 12, color: 'rgba(200,194,187,0.3)' }}>No teammates added yet</div>
+                  ) : teamMembers.map(m => (
+                    <div key={m.id} style={{ padding: '12px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '0.5px solid rgba(200,194,187,0.06)' }}>
+                      <div>
+                        <div style={{ fontSize: 12, color: '#C8C2BB' }}>{m.member_name || m.member_email}</div>
+                        <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>{m.member_email}</div>
+                      </div>
+                      <button onClick={() => handleRemoveTeamMember(m.id)} style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '6px 10px', borderRadius: 3, border: '0.5px solid rgba(210,90,90,0.3)', color: 'rgba(210,90,90,0.8)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Remove</button>
+                    </div>
+                  ))}
+                </div>
+                {teamInvites.length > 0 && (
+                  <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, overflow: 'hidden' }}>
+                    <div style={{ padding: '13px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>Pending invites</div>
+                    {teamInvites.map(inv => (
+                      <div key={inv.id} style={{ padding: '12px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '0.5px solid rgba(200,194,187,0.06)' }}>
+                        <div>
+                          <div style={{ fontSize: 12, color: '#C8C2BB' }}>{inv.invited_name || inv.invited_email}</div>
+                          <div style={{ fontSize: 11, color: 'rgba(210,175,80,0.7)' }}>{inv.invited_email} · awaiting acceptance</div>
+                        </div>
+                        <button onClick={() => handleRevokeTeamInvite(inv.id)} style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '6px 10px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Revoke</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )
+        })()}
+
       </div>
 
       {/* PROJECT DETAIL MODAL */}
@@ -2933,8 +3076,8 @@ export default function ClientPortal() {
                       if (!changeRequest.trim()) return
                       await supabase.from('change_requests').insert([{
                         project_id: selectedProject.id || null,
-                        client_email: user?.email,
-                        client_name: clientProfile?.name || user?.email,
+                        client_email: accountEmail,
+                        client_name: clientProfile?.name || accountEmail,
                         message: changeRequest,
                         status: 'pending',
                         project_title: selectedProject.title || '',
@@ -2983,7 +3126,7 @@ export default function ClientPortal() {
           <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 12, width: '100%', maxWidth: 480, overflow: 'hidden', boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: '0.5px solid rgba(200,194,187,0.09)' }}>
               <div style={{ fontSize: 16, fontWeight: 600, color: '#fff' }}>You have updates</div>
-              <button onClick={async () => { await supabase.from('notifications').update({ read: true }).eq('user_email', user?.email); setNotifications([]); setShowNotifications(false) }} style={{ fontSize: 20, color: 'rgba(200,194,187,0.4)', background: 'transparent', border: 'none', cursor: 'pointer', lineHeight: 1 }}>×</button>
+              <button onClick={async () => { await supabase.from('notifications').update({ read: true }).eq('user_email', accountEmail); setNotifications([]); setShowNotifications(false) }} style={{ fontSize: 20, color: 'rgba(200,194,187,0.4)', background: 'transparent', border: 'none', cursor: 'pointer', lineHeight: 1 }}>×</button>
             </div>
             <div style={{ maxHeight: '60vh', overflowY: 'auto' }}>
               {notifications.map((n: any, i: number) => {
@@ -3005,7 +3148,7 @@ export default function ClientPortal() {
               })}
             </div>
             <div style={{ padding: '16px 24px', borderTop: '0.5px solid rgba(200,194,187,0.09)', display: 'flex', justifyContent: 'flex-end' }}>
-              <button onClick={async () => { await supabase.from('notifications').update({ read: true }).eq('user_email', user?.email); setNotifications([]); setShowNotifications(false) }} style={{ fontSize: 12, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '10px 28px', borderRadius: 4, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 600, fontFamily: 'inherit' }}>OK</button>
+              <button onClick={async () => { await supabase.from('notifications').update({ read: true }).eq('user_email', accountEmail); setNotifications([]); setShowNotifications(false) }} style={{ fontSize: 12, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '10px 28px', borderRadius: 4, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 600, fontFamily: 'inherit' }}>OK</button>
             </div>
           </div>
         </div>
@@ -3041,8 +3184,8 @@ export default function ClientPortal() {
                   const message = 'CANCELLATION REQUEST\nReason: ' + cancelReason + (cancelReason === 'Other' && cancelOther ? '\nDetails: ' + cancelOther : '')
                   await supabase.from('change_requests').insert([{
                     project_id: selectedProject.id || null,
-                    client_email: user?.email,
-                    client_name: clientProfile?.name || user?.email,
+                    client_email: accountEmail,
+                    client_name: clientProfile?.name || accountEmail,
                     message,
                     status: 'pending',
                     project_title: selectedProject.title || '',

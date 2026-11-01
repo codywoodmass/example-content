@@ -3,8 +3,9 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import StudioSidebar from '../StudioSidebar'
-import { notify, ToastHost } from '@/lib/notify'
+import { notify, ToastHost, confirmDialog } from '@/lib/notify'
 import { stageLabel } from '@/lib/stages'
+import { sendTeamInvite, removeTeamMember, revokeTeamInvite } from '@/lib/clientTeam'
 
 type Client = {
   id: string
@@ -32,6 +33,16 @@ export default function ClientsPage() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [newForm, setNewForm] = useState({ name: '', email: '', phone: '', company: '', category: 'Property', notes: '' })
+  const [studioEmail, setStudioEmail] = useState<string | null>(null)
+  const [clientTeamMembers, setClientTeamMembers] = useState<{ id: string; member_email: string; member_name: string }[]>([])
+  const [clientTeamInvites, setClientTeamInvites] = useState<{ id: string; invited_email: string; invited_name: string }[]>([])
+  const [teamInviteName, setTeamInviteName] = useState('')
+  const [teamInviteEmail, setTeamInviteEmail] = useState('')
+  const [sendingTeamInvite, setSendingTeamInvite] = useState(false)
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => setStudioEmail(session?.user?.email || null))
+  }, [])
 
   const inp: React.CSSProperties = { background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }
   const lbl: React.CSSProperties = { fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)', marginBottom: 6, display: 'block' }
@@ -53,6 +64,37 @@ export default function ClientsPage() {
     if (briefs) setClientBriefs(briefs)
     if (bookings) setClientBookings(bookings)
     if (projects) setClientProjects(projects)
+    const { data: members } = await supabase.from('client_members').select('*').eq('account_email', client.email).eq('status', 'active').order('created_at', { ascending: true })
+    setClientTeamMembers(members || [])
+    const { data: invites } = await supabase.from('client_invites').select('*').eq('account_email', client.email).eq('status', 'pending').order('created_at', { ascending: true })
+    setClientTeamInvites(invites || [])
+    setTeamInviteName('')
+    setTeamInviteEmail('')
+  }
+
+  async function handleSendTeamInvite() {
+    if (!selectedClient || !teamInviteEmail.trim()) return
+    setSendingTeamInvite(true)
+    try {
+      const { invite, error } = await sendTeamInvite({ accountEmail: selectedClient.email, invitedEmail: teamInviteEmail, invitedName: teamInviteName, invitedBy: studioEmail, source: 'studio' })
+      if (error) { notify('Error sending invite: ' + error, 'error'); return }
+      if (invite) setClientTeamInvites(p => [...p, invite])
+      setTeamInviteName('')
+      setTeamInviteEmail('')
+    } finally {
+      setSendingTeamInvite(false)
+    }
+  }
+
+  async function handleRemoveTeamMember(id: string) {
+    if (!(await confirmDialog('Remove this teammate\'s access to the account?'))) return
+    setClientTeamMembers(p => p.filter(m => m.id !== id))
+    await removeTeamMember(id)
+  }
+
+  async function handleRevokeTeamInvite(id: string) {
+    setClientTeamInvites(p => p.filter(i => i.id !== id))
+    await revokeTeamInvite(id)
   }
 
   async function saveClient() {
@@ -207,6 +249,38 @@ export default function ClientsPage() {
                 <div style={{ padding: '0 18px 18px' }}>
                   <label style={lbl}>Notes</label>
                   <textarea value={selectedClient.notes || ''} onChange={e => setSelectedClient(p => p ? { ...p, notes: e.target.value } : p)} style={{ ...inp, resize: 'vertical' as const, lineHeight: 1.65, minHeight: 80 }} placeholder="Client preferences, working style, important notes..." />
+                </div>
+              </div>
+              <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, overflow: 'hidden', marginBottom: 20 }}>
+                <div style={{ padding: '13px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>Team members — full access to this account</div>
+                <div style={{ padding: '12px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.06)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <div style={{ fontSize: 12, color: '#C8C2BB' }}>{selectedClient.name || selectedClient.email} <span style={{ color: 'rgba(200,194,187,0.35)', fontWeight: 400 }}>— main account</span></div>
+                    <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>{selectedClient.email}</div>
+                  </div>
+                </div>
+                {clientTeamMembers.map(m => (
+                  <div key={m.id} style={{ padding: '12px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.06)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <div style={{ fontSize: 12, color: '#C8C2BB' }}>{m.member_name || m.member_email}</div>
+                      <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>{m.member_email}</div>
+                    </div>
+                    <button onClick={() => handleRemoveTeamMember(m.id)} style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '5px 10px', borderRadius: 3, border: '0.5px solid rgba(210,90,90,0.3)', color: 'rgba(210,90,90,0.8)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Remove</button>
+                  </div>
+                ))}
+                {clientTeamInvites.map(inv => (
+                  <div key={inv.id} style={{ padding: '12px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.06)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <div style={{ fontSize: 12, color: '#C8C2BB' }}>{inv.invited_name || inv.invited_email}</div>
+                      <div style={{ fontSize: 11, color: 'rgba(210,175,80,0.7)' }}>{inv.invited_email} · awaiting acceptance</div>
+                    </div>
+                    <button onClick={() => handleRevokeTeamInvite(inv.id)} style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '5px 10px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Revoke</button>
+                  </div>
+                ))}
+                <div style={{ padding: 18, display: 'flex', gap: 8, flexWrap: 'wrap' as const }}>
+                  <input value={teamInviteName} onChange={e => setTeamInviteName(e.target.value)} placeholder="Name" style={{ ...inp, flex: '1 1 140px', width: 'auto' }} />
+                  <input type="email" value={teamInviteEmail} onChange={e => setTeamInviteEmail(e.target.value)} placeholder="their.email@company.com" style={{ ...inp, flex: '2 1 200px', width: 'auto' }} />
+                  <button disabled={sendingTeamInvite || !teamInviteEmail.trim()} onClick={handleSendTeamInvite} style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '9px 14px', borderRadius: 3, background: teamInviteEmail.trim() ? '#C8C2BB' : 'rgba(200,194,187,0.1)', color: teamInviteEmail.trim() ? '#111' : 'rgba(200,194,187,0.2)', border: 'none', cursor: teamInviteEmail.trim() ? 'pointer' : 'not-allowed', fontWeight: 500, fontFamily: 'inherit', flexShrink: 0 }}>{sendingTeamInvite ? 'Sending...' : '+ Invite'}</button>
                 </div>
               </div>
               <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, overflow: 'hidden', marginBottom: 20 }}>
