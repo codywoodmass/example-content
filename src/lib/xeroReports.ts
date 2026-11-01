@@ -47,11 +47,16 @@ export async function getOutstandingInvoices(accessToken: string, tenantId: stri
       .filter((inv: any) => (inv.AmountDue || 0) > 0)
       .map((inv: any) => {
         const dueDate = parseXeroDate(inv.DueDateString || inv.DueDate)
+        const issueDate = parseXeroDate(inv.DateString || inv.Date)
         return {
           invoiceId: inv.InvoiceID,
           invoiceNumber: inv.InvoiceNumber || '',
           contact: inv.Contact?.Name || 'Unknown',
           dueDate: dueDate ? toDateStr(dueDate) : null,
+          // Only used so far to estimate a realistic payment date for an
+          // already-overdue invoice in the cash flow forecast (issue date +
+          // the org's average days-to-pay) — not shown anywhere on its own.
+          issueDate: issueDate ? toDateStr(issueDate) : null,
           amountDue: inv.AmountDue || 0,
           overdue: !!dueDate && dueDate < now,
         }

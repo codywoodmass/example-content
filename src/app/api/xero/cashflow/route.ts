@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireStudioUser, getValidXeroToken } from '@/lib/xero'
-import { toDateStr, getOutstandingInvoices, getGstSchedule, getBankBalance, getDraftInvoices } from '@/lib/xeroReports'
+import { toDateStr, getOutstandingInvoices, getGstSchedule, getBankBalance, getDraftInvoices, getRecentPayments } from '@/lib/xeroReports'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
@@ -30,16 +30,27 @@ export async function GET(req: NextRequest) {
     getOutstandingInvoices(accessToken, tenantId, 'ACCPAY'),
     getGstSchedule(accessToken, tenantId),
     getDraftInvoices(accessToken, tenantId, 'ACCREC'),
+    getRecentPayments(accessToken, tenantId),
   ])
 
-  let [bank, ar, ap, gst, draftAr] = await fetchAll(token.accessToken, token.tenantId)
+  let [bank, ar, ap, gst, draftAr, recentPayments] = await fetchAll(token.accessToken, token.tenantId)
   if (bank.needsReconnect) {
     const refreshed = await getValidXeroToken(auth.supabase, true)
     if (refreshed) {
       token = refreshed
-      ;[bank, ar, ap, gst, draftAr] = await fetchAll(token.accessToken, token.tenantId)
+      ;[bank, ar, ap, gst, draftAr, recentPayments] = await fetchAll(token.accessToken, token.tenantId)
     }
   }
+
+  // Average days from issue to payment across real paid invoices — used
+  // below to guess a realistic payment date for invoices that are already
+  // overdue, rather than assuming either "never" or "exactly on the original
+  // due date" (which is, definitionally, already wrong for these).
+  const paySpans = recentPayments.items
+    .filter((p: any) => p.issueDate && p.paidDate)
+    .map((p: any) => (new Date(p.paidDate).getTime() - new Date(p.issueDate).getTime()) / DAY_MS)
+    .filter((d: number) => d >= 0)
+  const avgDaysToPay = paySpans.length ? paySpans.reduce((a: number, b: number) => a + b, 0) / paySpans.length : null
 
   // Fortnightly, not weekly — most clients pay on the 20th of the month, so a
   // weekly bucket just chopped a single payment cycle into meaningless slices.
@@ -65,6 +76,23 @@ export async function GET(req: NextRequest) {
       return d >= start && d <= end
     }).reduce((s, it) => s + it.total, 0)
 
+  // An overdue invoice's due date is in the past, so it would never fall into
+  // any of these (all-future) fortnight buckets and would just silently
+  // vanish from "Invoiced in" entirely — it's still real, expected money, not
+  // money that stopped existing. Re-date each overdue one to a realistic
+  // expected payment date (issue date + the org's own average days-to-pay,
+  // floored at today since it's overdue by definition) so it shows up
+  // somewhere plausible instead of nowhere. Falls back to today outright when
+  // there's no issue date or no payment history yet to average from.
+  const arWithEstimatedDates = ar.items.map((it: any) => {
+    if (!it.overdue) return it
+    const estimated = it.issueDate && avgDaysToPay != null
+      ? new Date(new Date(it.issueDate + 'T12:00:00').getTime() + avgDaysToPay * DAY_MS)
+      : today
+    const effective = estimated < today ? today : estimated
+    return { ...it, dueDate: toDateStr(effective) }
+  })
+
   // Opening balance for week 0 is the only one that matters from here — the
   // client folds in portal bookings and a recurring-expense/GST estimate
   // (computed from the P&L data it already has loaded) on top of this and
@@ -75,7 +103,7 @@ export async function GET(req: NextRequest) {
   // is more honest than a figure parsed out of a report whose layout for
   // this org was never confirmed. This just flags which week a due date falls in.
   const weekRows = weeks.map(w => {
-    const expectedIn = sumDueInRange(ar.items, w.start, w.end)
+    const expectedIn = sumDueInRange(arWithEstimatedDates, w.start, w.end)
     const expectedInDraft = sumDraftInRange(draftAr.items, w.start, w.end)
     const expectedOut = sumDueInRange(ap.items, w.start, w.end)
     const gstPeriodDue = gst.periods.some(p => {

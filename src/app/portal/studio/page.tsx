@@ -232,7 +232,11 @@ export default function StudioPortal() {
     const byPerson: Record<string, number> = {}
     ;(data || []).forEach((row: any) => {
       const p = row.person || 'Unassigned'
-      byPerson[p] = (byPerson[p] || 0) + row.hours
+      // row.hours comes back from PostgREST as a string for a numeric column —
+      // summing with + without coercing first silently string-concatenates
+      // ("0" + "1.5" + "2" -> "01.52") instead of adding, which then throws
+      // once a .toFixed() call hits that non-number downstream.
+      byPerson[p] = (byPerson[p] || 0) + (Number(row.hours) || 0)
     })
     setWeeklyTimeTotals(Object.entries(byPerson).map(([person, hours]) => ({ person, hours })))
   }
@@ -241,7 +245,7 @@ export default function StudioPortal() {
     const now = new Date()
     const monthStart = localDateKey(new Date(now.getFullYear(), now.getMonth(), 1))
     const { data } = await supabase.from('time_entries').select('hours').gte('entry_date', monthStart)
-    setMonthlyHours((data || []).reduce((s: number, r: any) => s + r.hours, 0))
+    setMonthlyHours((data || []).reduce((s: number, r: any) => s + (Number(r.hours) || 0), 0))
   }
   const [modalProject, setModalProject] = useState<any>(null)
   const [weekOffset, setWeekOffset] = useState(0)
@@ -2421,11 +2425,14 @@ export default function StudioPortal() {
                     const clientTotal = (pnl.revenueByClient || []).reduce((s: number, r: any) => s + r.amount, 0)
                     const packageTotal = Object.values(byPackage).reduce((a, b) => a + b, 0)
 
-                    // Turnaround: shoot day to actual delivery, not the target delivery_due —
-                    // only counts projects that have genuinely been delivered.
+                    // Turnaround: booking confirmed (moved from Enquiry into Pre-Production,
+                    // i.e. awaiting shoot) to actual delivery — not shoot day to delivery.
+                    // The client's clock starts the moment they lock in the booking, not the
+                    // shoot day itself, so this is the wait they actually feel — and not the
+                    // target delivery_due, only projects genuinely delivered.
                     const turnarounds = dashProjects
-                      .filter((p: any) => p.shoot_date && p.delivered_at)
-                      .map((p: any) => (new Date(p.delivered_at).getTime() - new Date(p.shoot_date + 'T12:00:00').getTime()) / (1000 * 60 * 60 * 24))
+                      .filter((p: any) => p.confirmed_at && p.delivered_at)
+                      .map((p: any) => (new Date(p.delivered_at).getTime() - new Date(p.confirmed_at).getTime()) / (1000 * 60 * 60 * 24))
                       .filter((d: number) => d >= 0)
                     const avgTurnaround = turnarounds.length ? turnarounds.reduce((a: number, b: number) => a + b, 0) / turnarounds.length : null
 
@@ -2455,7 +2462,7 @@ export default function StudioPortal() {
                           {kpi('Break-even / month', `$${Math.round(avgMonthlyExpense).toLocaleString()}`, `Avg. costs, last ${monthlyWindow.length}mo`)}
                         </div>
                         <div className="ec-form-grid-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 14 }}>
-                          {kpi('Avg turnaround', avgTurnaround != null ? `${avgTurnaround.toFixed(1)}d` : '—', avgTurnaround != null ? `Shoot to delivery · ${turnarounds.length} project${turnarounds.length !== 1 ? 's' : ''}` : 'Not enough delivered projects yet')}
+                          {kpi('Avg turnaround', avgTurnaround != null ? `${avgTurnaround.toFixed(1)}d` : '—', avgTurnaround != null ? `Booking confirmed to delivery · ${turnarounds.length} project${turnarounds.length !== 1 ? 's' : ''}` : 'Not enough delivered projects yet')}
                           {kpi('Repeat clients', repeatRate != null ? `${repeatRate}%` : '—', repeatRate != null ? `Of ${clientProjectCounts.length} client${clientProjectCounts.length !== 1 ? 's' : ''} booked more than once` : 'Not enough data yet')}
                           {kpi('Avg days to get paid', avgDaysToPay != null ? `${avgDaysToPay.toFixed(1)}d` : '—', avgDaysToPay != null ? `Invoice to payment · ${paySpans.length} invoice${paySpans.length !== 1 ? 's' : ''}` : 'No paid invoices with dates yet')}
                           {kpi('Hours logged this month', monthlyHours != null ? `${monthlyHours.toFixed(1)}h` : '—', 'Across the whole team')}
@@ -2637,7 +2644,7 @@ export default function StudioPortal() {
                           </tbody>
                         </table>
                         <div style={{ padding: '10px 14px', fontSize: 9.5, color: 'rgba(200,194,187,0.25)', borderTop: '0.5px solid rgba(200,194,187,0.06)' }}>
-                          Bucketed fortnightly, not weekly, since most clients pay on the 20th of the month. "Invoiced in" is real outstanding Xero invoices, assumed paid on their due date. "Draft invoices" are sitting in Xero but not yet sent/approved — bucketed by due date if set, otherwise issue date, so treat this column as lower-confidence than "Invoiced in". "Booked" is confirmed portal work with no invoice yet (by delivery/shoot date) — money not yet billed, so its timing is a rougher guess. "Expected out" is outstanding Xero bills plus a fortnightly estimate (trailing 6mo average ÷ 2.17) for recurring costs like rent, wages and subscriptions, which mostly don't pass through Xero's Bills module at all. GST is 15% of (revenue − expenses) for the period that's due, from the same P&L figures. Doesn't include income tax, which isn't tracked here. Treat as a guide, not a guarantee.
+                          Bucketed fortnightly, not weekly, since most clients pay on the 20th of the month. "Invoiced in" is real outstanding Xero invoices, assumed paid on their due date — an already-overdue invoice is re-dated to issue date + your average days-to-pay (from real paid invoices) instead of being dropped from the forecast entirely. "Draft invoices" are sitting in Xero but not yet sent/approved — bucketed by due date if set, otherwise issue date, so treat this column as lower-confidence than "Invoiced in". "Booked" is confirmed portal work with no invoice yet (by delivery/shoot date) — money not yet billed, so its timing is a rougher guess. "Expected out" is outstanding Xero bills plus a fortnightly estimate (trailing 6mo average ÷ 2.17) for recurring costs like rent, wages and subscriptions, which mostly don't pass through Xero's Bills module at all. GST is 15% of (revenue − expenses) for the period that's due, from the same P&L figures. Doesn't include income tax, which isn't tracked here. Treat as a guide, not a guarantee.
                         </div>
                       </div>
                     </div>

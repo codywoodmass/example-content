@@ -303,8 +303,11 @@ export default function TeamPage() {
               </div>
 
               {(() => {
-                const totalHours = memberEntries.reduce((s, e) => s + e.hours, 0)
-                const billableHours = memberEntries.filter(e => e.billable).reduce((s, e) => s + e.hours, 0)
+                // e.hours comes back from PostgREST as a string for a numeric
+                // column — Number() keeps this a real sum instead of silently
+                // string-concatenating across entries.
+                const totalHours = memberEntries.reduce((s, e) => s + (Number(e.hours) || 0), 0)
+                const billableHours = memberEntries.filter(e => e.billable).reduce((s, e) => s + (Number(e.hours) || 0), 0)
                 const billablePct = TARGET_WEEKLY_HOURS ? Math.round((billableHours / TARGET_WEEKLY_HOURS) * 100) : 0
                 const onTarget = billablePct >= TARGET_BILLABLE_PCT
                 return (

@@ -1896,8 +1896,11 @@ function ProjectsPageInner() {
               )}
               {modalTab === 'time' && (() => {
                 const round2 = (n: number) => Math.round(n * 100) / 100
-                const totalHours = round2(timeEntries.reduce((s, t) => s + t.hours, 0))
-                const byPhase = TIME_PHASES.map(phase => ({ phase, hours: round2(timeEntries.filter(t => t.phase === phase).reduce((s, t) => s + t.hours, 0)) }))
+                // t.hours comes back from PostgREST as a string for a numeric
+                // column — Number() keeps this a real sum instead of silently
+                // string-concatenating across entries.
+                const totalHours = round2(timeEntries.reduce((s, t) => s + (Number(t.hours) || 0), 0))
+                const byPhase = TIME_PHASES.map(phase => ({ phase, hours: round2(timeEntries.filter(t => t.phase === phase).reduce((s, t) => s + (Number(t.hours) || 0), 0)) }))
                 const effectiveRate = totalHours > 0 && modalProject.amount ? modalProject.amount / totalHours : null
                 const packageMatch = /^PACKAGE:\s*(.+)$/m.exec(modalProject.deliverables || '')
                 const packageEstimate = packageMatch ? PACKAGE_ESTIMATES[packageMatch[1].trim()] : undefined
