@@ -114,9 +114,67 @@ function IconPlay({ size = 14, color, style }: IconProps) {
   )
 }
 
+// Dashboard "Recent deliveries" card — matches the hover-preview feel of the
+// portfolio site's Work page cards: a static thumbnail by default, with a
+// looping autoplay video swapped in (crossfaded) only once actually hovered,
+// so a whole row of these doesn't mean a row of simultaneously-loading
+// players. Drive's own preview iframe is the only thing that can embed its
+// video without a signed streaming URL, so autoplay here rides on whatever
+// Drive's embed honours for ?autoplay=1&mute=1 — less guaranteed than the
+// Vimeo version on the public site, but the static thumbnail underneath
+// means a card never looks broken even if a given browser/file won't
+// autoplay it.
+// A lightweight click-and-drag scroller for the delivery carousel, for mice
+// without horizontal scroll — trackpads and touch already scroll it natively
+// via the plain overflow-x. Distinguishes a drag from a click by distance
+// moved, so dragging never also fires the card's onClick.
+function DragScrollRow({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
+  const ref = React.useRef<HTMLDivElement>(null)
+  const dragState = React.useRef<{ down: boolean; moved: boolean; startX: number; startScroll: number }>({ down: false, moved: false, startX: 0, startScroll: 0 })
+
+  function onMouseDown(e: React.MouseEvent) {
+    if (!ref.current) return
+    dragState.current = { down: true, moved: false, startX: e.pageX, startScroll: ref.current.scrollLeft }
+  }
+  function onMouseMove(e: React.MouseEvent) {
+    const d = dragState.current
+    if (!d.down || !ref.current) return
+    const delta = e.pageX - d.startX
+    if (Math.abs(delta) > 4) d.moved = true
+    ref.current.scrollLeft = d.startScroll - delta
+  }
+  function endDrag() { dragState.current.down = false }
+  // A drag that actually moved the row shouldn't also trigger whatever the
+  // mouseup lands on (a card's onClick) — swallow just that one click.
+  function onClickCapture(e: React.MouseEvent) { if (dragState.current.moved) { e.stopPropagation(); e.preventDefault() } }
+
+  function scrollBy(amount: number) { ref.current?.scrollBy({ left: amount, behavior: 'smooth' }) }
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <div
+        ref={ref}
+        onMouseDown={onMouseDown}
+        onMouseMove={onMouseMove}
+        onMouseUp={endDrag}
+        onMouseLeave={endDrag}
+        onClickCapture={onClickCapture}
+        className="ec-drag-scroll"
+        style={{ display: 'flex', gap: 14, overflowX: 'auto', scrollSnapType: 'x proximity', cursor: dragState.current.down ? 'grabbing' : 'grab', ...style }}
+      >
+        {children}
+      </div>
+      <button onClick={() => scrollBy(-280)} aria-label="Scroll left" style={{ position: 'absolute', top: '50%', left: -14, transform: 'translateY(-50%)', width: 30, height: 30, borderRadius: '50%', background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.6)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, boxShadow: '0 4px 14px rgba(0,0,0,0.4)' }}>‹</button>
+      <button onClick={() => scrollBy(280)} aria-label="Scroll right" style={{ position: 'absolute', top: '50%', right: -14, transform: 'translateY(-50%)', width: 30, height: 30, borderRadius: '50%', background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.6)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, boxShadow: '0 4px 14px rgba(0,0,0,0.4)' }}>›</button>
+    </div>
+  )
+}
+
 function DriveThumb({ project, onClick }: { project: any; onClick: () => void }) {
   const [firstFile, setFirstFile] = React.useState<any>(null)
   const [loading, setLoading] = React.useState(true)
+  const [hovered, setHovered] = React.useState(false)
+  const [playerReady, setPlayerReady] = React.useState(false)
 
   React.useEffect(() => {
     if (!project.drive_url) { setLoading(false); return }
@@ -141,32 +199,59 @@ function DriveThumb({ project, onClick }: { project: any; onClick: () => void })
   }, [project.drive_url])
 
   const isVideo = (mime: string) => mime?.includes('video')
+  const hasVideo = !!firstFile && isVideo(firstFile.mimeType)
 
   return (
-    <div onClick={onClick} style={{ flexShrink:0, width:220, background:'#1A1F28', border:'0.5px solid rgba(200,194,187,0.09)', borderRadius:7, overflow:'hidden', cursor:'pointer' }} onMouseEnter={e=>(e.currentTarget.style.borderColor='rgba(200,194,187,0.2)')} onMouseLeave={e=>(e.currentTarget.style.borderColor='rgba(200,194,187,0.09)')}>
-      <div style={{ height:124, background:'#0E1014', position:'relative', overflow:'hidden' }}>
+    <div
+      onClick={onClick}
+      onMouseEnter={() => { setHovered(true); setPlayerReady(false) }}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        flexShrink: 0,
+        scrollSnapAlign: 'start',
+        width: 260,
+        background: '#1A1F28',
+        border: `0.5px solid ${hovered ? 'rgba(200,194,187,0.3)' : 'rgba(200,194,187,0.09)'}`,
+        borderRadius: 9,
+        overflow: 'hidden',
+        cursor: 'pointer',
+        transform: hovered ? 'translateY(-3px)' : 'translateY(0)',
+        boxShadow: hovered ? '0 14px 32px rgba(0,0,0,0.45)' : '0 0 0 rgba(0,0,0,0)',
+        transition: 'transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease',
+      }}
+    >
+      <div style={{ aspectRatio: '16/9', background: '#0E1014', position: 'relative', overflow: 'hidden' }}>
         {loading ? (
-          <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', color:'rgba(200,194,187,0.2)', fontSize:11 }}>Loading...</div>
+          <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(200,194,187,0.2)', fontSize: 11 }}>Loading...</div>
         ) : firstFile ? (
-          isVideo(firstFile.mimeType) ? (
-            <div style={{ width:'100%', height:'100%', position:'relative', overflow:'hidden', background:'#0a0c10', display:'flex', alignItems:'center', justifyContent:'center' }}>
-              <img src={`/api/drive?thumb=${firstFile.id}`} alt={project.title} style={{ width:'100%', height:'100%', objectFit:'cover', opacity:0.8 }} onError={e=>{(e.target as HTMLImageElement).style.display='none'}} />
-              <div style={{ position:'absolute', width:36, height:36, borderRadius:'50%', background:'rgba(0,0,0,0.7)', display:'flex', alignItems:'center', justifyContent:'center', border:'1.5px solid rgba(200,194,187,0.4)' }}><IconPlay size={14} style={{ marginLeft:2, color:'#C8C2BB' }} /></div>
-            </div>
+          hasVideo ? (
+            <>
+              <img src={`/api/drive?thumb=${firstFile.id}`} alt={project.title} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: hovered && playerReady ? 0 : 0.85, transition: 'opacity 0.35s ease 0.2s' }} onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
+              {hovered && (
+                <iframe
+                  src={`https://drive.google.com/file/d/${firstFile.id}/preview?autoplay=1&mute=1&loop=1`}
+                  onLoad={() => setPlayerReady(true)}
+                  style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none', opacity: playerReady ? 1 : 0, transition: 'opacity 0.35s ease 0.2s', pointerEvents: 'none' }}
+                  allow="autoplay"
+                />
+              )}
+              <div style={{ position: 'absolute', width: 36, height: 36, borderRadius: '50%', background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1.5px solid rgba(200,194,187,0.4)', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', opacity: hovered && playerReady ? 0 : 1, transition: 'opacity 0.2s ease' }}><IconPlay size={14} style={{ marginLeft: 2, color: '#C8C2BB' }} /></div>
+            </>
           ) : (
-            <img src={`https://lh3.googleusercontent.com/d/${firstFile.id}`} alt={project.title} style={{ width:'100%', height:'100%', objectFit:'cover' }} onError={e=>{(e.target as HTMLImageElement).style.display='none'}} />
+            <img src={`https://lh3.googleusercontent.com/d/${firstFile.id}`} alt={project.title} style={{ width: '100%', height: '100%', objectFit: 'cover', transform: hovered ? 'scale(1.04)' : 'scale(1)', transition: 'transform 0.4s ease' }} onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
           )
         ) : (
-          <div style={{ width:'100%', height:'100%', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:6 }}>
+          <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
             <IconFolder size={26} style={{ color: 'rgba(200,194,187,0.25)' }} />
-            <span style={{ fontSize:10, color:'rgba(200,194,187,0.25)', letterSpacing:'0.08em', textTransform:'uppercase' }}>Coming soon</span>
+            <span style={{ fontSize: 10, color: 'rgba(200,194,187,0.25)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Coming soon</span>
           </div>
         )}
-      </div>
-      <div style={{ padding:'12px 14px' }}>
-        <div style={{ fontSize:12, fontWeight:500, color:'#C8C2BB', marginBottom:3, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{project.title}</div>
-        <div style={{ fontSize:11, color:'rgba(200,194,187,0.4)', marginBottom:8 }}>{project.delivery_due ? new Date(project.delivery_due+'T12:00:00').toLocaleDateString('en-NZ',{day:'numeric',month:'short',year:'numeric'}) : ''}</div>
-        <span style={{ fontSize:9, letterSpacing:'0.08em', textTransform:'uppercase', padding:'2px 7px', borderRadius:2, background:'rgba(100,200,130,0.15)', color:'rgba(100,200,130,0.9)', border:'0.5px solid rgba(100,200,130,0.3)' }}>Delivered</span>
+        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(14,16,20,0) 55%, rgba(14,16,20,0.85) 100%)', pointerEvents: 'none' }} />
+        <span style={{ position: 'absolute', top: 10, right: 10, fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '3px 8px', borderRadius: 2, background: 'rgba(100,200,130,0.15)', color: 'rgba(100,200,130,0.9)', border: '0.5px solid rgba(100,200,130,0.3)' }}>Delivered</span>
+        <div style={{ position: 'absolute', left: 14, right: 14, bottom: 10 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: '#fff', marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{project.title}</div>
+          <div style={{ fontSize: 10.5, color: 'rgba(200,194,187,0.6)' }}>{project.delivery_due ? new Date(project.delivery_due + 'T12:00:00').toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' }) : ''}</div>
+        </div>
       </div>
     </div>
   )
@@ -610,23 +695,31 @@ function DriveFolder({ project, clientEmail, clientName }: { project: any; clien
           </button>
         </div>
       </div>
-      {/* PREVIEW MODAL — scrolls vertically; feedback sits below the video */}
-      {previewFile && (
+      {/* PREVIEW MODAL — feedback sits beside a vertical video (both are tall,
+          so a side-by-side layout uses the space a lot better than stacking a
+          wide feedback bar under a narrow 9:16 player), below a horizontal one. */}
+      {previewFile && (() => {
+        const isVertical = !!(previewFile.videoMediaMetadata && parseInt(previewFile.videoMediaMetadata.height) > parseInt(previewFile.videoMediaMetadata.width))
+        return (
         <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.95)', zIndex:300, overflowY:'auto' }} onClick={() => setPreviewFile(null)}>
           <div style={{ position:'fixed', top:20, right:20, display:'flex', gap:12, alignItems:'center', zIndex:10 }} onClick={e => e.stopPropagation()}>
             <a href={`/api/drive/download?id=${previewFile.id}&name=${encodeURIComponent(previewFile.name)}`} download={previewFile.name} style={{ fontSize:11, letterSpacing:'0.09em', textTransform:'uppercase', padding:'8px 16px', borderRadius:3, background:'#C8C2BB', color:'#111', textDecoration:'none', fontFamily:'inherit', fontWeight:500 }}>Download</a>
             <button onClick={() => setPreviewFile(null)} style={{ fontSize:24, color:'rgba(200,194,187,0.5)', background:'transparent', border:'none', cursor:'pointer' }}>×</button>
           </div>
-          <div style={{ maxWidth: 920, margin:'0 auto', padding:'70px 20px 60px', display:'flex', flexDirection:'column', alignItems:'center' }} onClick={e => e.stopPropagation()}>
+          <div style={{ maxWidth: isVertical ? 1180 : 920, margin:'0 auto', padding:'70px 20px 60px', display:'flex', flexDirection: isVertical ? 'row' : 'column', alignItems: isVertical ? 'flex-start' : 'center', justifyContent: 'center', gap: isVertical ? 28 : 0, flexWrap: 'wrap' as const }} onClick={e => e.stopPropagation()}>
             {isVideo(previewFile.mimeType) ? (
               <>
-                <div style={{ width:'100%', maxWidth: previewFile.videoMediaMetadata && parseInt(previewFile.videoMediaMetadata.height) > parseInt(previewFile.videoMediaMetadata.width) ? 420 : 880, aspectRatio: previewFile.videoMediaMetadata && parseInt(previewFile.videoMediaMetadata.height) > parseInt(previewFile.videoMediaMetadata.width) ? '9/16' : '16/9', borderRadius:10, overflow:'hidden', background:'#000', boxShadow:'0 20px 60px rgba(0,0,0,0.5)' }}>
-                  <iframe src={`https://drive.google.com/file/d/${previewFile.id}/preview`} style={{ width:'100%', height:'100%', border:'none' }} allow="autoplay" allowFullScreen />
+                <div style={{ flexShrink: 0 }}>
+                  <div style={{ width: isVertical ? 380 : '100%', maxWidth: isVertical ? 380 : 880, aspectRatio: isVertical ? '9/16' : '16/9', borderRadius:10, overflow:'hidden', background:'#000', boxShadow:'0 20px 60px rgba(0,0,0,0.5)' }}>
+                    <iframe src={`https://drive.google.com/file/d/${previewFile.id}/preview`} style={{ width:'100%', height:'100%', border:'none' }} allow="autoplay" allowFullScreen />
+                  </div>
+                  <div style={{ fontSize:13, color:'rgba(200,194,187,0.6)', margin: isVertical ? '14px 0 0' : '14px 0 28px' }}>{previewFile.name}</div>
                 </div>
-                <div style={{ fontSize:13, color:'rgba(200,194,187,0.6)', margin:'14px 0 28px' }}>{previewFile.name}</div>
-                {/* FEEDBACK — below the player */}
-                <div style={{ width:'100%', maxWidth:620, background:'#14181F', border:'0.5px solid rgba(200,194,187,0.12)', borderRadius:12, overflow:'hidden', boxShadow:'0 10px 40px rgba(0,0,0,0.3)' }}>
-                  <div style={{ padding:'18px 22px', borderBottom:'0.5px solid rgba(200,194,187,0.1)', display:'flex', alignItems:'center', gap:10 }}>
+                {/* FEEDBACK — a tall side column next to vertical video (matching its
+                    own shape instead of a wide bar awkwardly stacked under a narrow
+                    player), a regular panel below horizontal video as before. */}
+                <div style={{ width: isVertical ? 360 : '100%', maxWidth: isVertical ? 360 : 620, flexShrink: 0, background:'#14181F', border:'0.5px solid rgba(200,194,187,0.12)', borderRadius:12, overflow:'hidden', boxShadow:'0 10px 40px rgba(0,0,0,0.3)', display: isVertical ? 'flex' : undefined, flexDirection: isVertical ? 'column' as const : undefined, maxHeight: isVertical ? 'calc(380px * 16 / 9 + 34px)' : undefined }}>
+                  <div style={{ padding:'18px 22px', borderBottom:'0.5px solid rgba(200,194,187,0.1)', display:'flex', alignItems:'center', gap:10, flexShrink: 0 }}>
                     <div style={{ width:30, height:30, borderRadius:'50%', background:'rgba(200,194,187,0.08)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}><IconDocument size={14} style={{ color:'rgba(200,194,187,0.6)' }} /></div>
                     <div>
                       <div style={{ fontSize:13, fontWeight:600, color:'#fff' }}>Feedback on this clip</div>
@@ -634,7 +727,7 @@ function DriveFolder({ project, clientEmail, clientName }: { project: any; clien
                     </div>
                   </div>
                   {feedbackList.length > 0 && (
-                    <div style={{ maxHeight:220, overflowY:'auto', padding:'14px 22px 0', display:'flex', flexDirection:'column', gap:8 }}>
+                    <div style={{ maxHeight: isVertical ? undefined : 220, flex: isVertical ? 1 : undefined, minHeight: isVertical ? 0 : undefined, overflowY:'auto', padding:'14px 22px 0', display:'flex', flexDirection:'column', gap:8 }}>
                       {feedbackList.map(fb => (
                         <div key={fb.id} style={{ background:'rgba(200,194,187,0.04)', border:'0.5px solid rgba(200,194,187,0.08)', borderRadius:8, padding:'10px 14px', display:'flex', gap:12, alignItems:'flex-start' }}>
                           <span style={{ fontSize:11, fontWeight:700, color:'#C8C2BB', background:'rgba(200,194,187,0.08)', borderRadius:4, padding:'3px 8px', flexShrink:0 }}>{formatSeconds(fb.timestamp_seconds)}</span>
@@ -647,7 +740,7 @@ function DriveFolder({ project, clientEmail, clientName }: { project: any; clien
                     </div>
                   )}
                   {draftStops.length > 0 && (
-                    <div style={{ padding:'14px 22px 0', display:'flex', flexDirection:'column', gap:8 }}>
+                    <div style={{ padding:'14px 22px 0', display:'flex', flexDirection:'column', gap:8, flexShrink: 0 }}>
                       <div style={{ fontSize:10, letterSpacing:'0.1em', textTransform:'uppercase', color:'rgba(210,175,80,0.8)' }}>Queued — not sent yet</div>
                       {draftStops.map((s, i) => (
                         <div key={i} style={{ background:'rgba(210,175,80,0.06)', border:'0.5px solid rgba(210,175,80,0.2)', borderRadius:8, padding:'10px 14px', display:'flex', gap:12, alignItems:'flex-start' }}>
@@ -658,15 +751,19 @@ function DriveFolder({ project, clientEmail, clientName }: { project: any; clien
                       ))}
                     </div>
                   )}
-                  <div style={{ padding:'18px 22px', display:'flex', gap:10, alignItems:'flex-start' }}>
-                    <input value={feedbackTimestamp} onChange={e => setFeedbackTimestamp(e.target.value)} placeholder="1:23" style={{ width:64, flexShrink:0, background:'rgba(200,194,187,0.06)', border:'0.5px solid rgba(200,194,187,0.15)', borderRadius:6, padding:'10px 10px', fontSize:12, color:'#C8C2BB', fontFamily:'inherit', outline:'none', textAlign:'center' }} />
-                    <textarea value={feedbackMessage} onChange={e => setFeedbackMessage(e.target.value)} placeholder="What would you like changed?" rows={1} style={{ flex:1, background:'rgba(200,194,187,0.06)', border:'0.5px solid rgba(200,194,187,0.15)', borderRadius:6, padding:'10px 12px', fontSize:12, color:'#C8C2BB', fontFamily:'inherit', outline:'none', resize:'vertical' as const, minHeight:40 }} />
-                    <button onClick={addDraftStop} disabled={!feedbackMessage.trim()} title="Queue another timestamped note before sending" style={{ fontSize:11, letterSpacing:'0.08em', textTransform:'uppercase', padding:'11px 14px', borderRadius:6, background:'transparent', border:'0.5px solid rgba(200,194,187,0.25)', color:'rgba(200,194,187,0.7)', cursor: !feedbackMessage.trim() ? 'not-allowed' : 'pointer', fontWeight:500, fontFamily:'inherit', flexShrink:0, opacity: !feedbackMessage.trim() ? 0.5 : 1 }}>
-                      + Add
-                    </button>
-                    <button onClick={submitFeedback} disabled={submittingFeedback || (draftStops.length === 0 && !feedbackMessage.trim())} style={{ fontSize:11, letterSpacing:'0.08em', textTransform:'uppercase', padding:'11px 16px', borderRadius:6, background: feedbackSent ? 'rgba(100,200,130,0.15)' : '#C8C2BB', color: feedbackSent ? 'rgba(100,200,130,0.9)' : '#111', border: feedbackSent ? '0.5px solid rgba(100,200,130,0.3)' : 'none', cursor: submittingFeedback || (draftStops.length === 0 && !feedbackMessage.trim()) ? 'not-allowed' : 'pointer', fontWeight:500, fontFamily:'inherit', flexShrink:0, opacity: draftStops.length === 0 && !feedbackMessage.trim() && !submittingFeedback ? 0.5 : 1 }}>
-                      {submittingFeedback ? 'Sending...' : feedbackSent ? '✓ Sent' : draftStops.length > 0 ? `Send ${draftStops.length + (feedbackMessage.trim() ? 1 : 0)}` : 'Send'}
-                    </button>
+                  <div style={{ padding:'18px 22px', display:'flex', flexDirection: isVertical ? 'column' as const : 'row' as const, gap:10, alignItems: isVertical ? 'stretch' as const : 'flex-start' as const, flexShrink: 0 }}>
+                    <div style={{ display: 'flex', gap: 10 }}>
+                      <input value={feedbackTimestamp} onChange={e => setFeedbackTimestamp(e.target.value)} placeholder="1:23" style={{ width:64, flexShrink:0, background:'rgba(200,194,187,0.06)', border:'0.5px solid rgba(200,194,187,0.15)', borderRadius:6, padding:'10px 10px', fontSize:12, color:'#C8C2BB', fontFamily:'inherit', outline:'none', textAlign:'center' }} />
+                      <textarea value={feedbackMessage} onChange={e => setFeedbackMessage(e.target.value)} placeholder="What would you like changed?" rows={1} style={{ flex:1, background:'rgba(200,194,187,0.06)', border:'0.5px solid rgba(200,194,187,0.15)', borderRadius:6, padding:'10px 12px', fontSize:12, color:'#C8C2BB', fontFamily:'inherit', outline:'none', resize:'vertical' as const, minHeight:40 }} />
+                    </div>
+                    <div style={{ display: 'flex', gap: 10 }}>
+                      <button onClick={addDraftStop} disabled={!feedbackMessage.trim()} title="Queue another timestamped note before sending" style={{ flex: isVertical ? 1 : undefined, fontSize:11, letterSpacing:'0.08em', textTransform:'uppercase', padding:'11px 14px', borderRadius:6, background:'transparent', border:'0.5px solid rgba(200,194,187,0.25)', color:'rgba(200,194,187,0.7)', cursor: !feedbackMessage.trim() ? 'not-allowed' : 'pointer', fontWeight:500, fontFamily:'inherit', flexShrink:0, opacity: !feedbackMessage.trim() ? 0.5 : 1 }}>
+                        + Add
+                      </button>
+                      <button onClick={submitFeedback} disabled={submittingFeedback || (draftStops.length === 0 && !feedbackMessage.trim())} style={{ flex: isVertical ? 1 : undefined, fontSize:11, letterSpacing:'0.08em', textTransform:'uppercase', padding:'11px 16px', borderRadius:6, background: feedbackSent ? 'rgba(100,200,130,0.15)' : '#C8C2BB', color: feedbackSent ? 'rgba(100,200,130,0.9)' : '#111', border: feedbackSent ? '0.5px solid rgba(100,200,130,0.3)' : 'none', cursor: submittingFeedback || (draftStops.length === 0 && !feedbackMessage.trim()) ? 'not-allowed' : 'pointer', fontWeight:500, fontFamily:'inherit', flexShrink:0, opacity: draftStops.length === 0 && !feedbackMessage.trim() && !submittingFeedback ? 0.5 : 1 }}>
+                        {submittingFeedback ? 'Sending...' : feedbackSent ? '✓ Sent' : draftStops.length > 0 ? `Send ${draftStops.length + (feedbackMessage.trim() ? 1 : 0)}` : 'Send'}
+                      </button>
+                    </div>
                   </div>
                 </div>
               </>
@@ -683,7 +780,8 @@ function DriveFolder({ project, clientEmail, clientName }: { project: any; clien
             )}
           </div>
         </div>
-      )}
+        )
+      })()}
     </div>
   )
 }
@@ -1521,7 +1619,7 @@ export default function ClientPortal() {
           const completedProjects = allClientProjects.filter((p: any) => p.stage === 'Awaiting Confirmation' || p.stage === 'Completed' || p.drive_url)
           const pendingBookings = clientBookings.filter((b: any) => isAwaitingProject(b))
           // Same scoping as the studio dashboard's "Recent deliveries" slider.
-          const recentDeliveries = allClientProjects.filter((p: any) => p.drive_url && (p.stage === 'Awaiting Confirmation' || p.stage === 'Completed')).sort((a: any, b: any) => new Date(b.delivered_at || b.created_at).getTime() - new Date(a.delivered_at || a.created_at).getTime()).slice(0, 10)
+          const recentDeliveries = allClientProjects.filter((p: any) => p.drive_url && (p.stage === 'Awaiting Confirmation' || p.stage === 'Completed')).sort((a: any, b: any) => new Date(b.delivered_at || b.created_at).getTime() - new Date(a.delivered_at || a.created_at).getTime()).slice(0, 3)
 
           // Calendar
           const startOfWeek = new Date(now)
@@ -1566,7 +1664,7 @@ export default function ClientPortal() {
               <div style={{ padding: 28 }}>
                 {/* STAT CARDS */}
                 <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 12 }}>Your account</div>
-                <div className="ec-grid-4-resp" style={{ gap: 10, marginBottom: 24 }}>
+                <div className="ec-grid-4-resp" style={{ gap: 10, marginBottom: 18 }}>
                   {[
                     { label: 'Upcoming shoots', value: upcomingShoots.length, sub: upcomingShoots.length > 0 ? 'Next: ' + new Date(upcomingShoots[0].shoot_date + 'T12:00:00').toLocaleDateString('en-NZ',{day:'numeric',month:'short'}) : 'None scheduled' },
                     { label: 'Active projects', value: activeProjects.length, sub: activeProjects.length > 0 ? activeProjects[0].stage : 'All clear' },
@@ -1581,16 +1679,17 @@ export default function ClientPortal() {
                   ))}
                 </div>
 
-                <div className="ec-grid-sidebar-resp" style={{ gap: 20 }}>
+                <div className="ec-grid-sidebar-resp" style={{ gap: 16 }}>
                   {/* LEFT: UPCOMING SHOOTS + ACTIVE PROJECTS */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-                    {/* UPCOMING SHOOTS */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                    {/* UPCOMING SHOOTS — dashboard shows just the next couple; the full
+                        list lives on the dedicated "Our Shoots" page. */}
                     <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, overflow: 'hidden' }}>
                       <div style={{ padding: '14px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <span style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>Upcoming shoots</span>
                         <button onClick={() => setActiveView('book')} style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>+ Book new</button>
                       </div>
-                      {awaitingSchedule.length > 0 && awaitingSchedule.map((b: any) => (
+                      {awaitingSchedule.length > 0 && awaitingSchedule.slice(0, 2).map((b: any) => (
                         <div key={b.id} onClick={() => setActiveView('upcoming')} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.06)', cursor: 'pointer' }}>
                           <div style={{ width: 42, flexShrink: 0, textAlign: 'center', background: 'rgba(210,175,80,0.08)', border: '0.5px solid rgba(210,175,80,0.2)', borderRadius: 5, padding: '10px 3px' }}>
                             <IconClock size={16} style={{ color: 'rgba(210,175,80,0.8)' }} />
@@ -1602,26 +1701,34 @@ export default function ClientPortal() {
                           <span style={{ fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '3px 8px', borderRadius: 2, background: 'rgba(210,175,80,0.12)', color: 'rgba(210,175,80,0.9)', border: '0.5px solid rgba(210,175,80,0.25)', whiteSpace: 'nowrap' }}>Pending</span>
                         </div>
                       ))}
-                      {upcomingShoots.length === 0 && awaitingSchedule.length === 0 ? (
-                        <div style={{ padding: '24px 18px', fontSize: 12, color: 'rgba(200,194,187,0.25)', textAlign: 'center' }}>No upcoming shoots — book one above</div>
-                      ) : upcomingShoots.map((p: any, i: number) => {
-                        const d = new Date(p.shoot_date + 'T12:00:00')
-                        const STAGE_C: Record<string,any> = { 'Pre-Production': {color:'rgba(100,150,220,0.9)',bg:'rgba(25,45,80,0.4)'}, 'Shooting': {color:'rgba(210,175,80,0.9)',bg:'rgba(65,52,18,0.4)'}, 'Post-Production': {color:'rgba(160,100,220,0.9)',bg:'rgba(50,25,80,0.4)'}, 'Revisions': {color:'rgba(220,120,60,0.9)',bg:'rgba(80,35,15,0.4)'}, 'Awaiting Confirmation': {color:'rgba(100,200,130,0.9)',bg:'rgba(30,70,45,0.4)'}, 'Completed': {color:'rgba(100,200,130,0.9)',bg:'rgba(30,70,45,0.6)'}, 'Pending': {color:'rgba(210,175,80,0.9)',bg:'rgba(65,52,18,0.4)'}, 'Time proposed': {color:'rgba(100,150,220,0.9)',bg:'rgba(25,45,80,0.4)'}, 'Awaiting new time': {color:'rgba(160,100,220,0.9)',bg:'rgba(50,25,80,0.4)'}, 'Confirmed': {color:'rgba(100,200,130,0.9)',bg:'rgba(30,70,45,0.4)'} }
-                        const sc = STAGE_C[p.stage] || {color:'#C8C2BB',bg:'rgba(200,194,187,0.1)'}
-                        return (
-                          <div key={p.id} onClick={() => p.isPending ? setActiveView('upcoming') : setSelectedProject(p)} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '13px 18px', borderBottom: i < upcomingShoots.length - 1 ? '0.5px solid rgba(200,194,187,0.06)' : 'none', cursor: 'pointer' }}>
-                            <div style={{ width: 42, flexShrink: 0, textAlign: 'center', background: 'rgba(61,71,86,0.3)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 5, padding: '5px 3px' }}>
-                              <div style={{ fontSize: 16, fontWeight: 600, color: '#fff', lineHeight: 1 }}>{d.getDate()}</div>
-                              <div style={{ fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)', marginTop: 2 }}>{d.toLocaleDateString('en-NZ',{month:'short'})}</div>
+                      {(() => {
+                        const shownAwaiting = Math.min(awaitingSchedule.length, 2)
+                        const shoots = upcomingShoots.slice(0, Math.max(0, 2 - shownAwaiting))
+                        if (upcomingShoots.length === 0 && awaitingSchedule.length === 0) {
+                          return <div style={{ padding: '24px 18px', fontSize: 12, color: 'rgba(200,194,187,0.25)', textAlign: 'center' }}>No upcoming shoots — book one above</div>
+                        }
+                        return shoots.map((p: any, i: number) => {
+                          const d = new Date(p.shoot_date + 'T12:00:00')
+                          const STAGE_C: Record<string,any> = { 'Pre-Production': {color:'rgba(100,150,220,0.9)',bg:'rgba(25,45,80,0.4)'}, 'Shooting': {color:'rgba(210,175,80,0.9)',bg:'rgba(65,52,18,0.4)'}, 'Post-Production': {color:'rgba(160,100,220,0.9)',bg:'rgba(50,25,80,0.4)'}, 'Revisions': {color:'rgba(220,120,60,0.9)',bg:'rgba(80,35,15,0.4)'}, 'Awaiting Confirmation': {color:'rgba(100,200,130,0.9)',bg:'rgba(30,70,45,0.4)'}, 'Completed': {color:'rgba(100,200,130,0.9)',bg:'rgba(30,70,45,0.6)'}, 'Pending': {color:'rgba(210,175,80,0.9)',bg:'rgba(65,52,18,0.4)'}, 'Time proposed': {color:'rgba(100,150,220,0.9)',bg:'rgba(25,45,80,0.4)'}, 'Awaiting new time': {color:'rgba(160,100,220,0.9)',bg:'rgba(50,25,80,0.4)'}, 'Confirmed': {color:'rgba(100,200,130,0.9)',bg:'rgba(30,70,45,0.4)'} }
+                          const sc = STAGE_C[p.stage] || {color:'#C8C2BB',bg:'rgba(200,194,187,0.1)'}
+                          return (
+                            <div key={p.id} onClick={() => p.isPending ? setActiveView('upcoming') : setSelectedProject(p)} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '13px 18px', borderBottom: i < shoots.length - 1 ? '0.5px solid rgba(200,194,187,0.06)' : 'none', cursor: 'pointer' }}>
+                              <div style={{ width: 42, flexShrink: 0, textAlign: 'center', background: 'rgba(61,71,86,0.3)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 5, padding: '5px 3px' }}>
+                                <div style={{ fontSize: 16, fontWeight: 600, color: '#fff', lineHeight: 1 }}>{d.getDate()}</div>
+                                <div style={{ fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)', marginTop: 2 }}>{d.toLocaleDateString('en-NZ',{month:'short'})}</div>
+                              </div>
+                              <div style={{ flex: 1 }}>
+                                <div style={{ fontSize: 13, fontWeight: 500, color: '#C8C2BB', marginBottom: 3 }}>{p.title}</div>
+                                <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>{p.address ? p.address.split(',')[0] : p.client}</div>
+                              </div>
+                              <span style={{ fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '3px 8px', borderRadius: 2, background: sc.bg, color: sc.color, whiteSpace: 'nowrap' }}>{stageLabel(p.stage)}</span>
                             </div>
-                            <div style={{ flex: 1 }}>
-                              <div style={{ fontSize: 13, fontWeight: 500, color: '#C8C2BB', marginBottom: 3 }}>{p.title}</div>
-                              <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>{p.address ? p.address.split(',')[0] : p.client}</div>
-                            </div>
-                            <span style={{ fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '3px 8px', borderRadius: 2, background: sc.bg, color: sc.color, whiteSpace: 'nowrap' }}>{stageLabel(p.stage)}</span>
-                          </div>
-                        )
-                      })}
+                          )
+                        })
+                      })()}
+                      {(upcomingShoots.length + awaitingSchedule.length) > 2 && (
+                        <div onClick={() => setActiveView('upcoming')} style={{ padding: '10px 18px', fontSize: 11, color: 'rgba(200,194,187,0.4)', textAlign: 'center', cursor: 'pointer', borderTop: '0.5px solid rgba(200,194,187,0.06)' }}>View all {upcomingShoots.length + awaitingSchedule.length} →</div>
+                      )}
                     </div>
 
                     {/* ACTIVE PROJECTS */}
@@ -1807,16 +1914,16 @@ export default function ClientPortal() {
 
                 {/* RECENT DELIVERIES */}
                 {recentDeliveries.length > 0 && (
-                  <div style={{ marginTop: 24 }}>
+                  <div style={{ marginTop: 18 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
                       <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)' }}>Recent deliveries</div>
-                      <span style={{ fontSize: 11, color: 'rgba(200,194,187,0.3)' }}>scroll →</span>
+                      <span onClick={() => setActiveView('library')} style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', cursor: 'pointer' }}>View all →</span>
                     </div>
-                    <div style={{ display: 'flex', gap: 14, overflowX: 'auto', paddingBottom: 8 }}>
+                    <DragScrollRow style={{ paddingBottom: 8 }}>
                       {recentDeliveries.map((p: any) => (
                         <DriveThumb key={p.id} project={p} onClick={() => { setLibraryProject(p); setActiveView('library') }} />
                       ))}
-                    </div>
+                    </DragScrollRow>
                   </div>
                 )}
               </div>
