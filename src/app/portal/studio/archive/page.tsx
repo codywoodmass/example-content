@@ -117,7 +117,7 @@ export default function ArchivePage() {
     .filter(e => !search.trim() || (e.project_name + ' ' + e.folder_path + ' ' + e.client).toLowerCase().includes(search.toLowerCase()))
 
   return (
-    <main style={{ background: '#0E1014', minHeight: '100vh', fontFamily: 'Plus Jakarta Sans, sans-serif', color: '#C8C2BB', fontSize: 13, display: 'flex' }}>
+    <main style={{ background: '#0E1014', minHeight: '100vh', fontFamily: 'Geist, sans-serif', color: '#C8C2BB', fontSize: 13, display: 'flex' }}>
       <ToastHost />
       <ConfirmHost />
       <StudioSidebar active="archive" />

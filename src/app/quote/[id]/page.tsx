@@ -64,7 +64,7 @@ export default function PublicQuoteViewer() {
 
   if (loading) {
     return (
-      <main style={{ background: DOC.pageBg, minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
+      <main style={{ background: DOC.pageBg, minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Geist, sans-serif' }}>
         <div style={{ color: DOC.muted, fontSize: 13 }}>Loading...</div>
       </main>
     )
@@ -72,7 +72,7 @@ export default function PublicQuoteViewer() {
 
   if (notFound || !quote) {
     return (
-      <main style={{ background: DOC.pageBg, minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', fontFamily: 'Plus Jakarta Sans, sans-serif', gap: 16, textAlign: 'center', padding: '0 24px' }}>
+      <main style={{ background: DOC.pageBg, minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', fontFamily: 'Geist, sans-serif', gap: 16, textAlign: 'center', padding: '0 24px' }}>
         <img src="/images/Pale_logo_EX.png" alt="Example Content" style={{ height: 32, objectFit: 'contain', filter: 'invert(1)', opacity: 0.7, marginBottom: 8 }} />
         <div style={{ color: DOC.muted, fontSize: 14 }}>This quote isn't available.</div>
         <div style={{ color: DOC.faint, fontSize: 12 }}>It may not have been sent yet. Contact Example Content if you think this is a mistake.</div>
@@ -91,7 +91,7 @@ export default function PublicQuoteViewer() {
   const total = subtotal + gst
 
   return (
-    <main style={{ background: DOC.pageBg, minHeight: '100vh', fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
+    <main style={{ background: DOC.pageBg, minHeight: '100vh', fontFamily: 'Geist, sans-serif' }}>
       <div style={{ maxWidth: 800, margin: '0 auto', background: DOC.bg, minHeight: '100vh', color: DOC.text, padding: '56px 64px', boxSizing: 'border-box' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 40, paddingBottom: 24, borderBottom: `1px solid ${DOC.border}` }}>
           <div>

@@ -3,13 +3,16 @@ import { Geist, Geist_Mono, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 
 // Every portal page (studio and client) styles itself with fontFamily:
-// 'Plus Jakarta Sans, sans-serif' inline (picked over the previous Inter
-// after a side-by-side comparison — easier to read at the small sizes this
-// portal runs on). A plain Google Fonts stylesheet link (not next/font's
-// scoped class/variable) registers the real family under that literal name,
-// so every existing inline fontFamily declaration across the whole app
-// resolves to the real font with no per-page changes needed.
-const PORTAL_FONT_HREF = "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap";
+// 'Geist, sans-serif' inline (picked over Plus Jakarta Sans after a
+// side-by-side comparison — more modern/professional with stronger
+// regular/bold contrast for this dense a UI). A plain Google Fonts
+// stylesheet link (not next/font's scoped geistSans variable below,
+// which exposes a hashed family name via CSS variable rather than the
+// literal 'Geist' string these inline declarations use) registers the
+// real family under that literal name, so every existing inline
+// fontFamily declaration across the whole app resolves to the real
+// font with no per-page changes needed.
+const PORTAL_FONT_HREF = "https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&display=swap";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",

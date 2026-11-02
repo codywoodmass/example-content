@@ -1311,7 +1311,7 @@ export default function StudioPortal() {
   ]
 
   return (
-    <main style={{ background: '#0E1014', minHeight: '100vh', fontFamily: 'Plus Jakarta Sans, sans-serif', color: '#C8C2BB', display: 'flex', fontSize: 13 }}>
+    <main style={{ background: '#0E1014', minHeight: '100vh', fontFamily: 'Geist, sans-serif', color: '#C8C2BB', display: 'flex', fontSize: 13 }}>
       <ToastHost />
       <ConfirmHost />
 

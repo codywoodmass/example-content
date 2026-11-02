@@ -337,7 +337,7 @@ export default function QuotePage() {
   // down one document so the client can read it top to bottom.
   function QuoteDocument() {
     return (
-      <div style={{ background: DOC.bg, color: DOC.text, width: '100%', maxWidth: 800, margin: '0 auto', padding: '56px 64px', fontFamily: 'Plus Jakarta Sans, sans-serif', boxSizing: 'border-box' as const }}>
+      <div style={{ background: DOC.bg, color: DOC.text, width: '100%', maxWidth: 800, margin: '0 auto', padding: '56px 64px', fontFamily: 'Geist, sans-serif', boxSizing: 'border-box' as const }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 40, paddingBottom: 24, borderBottom: `1px solid ${DOC.border}` }}>
           <div>
             <img src="/images/Pale_logo_EX.png" alt="Example Content" style={{ height: 32, objectFit: 'contain', filter: 'invert(1)', opacity: 0.85, marginBottom: 14 }} />
@@ -436,7 +436,7 @@ export default function QuotePage() {
   }
 
   return (
-    <main style={{ background: '#0E1014', minHeight: '100vh', fontFamily: 'Plus Jakarta Sans, sans-serif', color: '#C8C2BB', fontSize: 13, display: 'flex' }}>
+    <main style={{ background: '#0E1014', minHeight: '100vh', fontFamily: 'Geist, sans-serif', color: '#C8C2BB', fontSize: 13, display: 'flex' }}>
       <ToastHost />
       <ConfirmHost />
       <StudioSidebar active="quotes" />

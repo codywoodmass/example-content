@@ -91,7 +91,7 @@ export default function ProjectDetailPage() {
     setBriefLoading(false)
   }
   if (loading) return (
-    <main style={{ background: '#0E1014', minHeight: '100vh', display: 'flex', fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
+    <main style={{ background: '#0E1014', minHeight: '100vh', display: 'flex', fontFamily: 'Geist, sans-serif' }}>
       <StudioSidebar active="projects" />
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ color: 'rgba(200,194,187,0.4)', fontSize: 13 }}>Loading project...</div>
@@ -99,7 +99,7 @@ export default function ProjectDetailPage() {
     </main>
   )
   if (!project) return (
-    <main style={{ background: '#0E1014', minHeight: '100vh', display: 'flex', fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
+    <main style={{ background: '#0E1014', minHeight: '100vh', display: 'flex', fontFamily: 'Geist, sans-serif' }}>
       <StudioSidebar active="projects" />
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ color: 'rgba(200,194,187,0.4)', fontSize: 13 }}>
@@ -112,7 +112,7 @@ export default function ProjectDetailPage() {
   const stageIdx = STAGES.indexOf(project.stage)
   const completedCount = deliverables.filter(d => d.done).length
   return (
-    <main style={{ background: '#0E1014', minHeight: '100vh', fontFamily: 'Plus Jakarta Sans, sans-serif', color: '#C8C2BB', fontSize: 13, display: 'flex' }}>
+    <main style={{ background: '#0E1014', minHeight: '100vh', fontFamily: 'Geist, sans-serif', color: '#C8C2BB', fontSize: 13, display: 'flex' }}>
       <StudioSidebar active="projects" />
       <div style={{ flex: 1, overflowX: 'hidden', display: 'flex', flexDirection: 'column' }}>
         {/* TOPBAR */}

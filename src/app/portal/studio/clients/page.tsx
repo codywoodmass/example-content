@@ -147,7 +147,7 @@ export default function ClientsPage() {
   }
 
   return (
-    <main style={{ background: '#0E1014', minHeight: '100vh', fontFamily: 'Plus Jakarta Sans, sans-serif', color: '#C8C2BB', fontSize: 13, display: 'flex' }}>
+    <main style={{ background: '#0E1014', minHeight: '100vh', fontFamily: 'Geist, sans-serif', color: '#C8C2BB', fontSize: 13, display: 'flex' }}>
       <ToastHost />
       <StudioSidebar active="clients" />
       <div className="ec-studio-main ec-split-pane" style={{ flex: 1, display: 'flex', overflow: 'hidden', height: '100vh', minWidth: 0 }}>

@@ -97,7 +97,7 @@ export default function BriefPage() {
   }
 
   return (
-    <main style={{ background: '#0E1014', minHeight: '100vh', fontFamily: 'Plus Jakarta Sans, sans-serif', color: '#C8C2BB', fontSize: 13, display: 'flex' }}>
+    <main style={{ background: '#0E1014', minHeight: '100vh', fontFamily: 'Geist, sans-serif', color: '#C8C2BB', fontSize: 13, display: 'flex' }}>
       <StudioSidebar active="brief" />
       <div className="ec-studio-main" style={{ flex: 1, overflowY: 'auto', minWidth: 0 }}>
         <div style={{ padding: '16px 28px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', background: '#14181F', position: 'sticky', top: 0, zIndex: 10 }}>

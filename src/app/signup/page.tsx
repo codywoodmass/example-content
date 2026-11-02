@@ -50,7 +50,7 @@ export default function SignupPage() {
 
   if (awaitingConfirmation) {
     return (
-      <main style={{ background: '#0E1014', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
+      <main style={{ background: '#0E1014', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Geist, sans-serif' }}>
         <div style={{ width: '100%', maxWidth: 420, padding: '0 24px', textAlign: 'center' }}>
           <div style={{ width: 56, height: 56, borderRadius: '50%', border: '1px solid rgba(100,200,130,0.4)', background: 'rgba(100,200,130,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px', fontSize: 24 }}>✓</div>
           <div style={{ fontSize: 18, fontWeight: 500, color: '#fff', marginBottom: 10 }}>Check your email</div>
@@ -62,7 +62,7 @@ export default function SignupPage() {
   }
 
   return (
-    <main style={{ background: '#0E1014', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
+    <main style={{ background: '#0E1014', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Geist, sans-serif' }}>
       <div style={{ width: '100%', maxWidth: 420, padding: '0 24px' }}>
 
         <div style={{ textAlign: 'center', marginBottom: 40 }}>
