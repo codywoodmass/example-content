@@ -744,6 +744,7 @@ export default function ClientPortal() {
   // address without ever clicking a suggestion.
   const [propertyCoords, setPropertyCoords] = useState<{ lat: number; lng: number } | null>(null)
   const [travelFee, setTravelFee] = useState(0)
+  const [calculatingTravelFee, setCalculatingTravelFee] = useState(false)
   const [bookingNotes, setBookingNotes] = useState("")
   const [accessNotes, setAccessNotes] = useState("")
   const [clientContactName, setClientContactName] = useState("")
@@ -1125,15 +1126,32 @@ export default function ClientPortal() {
     } catch (e) { console.error('Travel fee geocode error:', e) }
   }
 
-  // Straight-line distance, not driving distance — close enough for a
-  // location-based travel fee without needing a second (paid, rate-limited)
-  // Directions API call on top of the geocode this already does.
+  // Straight-line distance — only used to pick which city's free radius
+  // applies (cheap, no API call needed for that) and as a fallback if the
+  // real driving-distance lookup below fails outright.
   function haversineKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
     const R = 6371
     const dLat = (b.lat - a.lat) * Math.PI / 180
     const dLng = (b.lng - a.lng) * Math.PI / 180
     const s = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * Math.PI / 180) * Math.cos(b.lat * Math.PI / 180) * Math.sin(dLng / 2) ** 2
     return R * 2 * Math.atan2(Math.sqrt(s), Math.sqrt(1 - s))
+  }
+
+  // Real road distance, via the same Mapbox account already used for address
+  // search — straight-line badly understates routes with hills or coastline
+  // between the CBD and the property (Raglan from Hamilton is the textbook
+  // case: ~35km straight line, ~48km actually driven). Returns null on any
+  // failure so the caller can fall back to straight-line rather than break.
+  async function getDrivingKm(from: { lat: number; lng: number }, to: { lat: number; lng: number }): Promise<number | null> {
+    try {
+      const res = await fetch(`https://api.mapbox.com/directions/v5/mapbox/driving/${from.lng},${from.lat};${to.lng},${to.lat}?overview=false&access_token=${process.env.NEXT_PUBLIC_MAPBOX_TOKEN}`)
+      const data = await res.json()
+      const meters = data.routes?.[0]?.distance
+      return typeof meters === 'number' ? meters / 1000 : null
+    } catch (e) {
+      console.error('Travel fee directions error:', e)
+      return null
+    }
   }
 
   // Auckland and Hamilton CBD reference points (Auckland's match the ones
@@ -1150,25 +1168,36 @@ export default function ClientPortal() {
   const HAMILTON_CBD = { lat: -37.7870, lng: 175.2793 }
   const AUCKLAND_FREE_RADIUS_KM = 16
   const HAMILTON_FREE_RADIUS_KM = 10
-  const TRAVEL_RATE_PER_KM = 1
+  // Matches the studio's own internal rate card ($1.17/km) so the quoted
+  // fee reflects real cost rather than a separate, lower placeholder number.
+  const TRAVEL_RATE_PER_KM = 1.17
 
-  function calculatePropertyTravelFee(coords: { lat: number; lng: number }) {
-    const dAkl = haversineKm(coords, AUCKLAND_CBD)
-    const dHam = haversineKm(coords, HAMILTON_CBD)
-    const nearest = dAkl <= dHam ? { dist: dAkl, freeRadius: AUCKLAND_FREE_RADIUS_KM } : { dist: dHam, freeRadius: HAMILTON_FREE_RADIUS_KM }
-    if (nearest.dist < nearest.freeRadius) return 0
+  async function calculatePropertyTravelFee(coords: { lat: number; lng: number }): Promise<number> {
+    const dAklStraight = haversineKm(coords, AUCKLAND_CBD)
+    const dHamStraight = haversineKm(coords, HAMILTON_CBD)
+    const nearestCity = dAklStraight <= dHamStraight
+      ? { cbd: AUCKLAND_CBD, freeRadius: AUCKLAND_FREE_RADIUS_KM, straight: dAklStraight }
+      : { cbd: HAMILTON_CBD, freeRadius: HAMILTON_FREE_RADIUS_KM, straight: dHamStraight }
+    const drivingKm = await getDrivingKm(nearestCity.cbd, coords)
+    const dist = drivingKm ?? nearestCity.straight
+    if (dist < nearestCity.freeRadius) return 0
     // Covers the full trip out to the property, then only the part of the
     // trip back that's still outside the free radius — the crew drives the
     // whole distance out regardless, but once they're back inside the free
     // zone that remaining leg is ordinary local driving again, not billable
     // travel. Charging the one-way distance alone under-covered the return.
-    const billableKm = nearest.dist + (nearest.dist - nearest.freeRadius)
+    const billableKm = dist + (dist - nearestCity.freeRadius)
     return Math.round(billableKm * TRAVEL_RATE_PER_KM)
   }
 
   useEffect(() => {
-    if (propertyCoords) { setTravelFee(calculatePropertyTravelFee(propertyCoords)); return }
-    setTravelFee(0)
+    if (!propertyCoords) { setTravelFee(0); return }
+    let cancelled = false
+    setCalculatingTravelFee(true)
+    calculatePropertyTravelFee(propertyCoords)
+      .then(fee => { if (!cancelled) setTravelFee(fee) })
+      .finally(() => { if (!cancelled) setCalculatingTravelFee(false) })
+    return () => { cancelled = true }
   }, [propertyCoords])
 
   function toggleAddon(addon: any) {
@@ -1475,7 +1504,7 @@ export default function ClientPortal() {
                     { label: 'Upcoming shoots', value: upcomingShoots.length, sub: upcomingShoots.length > 0 ? 'Next: ' + new Date(upcomingShoots[0].shoot_date + 'T12:00:00').toLocaleDateString('en-NZ',{day:'numeric',month:'short'}) : 'None scheduled' },
                     { label: 'Active projects', value: activeProjects.length, sub: activeProjects.length > 0 ? activeProjects[0].stage : 'All clear' },
                     { label: 'Pending bookings', value: pendingBookings.length, sub: pendingBookings.length > 0 ? 'Awaiting confirmation' : 'All confirmed', alert: pendingBookings.length > 0 },
-                    { label: 'Projects complete', value: completedProjects.length, sub: 'Ready for delivery' },
+                    { label: 'Projects complete', value: completedProjects.length, sub: 'Delivered — in your library' },
                   ].map(({ label, value, sub, alert }: any) => (
                     <div key={label} style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, padding: '16px 18px' }}>
                       <div style={{ fontSize: 10, color: 'rgba(200,194,187,0.38)', marginBottom: 8 }}>{label}</div>
@@ -2148,7 +2177,7 @@ export default function ClientPortal() {
                           <input value={propertyAddress} onChange={e => handleAddressChange(e.target.value)} onBlur={() => { setTimeout(() => setShowAddressSuggestions(false), 200); geocodePropertyAddressIfNeeded() }} placeholder="Start typing an address..." style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }} />
                           {propertyAddress.trim() && selectedCat === 'property' && (
                             <div style={{ fontSize: 10, color: 'rgba(200,194,187,0.35)', marginTop: 6 }}>
-                              {!propertyCoords ? 'Calculating travel fee...' : travelFee > 0 ? `Travel fee: $${travelFee} + GST (auto-calculated from address)` : 'No travel fee — within the free zone'}
+                              {!propertyCoords || calculatingTravelFee ? 'Calculating travel fee...' : travelFee > 0 ? `Travel fee: $${travelFee} + GST (auto-calculated from address)` : 'No travel fee — within the free zone'}
                             </div>
                           )}
                           {showAddressSuggestions && addressSuggestions.length > 0 && (
