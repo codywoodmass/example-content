@@ -263,6 +263,57 @@ function ProjectThumbSquare({ project }: { project: any }) {
   )
 }
 
+// A folder tile in the library grid used to just show a generic folder icon
+// — gives a real preview instead, pulled from the first video frame or photo
+// inside it (descending one level if the folder itself holds only another
+// folder), same "find the first real media" logic as DriveThumb etc. above,
+// just keyed off a folder id already in hand rather than a project's
+// drive_url.
+function FolderTileThumb({ folderId }: { folderId: string }) {
+  const [firstFile, setFirstFile] = React.useState<any>(null)
+  const [loading, setLoading] = React.useState(true)
+
+  React.useEffect(() => {
+    let cancelled = false
+    const isMedia = (f: any) => f.mimeType?.includes('video') || f.mimeType?.includes('image')
+    fetch(`/api/drive?folderId=${folderId}`)
+      .then(r => r.json())
+      .then(async data => {
+        const files = data.files || []
+        const media = files.find(isMedia)
+        if (media) { if (!cancelled) { setFirstFile(media); setLoading(false) }; return }
+        const subfolder = files.find((f: any) => f.mimeType === 'application/vnd.google-apps.folder')
+        if (subfolder) {
+          const res2 = await fetch(`/api/drive?folderId=${subfolder.id}`)
+          const data2 = await res2.json()
+          if (!cancelled) setFirstFile((data2.files || []).find(isMedia) || null)
+        } else if (!cancelled) {
+          setFirstFile(null)
+        }
+        if (!cancelled) setLoading(false)
+      })
+      .catch(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [folderId])
+
+  const isVideo = (mime: string) => mime?.includes('video')
+
+  if (loading) return <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center' }}><IconFolder size={32} style={{ color:'rgba(200,194,187,0.3)' }} /></div>
+  if (!firstFile) return <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center' }}><IconFolder size={32} style={{ color:'rgba(200,194,187,0.5)' }} /></div>
+
+  return isVideo(firstFile.mimeType) ? (
+    <div style={{ width:'100%', height:'100%', position:'relative', overflow:'hidden', background:'#0a0c10', display:'flex', alignItems:'center', justifyContent:'center' }}>
+      <img src={`/api/drive?thumb=${firstFile.id}`} alt="" style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', opacity:0.6 }} onError={e=>{(e.target as HTMLImageElement).style.display='none'}} />
+      <IconFolder size={26} style={{ position:'relative', color:'rgba(255,255,255,0.85)', filter:'drop-shadow(0 1px 4px rgba(0,0,0,0.6))' }} />
+    </div>
+  ) : (
+    <div style={{ width:'100%', height:'100%', position:'relative', overflow:'hidden' }}>
+      <img src={`https://lh3.googleusercontent.com/d/${firstFile.id}`} alt="" style={{ width:'100%', height:'100%', objectFit:'cover', opacity:0.6 }} onError={e=>{(e.target as HTMLImageElement).style.display='none'}} />
+      <IconFolder size={26} style={{ position:'absolute', inset:0, margin:'auto', color:'rgba(255,255,255,0.85)', filter:'drop-shadow(0 1px 4px rgba(0,0,0,0.6))' }} />
+    </div>
+  )
+}
+
 function DriveFolder({ project, clientEmail, clientName }: { project: any; clientEmail?: string | null; clientName?: string }) {
   const [files, setFiles] = React.useState<any[]>([])
   const [loading, setLoading] = React.useState(true)
@@ -480,15 +531,6 @@ function DriveFolder({ project, clientEmail, clientName }: { project: any; clien
           </div>
         </div>
       </div>
-      <div style={{ background:'#1A1F28', border:'0.5px solid rgba(200,194,187,0.09)', borderRadius:7, overflow:'hidden', marginBottom:14, padding:'14px 18px' }}>
-        <div style={{ fontSize:11, fontWeight:500, color:'#C8C2BB', marginBottom:8 }}>Have feedback on this project overall?</div>
-        <div style={{ display:'flex', gap:8 }}>
-          <textarea value={generalFeedbackMessage} onChange={e => setGeneralFeedbackMessage(e.target.value)} placeholder="e.g. Can we get a warmer grade across the whole set, and swap the intro clip?" rows={2} style={{ flex:1, background:'rgba(200,194,187,0.04)', border:'0.5px solid rgba(200,194,187,0.12)', borderRadius:4, padding:'8px 10px', fontSize:12, color:'#C8C2BB', fontFamily:'inherit', outline:'none', resize:'vertical' as const }} />
-          <button onClick={submitGeneralFeedback} disabled={submittingGeneralFeedback || !generalFeedbackMessage.trim()} style={{ fontSize:11, letterSpacing:'0.08em', textTransform:'uppercase', padding:'9px 14px', borderRadius:3, background: generalFeedbackSent ? 'rgba(100,200,130,0.15)' : '#C8C2BB', color: generalFeedbackSent ? 'rgba(100,200,130,0.9)' : '#111', border: generalFeedbackSent ? '0.5px solid rgba(100,200,130,0.3)' : 'none', cursor: submittingGeneralFeedback || !generalFeedbackMessage.trim() ? 'not-allowed' : 'pointer', fontWeight:500, fontFamily:'inherit', flexShrink:0, opacity: !generalFeedbackMessage.trim() && !submittingGeneralFeedback ? 0.5 : 1 }}>
-            {submittingGeneralFeedback ? 'Sending...' : generalFeedbackSent ? '✓ Sent' : 'Send'}
-          </button>
-        </div>
-      </div>
       {stack.length > 0 && (
         <div style={{ display:'flex', flexWrap:'wrap' as const, alignItems:'center', gap:4, marginBottom:14, fontSize:11 }}>
           <span onClick={() => goToCrumb(-1)} style={{ cursor:'pointer', color: 'rgba(200,194,187,0.4)', textDecoration:'underline', display:'inline-flex', alignItems:'center', gap:5 }}><IconFolder size={12} /> {project.title}</span>
@@ -511,12 +553,18 @@ function DriveFolder({ project, clientEmail, clientName }: { project: any; clien
           )}
         </div>
       )}
-      <div style={{ display:'flex', flexWrap:'wrap', alignItems:'flex-start', gap:14 }}>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(190px, 1fr))', gap:14 }}>
         {files.map((file: any) => (
-          <div key={file.id} style={{ background:'#1A1F28', border:'0.5px solid rgba(200,194,187,0.09)', borderRadius:7, overflow:'hidden', cursor:'pointer', width: file.videoMediaMetadata && parseInt(file.videoMediaMetadata.height) > parseInt(file.videoMediaMetadata.width) ? 'calc(33% - 10px)' : 'calc(50% - 7px)' }} onClick={() => { if (isFolder(file.mimeType)) openFolder(file); else setPreviewFile(file) }}>
-            <div style={{ aspectRatio: file.videoMediaMetadata && parseInt(file.videoMediaMetadata.height) > parseInt(file.videoMediaMetadata.width) ? '9/16' : '16/9', background:'#0E1014', position:'relative', overflow:'hidden', display:'flex', alignItems:'center', justifyContent:'center' }}>
+          <div key={file.id} style={{ background:'#1A1F28', border:'0.5px solid rgba(200,194,187,0.09)', borderRadius:7, overflow:'hidden', cursor:'pointer' }} onClick={() => { if (isFolder(file.mimeType)) openFolder(file); else setPreviewFile(file) }}>
+            {/* A uniform square thumbnail regardless of source orientation keeps
+                the grid clean — vertical and horizontal media next to each
+                other no longer produce mismatched tile widths/heights and the
+                gaps that came with them. The "Vertical" badge below still
+                tells you the actual format; the full aspect ratio is honoured
+                in the preview modal when you open the file. */}
+            <div style={{ aspectRatio:'1/1', background:'#0E1014', position:'relative', overflow:'hidden', display:'flex', alignItems:'center', justifyContent:'center' }}>
               {isFolder(file.mimeType) ? (
-                <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center' }}><IconFolder size={32} style={{ color:'rgba(200,194,187,0.5)' }} /></div>
+                <FolderTileThumb folderId={file.id} />
               ) : isVideo(file.mimeType) ? (
                 <div style={{ width:'100%', height:'100%', position:'relative', overflow:'hidden', background:'#0a0c10', display:'flex', alignItems:'center', justifyContent:'center' }}>
                   <img src={`/api/drive?thumb=${file.id}`} alt={file.name} style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', opacity:0.75 }} onError={e=>{(e.target as HTMLImageElement).style.display='none'}} />
@@ -549,6 +597,18 @@ function DriveFolder({ project, clientEmail, clientName }: { project: any; clien
             )}
           </div>
         ))}
+      </div>
+      {/* General feedback sits below the files, not above — this is an
+          occasional, optional action, not something to force in front of
+          the content every time the library's opened. */}
+      <div style={{ background:'#1A1F28', border:'0.5px solid rgba(200,194,187,0.09)', borderRadius:7, overflow:'hidden', marginTop:24, padding:'14px 18px' }}>
+        <div style={{ fontSize:11, fontWeight:500, color:'#C8C2BB', marginBottom:8 }}>Have feedback on this project overall?</div>
+        <div style={{ display:'flex', gap:8 }}>
+          <textarea value={generalFeedbackMessage} onChange={e => setGeneralFeedbackMessage(e.target.value)} placeholder="e.g. Can we get a warmer grade across the whole set, and swap the intro clip?" rows={2} style={{ flex:1, background:'rgba(200,194,187,0.04)', border:'0.5px solid rgba(200,194,187,0.12)', borderRadius:4, padding:'8px 10px', fontSize:12, color:'#C8C2BB', fontFamily:'inherit', outline:'none', resize:'vertical' as const }} />
+          <button onClick={submitGeneralFeedback} disabled={submittingGeneralFeedback || !generalFeedbackMessage.trim()} style={{ fontSize:11, letterSpacing:'0.08em', textTransform:'uppercase', padding:'9px 14px', borderRadius:3, background: generalFeedbackSent ? 'rgba(100,200,130,0.15)' : '#C8C2BB', color: generalFeedbackSent ? 'rgba(100,200,130,0.9)' : '#111', border: generalFeedbackSent ? '0.5px solid rgba(100,200,130,0.3)' : 'none', cursor: submittingGeneralFeedback || !generalFeedbackMessage.trim() ? 'not-allowed' : 'pointer', fontWeight:500, fontFamily:'inherit', flexShrink:0, opacity: !generalFeedbackMessage.trim() && !submittingGeneralFeedback ? 0.5 : 1 }}>
+            {submittingGeneralFeedback ? 'Sending...' : generalFeedbackSent ? '✓ Sent' : 'Send'}
+          </button>
+        </div>
       </div>
       {/* PREVIEW MODAL — scrolls vertically; feedback sits below the video */}
       {previewFile && (
