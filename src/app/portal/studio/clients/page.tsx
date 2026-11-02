@@ -76,9 +76,10 @@ export default function ClientsPage() {
     if (!selectedClient || !teamInviteEmail.trim()) return
     setSendingTeamInvite(true)
     try {
-      const { invite, error } = await sendTeamInvite({ accountEmail: selectedClient.email, invitedEmail: teamInviteEmail, invitedName: teamInviteName, invitedBy: studioEmail, source: 'studio' })
+      const { invite, error, emailSent } = await sendTeamInvite({ accountEmail: selectedClient.email, invitedEmail: teamInviteEmail, invitedName: teamInviteName, invitedBy: studioEmail, source: 'studio' })
       if (error) { notify('Error sending invite: ' + error, 'error'); return }
       if (invite) setClientTeamInvites(p => [...p, invite])
+      notify(emailSent ? `Invite sent to ${teamInviteEmail.trim()}.` : 'Invite created, but the email failed to send — check Resend is configured.', emailSent ? 'success' : 'error')
       setTeamInviteName('')
       setTeamInviteEmail('')
     } finally {

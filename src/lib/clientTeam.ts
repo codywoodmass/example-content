@@ -13,32 +13,44 @@ export async function sendTeamInvite(opts: {
   invitedName?: string
   invitedBy?: string | null
   source: 'client' | 'studio'
-}): Promise<{ invite: any | null; error: string | null }> {
+}): Promise<{ invite: any | null; error: string | null; emailSent: boolean }> {
   const { accountEmail, invitedEmail, invitedName = '', invitedBy = null, source } = opts
-  if (!accountEmail || !invitedEmail.trim()) return { invite: null, error: 'Missing account or invite email' }
+  if (!accountEmail || !invitedEmail.trim()) return { invite: null, error: 'Missing account or invite email', emailSent: false }
+
+  // Supabase Auth always lowercases auth.users.email regardless of how
+  // someone typed it at signup — storing the invite's email with whatever
+  // casing the inviter happened to type would make the client portal's
+  // later client_invites.invited_email === loginEmail lookup (which is
+  // how a sub-user's login gets linked to the account on first real login)
+  // silently never match.
+  const normalizedEmail = invitedEmail.trim().toLowerCase()
 
   const token = (typeof crypto !== 'undefined' && 'randomUUID' in crypto) ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Date.now().toString(36)
   const { data: invite, error } = await supabase.from('client_invites').insert([{
     account_email: accountEmail,
-    invited_email: invitedEmail.trim(),
+    invited_email: normalizedEmail,
     invited_name: invitedName.trim(),
     token,
     status: 'pending',
     invited_by: invitedBy,
   }]).select().single()
-  if (error) return { invite: null, error: error.message }
+  if (error) return { invite: null, error: error.message, emailSent: false }
 
+  let emailSent = false
   try {
-    await fetch('/api/notify-team-invite', {
+    const res = await fetch('/api/notify-team-invite', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ invitedEmail: invitedEmail.trim(), invitedName: invitedName.trim(), accountEmail, invitedBy, token, source }),
+      body: JSON.stringify({ invitedEmail: normalizedEmail, invitedName: invitedName.trim(), accountEmail, invitedBy, token, source }),
     })
+    const data = await res.json()
+    emailSent = !!data.emailSent
+    if (!emailSent) console.error('Team invite email not sent:', data)
   } catch (e) {
     console.error('Invite notify error:', e)
   }
 
-  return { invite, error: null }
+  return { invite, error: null, emailSent }
 }
 
 export async function removeTeamMember(id: string) {

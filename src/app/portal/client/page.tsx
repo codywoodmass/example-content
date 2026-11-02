@@ -717,6 +717,7 @@ export default function ClientPortal() {
   const [teamInvites, setTeamInvites] = useState<{ id: string; invited_email: string; invited_name: string; created_at: string }[]>([])
   const [teamInviteName, setTeamInviteName] = useState('')
   const [teamInviteEmail, setTeamInviteEmail] = useState('')
+  const [teamInviteNotice, setTeamInviteNotice] = useState<{ type: 'success' | 'warning' | 'error'; message: string } | null>(null)
   const [sendingTeamInvite, setSendingTeamInvite] = useState(false)
   const [loading, setLoading] = useState(true)
   const [activeView, setActiveView] = useState('dashboard')
@@ -947,10 +948,14 @@ export default function ClientPortal() {
   async function handleSendTeamInvite() {
     if (!accountEmail || !teamInviteEmail.trim()) return
     setSendingTeamInvite(true)
+    setTeamInviteNotice(null)
     try {
-      const { invite, error } = await sendTeamInvite({ accountEmail, invitedEmail: teamInviteEmail, invitedName: teamInviteName, invitedBy: user?.email, source: 'client' })
-      if (error) { console.error('Invite error:', error); return }
+      const { invite, error, emailSent } = await sendTeamInvite({ accountEmail, invitedEmail: teamInviteEmail, invitedName: teamInviteName, invitedBy: user?.email, source: 'client' })
+      if (error) { setTeamInviteNotice({ type: 'error', message: "Couldn't create the invite: " + error }); return }
       if (invite) setTeamInvites(p => [...p, invite])
+      setTeamInviteNotice(emailSent
+        ? { type: 'success', message: `Invite sent to ${teamInviteEmail.trim()}.` }
+        : { type: 'warning', message: `Invite created, but the email couldn't be sent — let them know to check with you directly, or try resending later.` })
       setTeamInviteName('')
       setTeamInviteEmail('')
     } finally {
@@ -3116,6 +3121,18 @@ export default function ClientPortal() {
                     <input type="email" value={teamInviteEmail} onChange={e => setTeamInviteEmail(e.target.value)} placeholder="their.email@company.com" style={{ flex: '2 1 220px', background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }} />
                     <button disabled={sendingTeamInvite || !teamInviteEmail.trim()} onClick={handleSendTeamInvite} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '9px 18px', borderRadius: 3, background: teamInviteEmail.trim() ? '#C8C2BB' : 'rgba(200,194,187,0.1)', color: teamInviteEmail.trim() ? '#111' : 'rgba(200,194,187,0.2)', border: 'none', cursor: teamInviteEmail.trim() ? 'pointer' : 'not-allowed', fontWeight: 500, fontFamily: 'inherit' }}>{sendingTeamInvite ? 'Sending...' : 'Send invite'}</button>
                   </div>
+                  {teamInviteNotice && (
+                    <div style={{
+                      margin: '0 18px 18px',
+                      padding: '10px 14px',
+                      borderRadius: 4,
+                      fontSize: 12,
+                      lineHeight: 1.5,
+                      background: teamInviteNotice.type === 'success' ? 'rgba(100,200,130,0.08)' : teamInviteNotice.type === 'warning' ? 'rgba(210,175,80,0.08)' : 'rgba(210,90,90,0.08)',
+                      border: `0.5px solid ${teamInviteNotice.type === 'success' ? 'rgba(100,200,130,0.25)' : teamInviteNotice.type === 'warning' ? 'rgba(210,175,80,0.25)' : 'rgba(210,90,90,0.25)'}`,
+                      color: teamInviteNotice.type === 'success' ? 'rgba(100,200,130,0.9)' : teamInviteNotice.type === 'warning' ? 'rgba(210,175,80,0.9)' : 'rgba(210,90,90,0.9)',
+                    }}>{teamInviteNotice.message}</div>
+                  )}
                 </div>
                 <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, overflow: 'hidden', marginBottom: 20 }}>
                   <div style={{ padding: '13px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>On this account</div>
