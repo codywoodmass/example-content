@@ -2,11 +2,17 @@ import { NextRequest, NextResponse } from 'next/server'
 import { formatTime12 } from '@/lib/time'
 
 export async function POST(req: NextRequest) {
-  const { clientEmail, clientName, title, date, startTime, endTime } = await req.json()
+  const { clientEmail, clientName, title, date, startTime, endTime, createdByEmail } = await req.json()
 
   if (!clientEmail) {
     return NextResponse.json({ error: 'Missing clientEmail' }, { status: 400 })
   }
+
+  // Goes to whoever actually made this booking (a teammate or the account
+  // owner) rather than always the main account holder — the in-app
+  // notification (written separately by the caller) still targets the
+  // shared account email, so everyone on the account sees it there either way.
+  const emailTarget = createdByEmail || clientEmail
 
   const dateLabel = new Date(`${date}T12:00:00`).toLocaleDateString('en-NZ', { weekday: 'long', day: 'numeric', month: 'long' })
   const timeLabel = `${formatTime12(startTime)} – ${formatTime12(endTime)}`
@@ -23,7 +29,7 @@ export async function POST(req: NextRequest) {
       headers: { 'Authorization': `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         from: process.env.RESEND_FROM_EMAIL || 'Example Content <onboarding@resend.dev>',
-        to: clientEmail,
+        to: emailTarget,
         subject: `A time has been proposed${title ? ' for ' + title : ''}`,
         html: `
           <p>Hi ${clientName || 'there'},</p>

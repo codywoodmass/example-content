@@ -874,6 +874,10 @@ export default function StudioPortal() {
       contact: booking.client_name || "",
       email: booking.client_email || '',
       category: booking.category === 'property' ? 'Property' : 'Commercial',
+      // Carries through so later project-level client emails (content
+      // delivered, etc.) can go to whoever actually made this booking
+      // rather than always the main account holder.
+      created_by_email: booking.created_by_email || null,
       address: booking.address || '',
       stage: needsBrief ? 'Enquiry' : 'Pre-Production',
       shoot_date: shootDateForProject,
@@ -1078,6 +1082,7 @@ export default function StudioPortal() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               clientEmail: proposeBooking.client_email,
+              createdByEmail: proposeBooking.created_by_email,
               clientName: proposeBooking.client_name,
               title: proposeBooking.address || proposeBooking.shoot_package || 'your shoot',
               date: proposeDate,

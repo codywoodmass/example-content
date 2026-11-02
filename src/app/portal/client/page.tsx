@@ -2560,6 +2560,11 @@ export default function ClientPortal() {
                       try {
                         const { data: newBooking } = await supabase.from('bookings1').insert([selectedCat === 'commercial' ? {
                           client_id: user?.id,
+                          // The actual logged-in person, not the shared account
+                          // email — lets booking-related emails go to whoever
+                          // made this specific booking (owner or teammate)
+                          // instead of always the main account holder.
+                          created_by_email: user?.email || null,
                           client_name: clientContactName || accountEmail,
                           category: selectedCat,
                           shoot_package: projectType,
@@ -2592,6 +2597,7 @@ export default function ClientPortal() {
                           attachment_urls: bookingAttachments,
                         } : {
                           client_id: user?.id,
+                          created_by_email: user?.email || null,
                           client_name: clientContactName || accountEmail,
                           category: selectedCat,
                           shoot_package: selectedShoot?.name || '',

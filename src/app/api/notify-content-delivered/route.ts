@@ -5,17 +5,27 @@ import { emailHasAccount } from '@/lib/account'
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
 
 export async function POST(req: NextRequest) {
-  const { projectId, projectTitle, clientName, clientEmail } = await req.json()
+  const { projectId, projectTitle, clientName, clientEmail, createdByEmail } = await req.json()
 
   if (!clientEmail) {
     return NextResponse.json({ error: 'Missing clientEmail' }, { status: 400 })
   }
 
+  // The in-app notification still goes out under the account's own email
+  // (clientEmail) — both the account owner and any teammate resolve to that
+  // same email when they load the portal, so one row there already reaches
+  // everyone on the account. The actual email, though, goes specifically to
+  // whoever made this booking (createdByEmail) when that's known, rather
+  // than always the main account holder — falls back to clientEmail for
+  // projects created before this was tracked, or created by the studio
+  // directly rather than from a client booking.
+  const emailTarget = createdByEmail || clientEmail
+
   const title = projectTitle || 'your project'
   // A client with an existing portal account gets the normal login-gated
   // link; a client who was only ever added as an email on the project (no
   // account) gets a public, no-login viewer for this specific delivery.
-  const hasAccount = await emailHasAccount(clientEmail)
+  const hasAccount = await emailHasAccount(emailTarget)
   const viewUrl = hasAccount
     ? new URL('/portal/client', req.nextUrl.origin).toString()
     : new URL(`/view/${projectId}`, req.nextUrl.origin).toString()
@@ -50,7 +60,7 @@ export async function POST(req: NextRequest) {
       headers: { 'Authorization': `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         from: process.env.RESEND_FROM_EMAIL || 'Example Content <onboarding@resend.dev>',
-        to: clientEmail,
+        to: emailTarget,
         subject: `Your content is ready — ${title}`,
         html: `
           <div style="font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif; max-width: 560px; margin: 0 auto; background: #0E1014;">

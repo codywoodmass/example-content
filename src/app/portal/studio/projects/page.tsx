@@ -172,6 +172,7 @@ type Project = {
   editor: string | null
   references: ReferenceItem[]
   travel_km: number | null
+  created_by_email: string | null
 }
 
 function attachmentIcon(name: string): string {
@@ -812,6 +813,7 @@ function ProjectsPageInner() {
           projectTitle: project.title || project.address,
           clientName: project.client,
           clientEmail: project.email,
+          createdByEmail: project.created_by_email,
         }),
       })
     } catch (e) { console.error('notify-content-delivered error:', e) }
