@@ -209,7 +209,7 @@ function DriveThumb({ project, onClick }: { project: any; onClick: () => void })
       style={{
         flexShrink: 0,
         scrollSnapAlign: 'start',
-        width: 260,
+        width: 340,
         background: '#1A1F28',
         border: `0.5px solid ${hovered ? 'rgba(200,194,187,0.3)' : 'rgba(200,194,187,0.09)'}`,
         borderRadius: 9,
@@ -228,11 +228,21 @@ function DriveThumb({ project, onClick }: { project: any; onClick: () => void })
             <>
               <img src={`/api/drive?thumb=${firstFile.id}`} alt={project.title} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: hovered && playerReady ? 0 : 0.85, transition: 'opacity 0.35s ease 0.2s' }} onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
               {hovered && (
-                <iframe
-                  src={`https://drive.google.com/file/d/${firstFile.id}/preview?autoplay=1&mute=1&loop=1`}
-                  onLoad={() => setPlayerReady(true)}
-                  style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none', opacity: playerReady ? 1 : 0, transition: 'opacity 0.35s ease 0.2s', pointerEvents: 'none' }}
-                  allow="autoplay"
+                // A real <video> with muted+autoPlay is reliably honoured by
+                // every modern browser's autoplay policy — the Drive preview
+                // iframe this replaced wasn't (it's Google's own app page, not
+                // built to be embedded as a silent background loop), which is
+                // why hovering used to play nothing. Streamed through our own
+                // Range-aware proxy so it also starts fast instead of waiting
+                // on a full download first.
+                <video
+                  src={`/api/drive/stream?id=${firstFile.id}`}
+                  autoPlay
+                  muted
+                  loop
+                  playsInline
+                  onCanPlay={() => setPlayerReady(true)}
+                  style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: playerReady ? 1 : 0, transition: 'opacity 0.35s ease 0.2s' }}
                 />
               )}
               <div style={{ position: 'absolute', width: 36, height: 36, borderRadius: '50%', background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1.5px solid rgba(200,194,187,0.4)', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', opacity: hovered && playerReady ? 0 : 1, transition: 'opacity 0.2s ease' }}><IconPlay size={14} style={{ marginLeft: 2, color: '#C8C2BB' }} /></div>
@@ -419,10 +429,15 @@ function DriveFolder({ project, clientEmail, clientName }: { project: any; clien
   const [feedbackSent, setFeedbackSent] = React.useState(false)
 
   React.useEffect(() => {
+    // Stepping to the next file with the arrow keys/buttons shouldn't carry
+    // over whatever was still sitting in the previous file's compose box.
+    setFeedbackTimestamp('')
+    setFeedbackMessage('')
+    setDraftStops([])
     if (!previewFile) { setFeedbackList([]); return }
     supabase.from('video_feedback').select('*').eq('file_id', previewFile.id).order('timestamp_seconds', { ascending: true })
       .then(({ data }) => setFeedbackList(data || []))
-  }, [previewFile])
+  }, [previewFile?.id])
 
   function parseTimestamp(input: string): number {
     const parts = input.trim().split(':').map(Number)
@@ -573,6 +588,28 @@ function DriveFolder({ project, clientEmail, clientName }: { project: any; clien
   const isImage = (mime: string) => mime?.includes('image')
   const isFolder = (mime: string) => mime === 'application/vnd.google-apps.folder'
 
+  // Lets the preview step through every file in the current folder — arrow
+  // keys or the on-screen arrows — instead of having to close the modal and
+  // click into the next file from the grid every time.
+  const navigableFiles = files.filter(f => !isFolder(f.mimeType))
+  function previewIndex() { return navigableFiles.findIndex(f => f.id === previewFile?.id) }
+  function previewStep(delta: number) {
+    const i = previewIndex()
+    if (i === -1) return
+    const next = navigableFiles[i + delta]
+    if (next) setPreviewFile(next)
+  }
+  React.useEffect(() => {
+    if (!previewFile) return
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'ArrowRight') previewStep(1)
+      else if (e.key === 'ArrowLeft') previewStep(-1)
+      else if (e.key === 'Escape') setPreviewFile(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [previewFile, files])
+
   function toggleFileSelected(id: string) {
     setSelectedFileIds(prev => {
       const next = new Set(prev)
@@ -703,9 +740,18 @@ function DriveFolder({ project, clientEmail, clientName }: { project: any; clien
         return (
         <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.95)', zIndex:300, overflowY:'auto' }} onClick={() => setPreviewFile(null)}>
           <div style={{ position:'fixed', top:20, right:20, display:'flex', gap:12, alignItems:'center', zIndex:10 }} onClick={e => e.stopPropagation()}>
+            {navigableFiles.length > 1 && <span style={{ fontSize:11, color:'rgba(200,194,187,0.4)' }}>{previewIndex() + 1} / {navigableFiles.length}</span>}
             <a href={`/api/drive/download?id=${previewFile.id}&name=${encodeURIComponent(previewFile.name)}`} download={previewFile.name} style={{ fontSize:11, letterSpacing:'0.09em', textTransform:'uppercase', padding:'8px 16px', borderRadius:3, background:'#C8C2BB', color:'#111', textDecoration:'none', fontFamily:'inherit', fontWeight:500 }}>Download</a>
             <button onClick={() => setPreviewFile(null)} style={{ fontSize:24, color:'rgba(200,194,187,0.5)', background:'transparent', border:'none', cursor:'pointer' }}>×</button>
           </div>
+          {/* Click left/right, or use arrow keys, to step through every file in
+              this folder without closing the preview each time. */}
+          {previewIndex() > 0 && (
+            <button onClick={e => { e.stopPropagation(); previewStep(-1) }} aria-label="Previous file" style={{ position:'fixed', left:20, top:'50%', transform:'translateY(-50%)', zIndex:10, width:44, height:44, borderRadius:'50%', background:'rgba(255,255,255,0.08)', border:'0.5px solid rgba(200,194,187,0.2)', color:'#C8C2BB', fontSize:20, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>‹</button>
+          )}
+          {previewIndex() < navigableFiles.length - 1 && (
+            <button onClick={e => { e.stopPropagation(); previewStep(1) }} aria-label="Next file" style={{ position:'fixed', right:20, top:'50%', transform:'translateY(-50%)', zIndex:10, width:44, height:44, borderRadius:'50%', background:'rgba(255,255,255,0.08)', border:'0.5px solid rgba(200,194,187,0.2)', color:'#C8C2BB', fontSize:20, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>›</button>
+          )}
           <div style={{ maxWidth: isVertical ? 1180 : 920, margin:'0 auto', padding:'70px 20px 60px', display:'flex', flexDirection: isVertical ? 'row' : 'column', alignItems: isVertical ? 'flex-start' : 'center', justifyContent: 'center', gap: isVertical ? 28 : 0, flexWrap: 'wrap' as const }} onClick={e => e.stopPropagation()}>
             {isVideo(previewFile.mimeType) ? (
               <>

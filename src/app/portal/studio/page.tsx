@@ -14,6 +14,83 @@ import { useTimeTracking, mondayOf } from '@/lib/timeTracking'
 import TimeTrackerBar from '@/components/studio/TimeTrackerBar'
 import RingProgress from '@/components/studio/RingProgress'
 
+// Small local icon set — mirrors the client portal's line icons so the
+// studio file browser reads the same way instead of falling back to emoji.
+type IconProps = { size?: number; color?: string; style?: React.CSSProperties }
+const ICON_BASE = { fill: 'none' as const, stroke: 'currentColor', strokeWidth: 1.6, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const }
+function IconFolder({ size = 17, color, style }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" style={{ color, ...style }} {...ICON_BASE}>
+      <path d="M3 7.2A2 2 0 0 1 5 5.2h3.6l1.8 2H19a2 2 0 0 1 2 2v7.6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7.2z" />
+    </svg>
+  )
+}
+function IconDocument({ size = 17, color, style }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" style={{ color, ...style }} {...ICON_BASE}>
+      <path d="M7 3h6.5L19 8.5V19a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" />
+      <path d="M13.5 3v5.5H19" />
+      <line x1="8.3" y1="13" x2="15.5" y2="13" />
+      <line x1="8.3" y1="16.5" x2="15.5" y2="16.5" />
+    </svg>
+  )
+}
+function IconPlay({ size = 14, color, style }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" style={{ color, ...style }}>
+      <polygon points="6 4 20 12 6 20" fill="currentColor" />
+    </svg>
+  )
+}
+
+// Folder-tile thumbnail — pulls the first video/photo found inside (one
+// level deep) so folders in the grid show real content instead of a blank
+// folder icon, matching the client portal's FolderTileThumb.
+function StudioFolderTileThumb({ folderId }: { folderId: string }) {
+  const [firstFile, setFirstFile] = React.useState<any>(null)
+  const [loading, setLoading] = React.useState(true)
+
+  React.useEffect(() => {
+    let cancelled = false
+    const isMedia = (f: any) => f.mimeType?.includes('video') || f.mimeType?.includes('image')
+    fetch(`/api/drive?folderId=${folderId}`)
+      .then(r => r.json())
+      .then(async data => {
+        const files = data.files || []
+        const media = files.find(isMedia)
+        if (media) { if (!cancelled) { setFirstFile(media); setLoading(false) }; return }
+        const subfolder = files.find((f: any) => f.mimeType === 'application/vnd.google-apps.folder')
+        if (subfolder) {
+          const res2 = await fetch(`/api/drive?folderId=${subfolder.id}`)
+          const data2 = await res2.json()
+          if (!cancelled) setFirstFile((data2.files || []).find(isMedia) || null)
+        } else if (!cancelled) {
+          setFirstFile(null)
+        }
+        if (!cancelled) setLoading(false)
+      })
+      .catch(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [folderId])
+
+  const isVideo = (mime: string) => mime?.includes('video')
+
+  if (loading) return <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center' }}><IconFolder size={32} style={{ color:'rgba(200,194,187,0.3)' }} /></div>
+  if (!firstFile) return <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center' }}><IconFolder size={32} style={{ color:'rgba(200,194,187,0.5)' }} /></div>
+
+  return isVideo(firstFile.mimeType) ? (
+    <div style={{ width:'100%', height:'100%', position:'relative', overflow:'hidden', background:'#0a0c10', display:'flex', alignItems:'center', justifyContent:'center' }}>
+      <img src={`/api/drive?thumb=${firstFile.id}`} alt="" style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', opacity:0.6 }} onError={e=>{(e.target as HTMLImageElement).style.display='none'}} />
+      <IconFolder size={26} style={{ position:'relative', color:'rgba(255,255,255,0.85)', filter:'drop-shadow(0 1px 4px rgba(0,0,0,0.6))' }} />
+    </div>
+  ) : (
+    <div style={{ width:'100%', height:'100%', position:'relative', overflow:'hidden' }}>
+      <img src={`https://lh3.googleusercontent.com/d/${firstFile.id}`} alt="" style={{ width:'100%', height:'100%', objectFit:'cover', opacity:0.6 }} onError={e=>{(e.target as HTMLImageElement).style.display='none'}} />
+      <IconFolder size={26} style={{ position:'absolute', inset:0, margin:'auto', color:'rgba(255,255,255,0.85)', filter:'drop-shadow(0 1px 4px rgba(0,0,0,0.6))' }} />
+    </div>
+  )
+}
+
 function StudioDriveFolder({ driveUrl }: { driveUrl: string }) {
   const [files, setFiles] = React.useState<any[]>([])
   const [loading, setLoading] = React.useState(true)
@@ -25,7 +102,7 @@ function StudioDriveFolder({ driveUrl }: { driveUrl: string }) {
     if (!previewFile) { setFeedbackList([]); return }
     supabase.from('video_feedback').select('*').eq('file_id', previewFile.id).order('timestamp_seconds', { ascending: true })
       .then(({ data }) => setFeedbackList(data || []))
-  }, [previewFile])
+  }, [previewFile?.id])
 
   function formatSeconds(seconds: number): string {
     const m = Math.floor(seconds / 60)
@@ -66,9 +143,36 @@ function StudioDriveFolder({ driveUrl }: { driveUrl: string }) {
       .catch(() => setLoading(false))
   }
 
+  const isFolderMime = (mime: string) => mime === 'application/vnd.google-apps.folder'
+  const isVideoMime = (mime: string) => mime?.includes('video')
+  const isImageMime = (mime: string) => mime?.includes('image')
+
+  // Lets the preview step through every file in the current folder — arrow
+  // keys or the on-screen arrows — instead of having to close the modal and
+  // click into the next file from the grid every time, matching the client
+  // portal's file browser.
+  const navigableFiles = files.filter(f => !isFolderMime(f.mimeType))
+  function previewIndex() { return navigableFiles.findIndex(f => f.id === previewFile?.id) }
+  function previewStep(delta: number) {
+    const i = previewIndex()
+    if (i === -1) return
+    const next = navigableFiles[i + delta]
+    if (next) setPreviewFile(next)
+  }
+  React.useEffect(() => {
+    if (!previewFile) return
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'ArrowRight') previewStep(1)
+      else if (e.key === 'ArrowLeft') previewStep(-1)
+      else if (e.key === 'Escape') setPreviewFile(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [previewFile, files])
+
   const breadcrumb = (
     <div style={{ display:'flex', flexWrap:'wrap' as const, alignItems:'center', gap:4, marginBottom:14, fontSize:11 }}>
-      <span onClick={() => goToCrumb(-1)} style={{ cursor:'pointer', color: stack.length ? 'rgba(200,194,187,0.4)' : '#C8C2BB', textDecoration: stack.length ? 'underline' : 'none' }}>📁 Root</span>
+      <span onClick={() => goToCrumb(-1)} style={{ cursor:'pointer', color: stack.length ? 'rgba(200,194,187,0.4)' : '#C8C2BB', textDecoration: stack.length ? 'underline' : 'none', display:'inline-flex', alignItems:'center', gap:5 }}><IconFolder size={12} /> Root</span>
       {stack.map((s, i) => (
         <span key={s.id} style={{ display:'flex', alignItems:'center', gap:4 }}>
           <span style={{ color:'rgba(200,194,187,0.25)' }}>/</span>
@@ -86,38 +190,44 @@ function StudioDriveFolder({ driveUrl }: { driveUrl: string }) {
       {files.length === 0 ? (
         <div style={{ textAlign:'center', color:'rgba(200,194,187,0.25)', padding:'40px 0' }}>No files found</div>
       ) : (
-        <div className="ec-form-grid-3" style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:14 }}>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(190px, 1fr))', gap:14 }}>
           {files.map((file: any) => {
-            const isFolder = file.mimeType === 'application/vnd.google-apps.folder'
-            const isVideo = file.mimeType?.includes('video')
-            const isImage = file.mimeType?.includes('image')
+            const isFolder = isFolderMime(file.mimeType)
+            const isVideo = isVideoMime(file.mimeType)
+            const isImage = isImageMime(file.mimeType)
             return (
-              <div key={file.id} onClick={() => { if (isFolder) openFolder(file); else if (isVideo || isImage) setPreviewFile(file) }} style={{ background:'#0E1014', border:'0.5px solid rgba(200,194,187,0.08)', borderRadius:7, overflow:'hidden', cursor: isFolder || isVideo || isImage ? 'pointer' : 'default' }}>
-                <div style={{ aspectRatio:'16/9', position:'relative', overflow:'hidden' }}>
+              <div key={file.id} onClick={() => { if (isFolder) openFolder(file); else if (isVideo || isImage) setPreviewFile(file) }} style={{ background:'#1A1F28', border:'0.5px solid rgba(200,194,187,0.09)', borderRadius:7, overflow:'hidden', cursor: isFolder || isVideo || isImage ? 'pointer' : 'default' }}>
+                {/* Uniform square thumbnail regardless of source orientation —
+                    matches the client portal's grid so vertical and horizontal
+                    media next to each other don't produce mismatched tiles. */}
+                <div style={{ aspectRatio:'1/1', background:'#0E1014', position:'relative', overflow:'hidden', display:'flex', alignItems:'center', justifyContent:'center' }}>
                   {isFolder ? (
-                    <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:32, background:'#14181F' }}>📁</div>
+                    <StudioFolderTileThumb folderId={file.id} />
                   ) : isVideo ? (
-                    <div style={{ width:'100%', height:'100%', position:'relative', display:'flex', alignItems:'center', justifyContent:'center', background:'#0a0c10' }}>
-                      <img src={`/api/drive?thumb=${file.id}`} alt="" style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', opacity:0.8 }} onError={e=>{(e.target as HTMLImageElement).style.display='none'}} />
-                      <div style={{ position:'relative', width:32, height:32, borderRadius:'50%', background:'rgba(0,0,0,0.6)', display:'flex', alignItems:'center', justifyContent:'center', border:'1px solid rgba(200,194,187,0.3)' }}><span style={{ fontSize:12, marginLeft:2 }}>▶</span></div>
+                    <div style={{ width:'100%', height:'100%', position:'relative', overflow:'hidden', background:'#0a0c10', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                      <img src={`/api/drive?thumb=${file.id}`} alt="" style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', opacity:0.75 }} onError={e=>{(e.target as HTMLImageElement).style.display='none'}} />
+                      <div style={{ position:'relative', width:40, height:40, borderRadius:'50%', background:'rgba(0,0,0,0.65)', display:'flex', alignItems:'center', justifyContent:'center', border:'1.5px solid rgba(200,194,187,0.4)' }}><IconPlay size={15} style={{ marginLeft:2, color:'#C8C2BB' }} /></div>
                     </div>
                   ) : isImage ? (
-                    <img src={`/api/drive?thumb=${file.id}`} alt={file.name} style={{ width:'100%', height:'100%', objectFit:'cover' }} onError={e=>{(e.target as HTMLImageElement).style.display='none'}} />
+                    <img src={`https://lh3.googleusercontent.com/d/${file.id}`} alt={file.name} style={{ width:'100%', height:'100%', objectFit:'cover' }} onError={e => { const t=e.target as HTMLImageElement; t.src=`https://drive.google.com/thumbnail?id=${file.id}&sz=w800`; t.onerror=()=>{t.style.display='none'} }} />
                   ) : (
-                    <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:28 }}>📄</div>
+                    <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center' }}><IconDocument size={28} style={{ color:'rgba(200,194,187,0.5)' }} /></div>
                   )}
+                  {!isFolder && <span style={{ position:'absolute', top:8, left:8, fontSize:9, letterSpacing:'0.12em', textTransform:'uppercase', background:'rgba(0,0,0,0.6)', color:'#C8C2BB', padding:'3px 8px', borderRadius:2 }}>{isVideo ? 'Video' : isImage ? 'Photo' : 'File'}</span>}
+                  {file.videoMediaMetadata && parseInt(file.videoMediaMetadata.height) > parseInt(file.videoMediaMetadata.width) && <span style={{ position:'absolute', top:8, right:8, fontSize:9, letterSpacing:'0.12em', textTransform:'uppercase', background:'rgba(0,0,0,0.6)', color:'rgba(200,194,187,0.7)', padding:'3px 8px', borderRadius:2 }}>Vertical</span>}
                 </div>
-                <div style={{ padding:'10px 12px' }}>
-                  <div style={{ fontSize:11, fontWeight:500, color:'#C8C2BB', marginBottom:4, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{file.name.replace(/\.[^.]+$/, '').replace(/_/g, ' ')}</div>
-                  {isFolder ? (
-                    <div style={{ fontSize:9, letterSpacing:'0.08em', textTransform:'uppercase', color:'rgba(200,194,187,0.3)' }}>Open folder →</div>
-                  ) : (
-                    <div style={{ display:'flex', gap:6 }}>
-                      <a href={file.webViewLink} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} style={{ fontSize:9, letterSpacing:'0.08em', textTransform:'uppercase', padding:'4px 8px', borderRadius:2, border:'0.5px solid rgba(200,194,187,0.12)', color:'rgba(200,194,187,0.4)', textDecoration:'none' }}>View</a>
-                      <a href={`https://drive.google.com/uc?export=download&id=${file.id}`} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} style={{ fontSize:9, letterSpacing:'0.08em', textTransform:'uppercase', padding:'4px 8px', borderRadius:2, border:'0.5px solid rgba(200,194,187,0.12)', color:'rgba(200,194,187,0.4)', textDecoration:'none' }}>Download</a>
-                    </div>
-                  )}
+                <div style={{ padding:'10px 14px 6px' }}>
+                  <div style={{ fontSize:12, fontWeight:500, color:'#C8C2BB', marginBottom:3, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{file.name.replace(/\.[^.]+$/, '').replace(/_/g, ' ')}</div>
+                  {file.size && <div style={{ fontSize:10, color:'rgba(200,194,187,0.35)' }}>{(parseInt(file.size)/1024/1024).toFixed(1)} MB</div>}
                 </div>
+                {isFolder ? (
+                  <div style={{ fontSize:10, letterSpacing:'0.08em', textTransform:'uppercase', color:'rgba(200,194,187,0.3)', padding:'6px 14px 12px' }}>Open folder →</div>
+                ) : (
+                  <div style={{ display:'flex', gap:6, padding:'6px 14px 12px' }}>
+                    <a href={file.webViewLink} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} style={{ fontSize:10, letterSpacing:'0.08em', textTransform:'uppercase', padding:'5px 10px', borderRadius:3, border:'0.5px solid rgba(200,194,187,0.09)', color:'rgba(200,194,187,0.4)', textDecoration:'none' }}>View</a>
+                    <a href={`https://drive.google.com/uc?export=download&id=${file.id}`} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} style={{ fontSize:10, letterSpacing:'0.08em', textTransform:'uppercase', padding:'5px 10px', borderRadius:3, border:'0.5px solid rgba(200,194,187,0.09)', color:'rgba(200,194,187,0.4)', textDecoration:'none' }}>Download</a>
+                  </div>
+                )}
               </div>
             )
           })}
@@ -125,6 +235,17 @@ function StudioDriveFolder({ driveUrl }: { driveUrl: string }) {
       )}
       {previewFile && (
         <div onClick={() => setPreviewFile(null)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.9)', zIndex:500, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:20, gap:14 }}>
+          <div style={{ position:'fixed', top:20, right:20, display:'flex', gap:12, alignItems:'center', zIndex:10 }} onClick={e => e.stopPropagation()}>
+            {navigableFiles.length > 1 && <span style={{ fontSize:11, color:'rgba(200,194,187,0.4)' }}>{previewIndex() + 1} / {navigableFiles.length}</span>}
+          </div>
+          {/* Click left/right, or use arrow keys, to step through every file in
+              this folder without closing the preview each time. */}
+          {previewIndex() > 0 && (
+            <button onClick={e => { e.stopPropagation(); previewStep(-1) }} aria-label="Previous file" style={{ position:'fixed', left:20, top:'50%', transform:'translateY(-50%)', zIndex:10, width:44, height:44, borderRadius:'50%', background:'rgba(255,255,255,0.08)', border:'0.5px solid rgba(200,194,187,0.2)', color:'#C8C2BB', fontSize:20, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>‹</button>
+          )}
+          {previewIndex() < navigableFiles.length - 1 && (
+            <button onClick={e => { e.stopPropagation(); previewStep(1) }} aria-label="Next file" style={{ position:'fixed', right:20, top:'50%', transform:'translateY(-50%)', zIndex:10, width:44, height:44, borderRadius:'50%', background:'rgba(255,255,255,0.08)', border:'0.5px solid rgba(200,194,187,0.2)', color:'#C8C2BB', fontSize:20, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>›</button>
+          )}
           {previewFile.mimeType?.includes('video') ? (
             <div className="ec-video-row" style={{ display:'flex', gap:16, width:'96vw', height:'88vh' }} onClick={e => e.stopPropagation()}>
               <div style={{ flex:'1 1 auto', display:'flex', alignItems:'center', justifyContent:'center', minWidth:0 }}>

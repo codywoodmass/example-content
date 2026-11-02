@@ -91,6 +91,28 @@ function PublicDriveViewer({ project }: { project: Project }) {
   const isImage = (mime: string) => mime?.includes('image')
   const isFolder = (mime: string) => mime === 'application/vnd.google-apps.folder'
 
+  // Lets the preview step through every file in the current folder — arrow
+  // keys or the on-screen arrows — instead of having to close the modal and
+  // click into the next file each time.
+  const navigableFiles = files.filter(f => !isFolder(f.mimeType))
+  function previewIndex() { return navigableFiles.findIndex(f => f.id === previewFile?.id) }
+  function previewStep(delta: number) {
+    const i = previewIndex()
+    if (i === -1) return
+    const next = navigableFiles[i + delta]
+    if (next) setPreviewFile(next)
+  }
+  useEffect(() => {
+    if (!previewFile) return
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'ArrowRight') previewStep(1)
+      else if (e.key === 'ArrowLeft') previewStep(-1)
+      else if (e.key === 'Escape') setPreviewFile(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [previewFile, files])
+
   function toggleFileSelected(id: string) {
     setSelectedFileIds(prev => {
       const next = new Set(prev)
@@ -194,9 +216,16 @@ function PublicDriveViewer({ project }: { project: Project }) {
       {previewFile && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.95)', zIndex: 300, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={() => setPreviewFile(null)}>
           <div style={{ position: 'absolute', top: 20, right: 20, display: 'flex', gap: 12, alignItems: 'center', zIndex: 10 }} onClick={e => e.stopPropagation()}>
+            {navigableFiles.length > 1 && <span style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>{previewIndex() + 1} / {navigableFiles.length}</span>}
             <a href={`/api/drive/download?id=${previewFile.id}&name=${encodeURIComponent(previewFile.name)}`} download={previewFile.name} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, background: '#C8C2BB', color: '#111', textDecoration: 'none', fontFamily: 'inherit', fontWeight: 500 }}>Download</a>
             <button onClick={() => setPreviewFile(null)} style={{ fontSize: 24, color: 'rgba(200,194,187,0.5)', background: 'transparent', border: 'none', cursor: 'pointer' }}>×</button>
           </div>
+          {previewIndex() > 0 && (
+            <button onClick={e => { e.stopPropagation(); previewStep(-1) }} aria-label="Previous file" style={{ position: 'fixed', left: 20, top: '50%', transform: 'translateY(-50%)', zIndex: 10, width: 44, height: 44, borderRadius: '50%', background: 'rgba(255,255,255,0.08)', border: '0.5px solid rgba(200,194,187,0.2)', color: '#C8C2BB', fontSize: 20, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>‹</button>
+          )}
+          {previewIndex() < navigableFiles.length - 1 && (
+            <button onClick={e => { e.stopPropagation(); previewStep(1) }} aria-label="Next file" style={{ position: 'fixed', right: 20, top: '50%', transform: 'translateY(-50%)', zIndex: 10, width: 44, height: 44, borderRadius: '50%', background: 'rgba(255,255,255,0.08)', border: '0.5px solid rgba(200,194,187,0.2)', color: '#C8C2BB', fontSize: 20, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>›</button>
+          )}
           <div style={{ width: '94vw', height: '88vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16 }} onClick={e => e.stopPropagation()}>
             {isVideo(previewFile.mimeType) ? (
               <iframe src={`https://drive.google.com/file/d/${previewFile.id}/preview`} style={{ width: '100%', maxWidth: previewFile.videoMediaMetadata && parseInt(previewFile.videoMediaMetadata.height) > parseInt(previewFile.videoMediaMetadata.width) ? 'min(40vw,700px)' : '84vw', height: '82vh', border: 'none', borderRadius: 6 }} allow="autoplay; fullscreen" allowFullScreen />
