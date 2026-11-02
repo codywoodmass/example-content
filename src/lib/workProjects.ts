@@ -43,9 +43,7 @@ export const WORK_PROJECTS: WorkProject[] = [
     type: 'Showreel',
     propertyType: 'Property',
     vimeoId: '1242523905',
-    // vumbnail.com fallback — swap for a resolved i.vimeocdn.com thumbnail
-    // once Vimeo finishes processing this (freshly-uploaded) video.
-    thumb: 'https://vumbnail.com/1242523905_large.jpg',
+    thumb: 'https://i.vimeocdn.com/video/2220798223-417868bacb08a61eac2c44acb523f5b2f0cd7b7da97ce5e37ce830248fcacd18-d_1280x720?region=us',
     description: 'Our most recent property showreel — pulling together the studio\'s current property work into one reel.',
   },
   {

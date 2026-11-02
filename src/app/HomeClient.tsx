@@ -223,7 +223,7 @@ function ShowreelHero({ onNavOpacity }: { onNavOpacity: (v: number) => void }) {
             allow="autoplay; fullscreen"
             frameBorder="0"
           />
-          <div style={{ position: 'absolute', inset: 0, backgroundImage: 'url(https://vumbnail.com/1242523905_large.jpg)', backgroundSize: 'cover', backgroundPosition: 'center', opacity: videoReady ? 0 : 1, transition: 'opacity 0.5s ease', pointerEvents: 'none' }} />
+          <div style={{ position: 'absolute', inset: 0, backgroundImage: 'url(https://i.vimeocdn.com/video/2220798223-417868bacb08a61eac2c44acb523f5b2f0cd7b7da97ce5e37ce830248fcacd18-d_1920x1080?region=us)', backgroundSize: 'cover', backgroundPosition: 'center', opacity: videoReady ? 0 : 1, transition: 'opacity 0.5s ease', pointerEvents: 'none' }} />
         </div>
         {/* From-the-bottom gradient so the hero text sits on enough
             contrast on landing, fading out with the same scroll progress as
