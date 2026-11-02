@@ -2601,10 +2601,11 @@ export default function ClientPortal() {
           const upcomingProjects = clientProjects.filter((p: any) => p.shoot_date && new Date(p.shoot_date) >= now).sort((a: any, b: any) => new Date(a.shoot_date).getTime() - new Date(b.shoot_date).getTime())
           const deliveredProjects = allClientProjects.filter((p: any) => p.stage === 'Awaiting Confirmation' || p.stage === 'Completed').sort((a: any, b: any) => new Date(b.delivery_due || b.created_at).getTime() - new Date(a.delivery_due || a.created_at).getTime())
           const pendingBookings = clientBookings.filter((b: any) => b.status === 'pending' || b.status === 'date_proposed' || b.status === 'alt_requested' || b.status === 'meeting_booked' || b.status === 'meeting_alt_requested' || (b.status === 'confirmed' && !b.project_id))
-          // A booking the studio declined (before a project ever existed) or
-          // cancelled (after deleting an existing project) must never just
+          // A booking cancelled after a project already existed shouldn't just
           // vanish on the client — they still see it here, clearly labelled.
-          const cancelledBookings = clientBookings.filter((b: any) => b.status === 'declined' || b.status === 'cancelled').sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+          // Declined requests (never became a project) are left out entirely
+          // rather than shown as a dead end.
+          const cancelledBookings = clientBookings.filter((b: any) => b.status === 'cancelled').sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
           // Full shoot history, regardless of archived/invoiced status — a client's
           // own record of past shoots should never shrink just because the studio
           // invoiced the project.
@@ -2841,7 +2842,7 @@ export default function ClientPortal() {
                             <div style={{ fontSize:13, fontWeight:500, color:'rgba(200,194,187,0.6)', marginBottom:2, textDecoration:'line-through' }}>{b.address || b.shoot_package || 'Booking request'}</div>
                             <div style={{ fontSize:11, color:'rgba(200,194,187,0.35)' }}>{(b.proposed_date || b.preferred_date) ? new Date((b.proposed_date || b.preferred_date)+'T12:00:00').toLocaleDateString('en-NZ',{day:'numeric',month:'short',year:'numeric'}) : ''}</div>
                           </div>
-                          <span style={{ fontSize:9, letterSpacing:'0.08em', textTransform:'uppercase', padding:'3px 9px', borderRadius:2, background:'rgba(210,90,90,0.1)', color:'rgba(210,90,90,0.8)', border:'0.5px solid rgba(210,90,90,0.25)' }}>{b.status === 'cancelled' ? 'Cancelled' : 'Declined'}</span>
+                          <span style={{ fontSize:9, letterSpacing:'0.08em', textTransform:'uppercase', padding:'3px 9px', borderRadius:2, background:'rgba(210,90,90,0.1)', color:'rgba(210,90,90,0.8)', border:'0.5px solid rgba(210,90,90,0.25)' }}>Cancelled</span>
                         </div>
                       ))}
                     </div>
