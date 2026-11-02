@@ -400,7 +400,7 @@ export default function QuotePage() {
             )}
             {showTravel && travelFee > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: `1px solid ${DOC.border}` }}><span style={{ fontSize: 13, color: DOC.muted }}>Travel — {travelKm} km</span><span style={{ fontSize: 13, color: DOC.heading, fontWeight: 600 }}>${travelFee.toFixed(2)}</span></div>}
             {hireItems.filter(h => h.name).map(h => (
-              <div key={h.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: `1px solid ${DOC.border}` }}><span style={{ fontSize: 13, color: DOC.muted }}>{h.name} hire ×{h.days}</span><span style={{ fontSize: 13, color: DOC.heading, fontWeight: 600 }}>${(h.hireRate * h.days).toLocaleString()}</span></div>
+              <div key={h.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: `1px solid ${DOC.border}` }}><span style={{ fontSize: 13, color: DOC.muted }}>{h.name}{h.days > 1 ? ` ×${h.days}` : ''}</span><span style={{ fontSize: 13, color: DOC.heading, fontWeight: 600 }}>${(h.hireRate * h.days).toLocaleString()}</span></div>
             ))}
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '14px 0 4px' }}><span style={{ fontSize: 12, color: DOC.muted }}>Subtotal</span><span style={{ fontSize: 12, color: DOC.heading }}>${subtotal.toLocaleString()}</span></div>
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0 16px' }}><span style={{ fontSize: 12, color: DOC.muted }}>GST (15%)</span><span style={{ fontSize: 12, color: DOC.heading }}>${gst.toLocaleString()}</span></div>
@@ -722,16 +722,22 @@ export default function QuotePage() {
 
             <div style={panelS}>
               <div style={{ padding: '13px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>Equipment hire</span>
+                <span style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>Additional items</span>
                 <button onClick={addHireItem} style={{ ...btnG, fontSize: 10, padding: '4px 10px' }}>+ Add item</button>
               </div>
               {hireItems.length > 0 && (
                 <div style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px 70px 24px', gap: 8 }}>
+                    <label style={{ ...lbl, marginBottom: 0 }}>Item</label>
+                    <label style={{ ...lbl, marginBottom: 0 }}>Price ($)</label>
+                    <label style={{ ...lbl, marginBottom: 0 }}>Qty</label>
+                    <span />
+                  </div>
                   {hireItems.map(h => (
                     <div key={h.id} style={{ display: 'grid', gridTemplateColumns: '1fr 90px 70px 24px', gap: 8, alignItems: 'center' }}>
-                      <input style={inp} value={h.name} onChange={e => updateHireItem(h.id, 'name', e.target.value)} placeholder="e.g. Drone hire" />
-                      <input style={inp} type="number" min="0" value={h.hireRate} onChange={e => updateHireItem(h.id, 'hireRate', parseFloat(e.target.value) || 0)} placeholder="$/day" />
-                      <input style={inp} type="number" min="1" value={h.days} onChange={e => updateHireItem(h.id, 'days', parseInt(e.target.value) || 1)} placeholder="days" />
+                      <input style={inp} value={h.name} onChange={e => updateHireItem(h.id, 'name', e.target.value)} placeholder="e.g. RAW File Delivery, Drone hire" />
+                      <input style={inp} type="number" min="0" value={h.hireRate} onChange={e => updateHireItem(h.id, 'hireRate', parseFloat(e.target.value) || 0)} placeholder="Price" />
+                      <input style={inp} type="number" min="1" value={h.days} onChange={e => updateHireItem(h.id, 'days', parseInt(e.target.value) || 1)} placeholder="Qty" />
                       <button onClick={() => removeHireItem(h.id)} style={{ fontSize: 13, color: 'rgba(210,90,90,0.6)', background: 'transparent', border: 'none', cursor: 'pointer' }}>✕</button>
                     </div>
                   ))}

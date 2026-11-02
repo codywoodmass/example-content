@@ -112,7 +112,7 @@ export default function QuotePrintPage() {
             )}
             {showTravel && travelFee > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: `1px solid ${DOC.border}` }}><span style={{ fontSize: 13, color: DOC.muted }}>Travel — {travelKm} km</span><span style={{ fontSize: 13, color: DOC.heading, fontWeight: 600 }}>${travelFee.toFixed(2)}</span></div>}
             {(hireItems || []).filter((h: any) => h.name).map((h: any) => (
-              <div key={h.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: `1px solid ${DOC.border}` }}><span style={{ fontSize: 13, color: DOC.muted }}>{h.name} hire ×{h.days}</span><span style={{ fontSize: 13, color: DOC.heading, fontWeight: 600 }}>${(h.hireRate * h.days).toLocaleString()}</span></div>
+              <div key={h.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: `1px solid ${DOC.border}` }}><span style={{ fontSize: 13, color: DOC.muted }}>{h.name}{h.days > 1 ? ` ×${h.days}` : ''}</span><span style={{ fontSize: 13, color: DOC.heading, fontWeight: 600 }}>${(h.hireRate * h.days).toLocaleString()}</span></div>
             ))}
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '14px 0 4px' }}><span style={{ fontSize: 12, color: DOC.muted }}>Subtotal</span><span style={{ fontSize: 12, color: DOC.heading }}>${subtotal.toLocaleString()}</span></div>
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0 16px' }}><span style={{ fontSize: 12, color: DOC.muted }}>GST (15%)</span><span style={{ fontSize: 12, color: DOC.heading }}>${gst.toLocaleString()}</span></div>
