@@ -12,7 +12,10 @@ const DOC = {
   accent: '#111111', highlightBg: '#F4F2EF',
 }
 
-type DeliverableItem = { id: string; name: string; quantity: number; duration: string; formats: string[] }
+// A deliverable can be either filmed or photographed — each gets its own
+// quantity/notes convention (a photo set is usually a range like "50-100",
+// not a single count, and has no "length") and its own format list.
+type DeliverableItem = { id: string; name: string; type: 'video' | 'photo'; quantity: string; duration: string; formats: string[] }
 type HireItem = { id: string; name: string; hireRate: number; days: number }
 
 const VIDEO_FORMATS = ['1920×1080', '1080×1080', '9×16 Vertical', '4×5', '4K 3840×2160', 'ProRes Master']
@@ -54,7 +57,7 @@ export default function QuotePage() {
   const [locationDebounce, setLocationDebounce] = useState<any>(null)
   const [deliveryEstimate, setDeliveryEstimate] = useState('10-14 business days')
   const [deliverables, setDeliverables] = useState<DeliverableItem[]>([
-    { id: '1', name: '', quantity: 1, duration: '', formats: [] },
+    { id: '1', name: '', type: 'video', quantity: '1', duration: '', formats: [] },
   ])
   const [hireItems, setHireItems] = useState<HireItem[]>([])
 
@@ -119,7 +122,8 @@ export default function QuotePage() {
       if (q.locations) setLocations(q.locations)
       if (Array.isArray(q.deliverables) && q.deliverables.length > 0) {
         setDeliverables(q.deliverables.map((d: any, i: number) => ({
-          id: Date.now().toString() + i, name: d.name || '', quantity: d.quantity || 1,
+          id: Date.now().toString() + i, name: d.name || '', type: d.type === 'photo' ? 'photo' : 'video',
+          quantity: d.quantity != null ? String(d.quantity) : '1',
           duration: d.duration || '', formats: Array.isArray(d.formats) ? d.formats : [],
         })))
       }
@@ -181,7 +185,7 @@ export default function QuotePage() {
     setCategory('Commercial'); setJobType(''); setJobDescription('')
     setShootDates(''); setDraftDue(''); setFinalsDue('')
     setLocations(''); setLocationList([]); setDeliveryEstimate('10-14 business days')
-    setDeliverables([{ id: '1', name: '', quantity: 1, duration: '', formats: [] }])
+    setDeliverables([{ id: '1', name: '', type: 'video', quantity: '1', duration: '', formats: [] }])
     setHireItems([]); setOpenQuestions(''); setTcNotes('')
     setShootHours(0); setEditHours(0); setPreProdHours(0); setTravelKm(0)
     setShowPreProd(false); setShowTravel(false)
@@ -310,7 +314,7 @@ export default function QuotePage() {
   const btnP: React.CSSProperties = { fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }
   const btnG: React.CSSProperties = { fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }
 
-  function addDel() { setDeliverables(p => [...p, { id: Date.now().toString(), name: '', quantity: 1, duration: '', formats: [] }]) }
+  function addDel() { setDeliverables(p => [...p, { id: Date.now().toString(), name: '', type: 'video', quantity: '1', duration: '', formats: [] }]) }
   function updateDel(id: string, field: keyof DeliverableItem, value: any) { setDeliverables(p => p.map(d => d.id === id ? { ...d, [field]: value } : d)) }
   function toggleFmt(id: string, fmt: string) { setDeliverables(p => p.map(d => d.id === id ? { ...d, formats: d.formats.includes(fmt) ? d.formats.filter(f => f !== fmt) : [...d.formats, fmt] } : d)) }
   function removeDel(id: string) { setDeliverables(p => p.filter(d => d.id !== id)) }
@@ -378,7 +382,7 @@ export default function QuotePage() {
           <div style={{ display: 'flex', flexDirection: 'column' as const }}>
             {shootFee > 0 && (
               <div style={{ padding: '10px 0', borderBottom: `1px solid ${DOC.border}` }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: 13, color: DOC.muted }}>Filming — {shootHours} hrs</span><span style={{ fontSize: 13, color: DOC.heading, fontWeight: 600 }}>${shootFee.toLocaleString()}</span></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: 13, color: DOC.muted }}>Shooting — {shootHours} hrs</span><span style={{ fontSize: 13, color: DOC.heading, fontWeight: 600 }}>${shootFee.toLocaleString()}</span></div>
                 {filmingNotes && <div style={{ fontSize: 11, color: DOC.faint, marginTop: 3 }}>{filmingNotes}</div>}
               </div>
             )}
@@ -483,7 +487,7 @@ export default function QuotePage() {
                       setDraftDue(d.draftDue || ''); setFinalsDue(d.finalsDue || '')
                       setLocationList(d.locationList || []); setLocations(d.locations || '')
                       setDeliveryEstimate(d.deliveryEstimate || '10-14 business days')
-                      setDeliverables(d.deliverables && d.deliverables.length > 0 ? d.deliverables : [{ id: '1', name: '', quantity: 1, duration: '', formats: [] }])
+                      setDeliverables(d.deliverables && d.deliverables.length > 0 ? d.deliverables.map((del: any) => ({ ...del, type: del.type === 'photo' ? 'photo' : 'video', quantity: del.quantity != null ? String(del.quantity) : '1' })) : [{ id: '1', name: '', type: 'video', quantity: '1', duration: '', formats: [] }])
                       setHireItems(d.hireItems || [])
                       setOpenQuestions(d.openQuestions || ''); setTcNotes(d.tcNotes || '')
                       setShootHours(d.shootHours || 0); setEditHours(d.editHours || 0)
@@ -645,16 +649,23 @@ export default function QuotePage() {
               <div style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 12 }}>
                 {deliverables.map(d => (
                   <div key={d.id} style={{ background: 'rgba(0,0,0,0.2)', border: '0.5px solid rgba(200,194,187,0.07)', borderRadius: 6, padding: 14 }}>
-                    <div className="ec-shoot-date-row" style={{ display: 'grid', gridTemplateColumns: '1fr 60px 110px 24px', gap: 10, marginBottom: 10, alignItems: 'end' }}>
-                      <input style={inp} value={d.name} onChange={e => updateDel(d.id, 'name', e.target.value)} placeholder="e.g. Hero brand film..." />
-                      <div><label style={{ ...lbl, marginBottom: 4 }}>Qty</label><input style={{ ...inp, textAlign: 'center' as const }} type="number" min="1" value={d.quantity} onChange={e => updateDel(d.id, 'quantity', parseInt(e.target.value) || 1)} /></div>
-                      <div><label style={{ ...lbl, marginBottom: 4 }}>Length</label><input style={inp} value={d.duration} onChange={e => updateDel(d.id, 'duration', e.target.value)} placeholder="2-3 min" /></div>
+                    <div className="ec-shoot-date-row" style={{ display: 'grid', gridTemplateColumns: '1fr 130px', gap: 10, marginBottom: 10 }}>
+                      <input style={inp} value={d.name} onChange={e => updateDel(d.id, 'name', e.target.value)} placeholder={d.type === 'photo' ? 'e.g. Village A — photos' : 'e.g. Hero brand film...'} />
+                      <div style={{ display: 'flex', gap: 4 }}>
+                        {(['video', 'photo'] as const).map(t => (
+                          <button key={t} onClick={() => updateDel(d.id, 'type', t)} style={{ flex: 1, fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '7px 0', borderRadius: 3, border: `0.5px solid ${d.type === t ? '#C8C2BB' : 'rgba(200,194,187,0.12)'}`, background: d.type === t ? 'rgba(200,194,187,0.1)' : 'transparent', color: d.type === t ? '#C8C2BB' : 'rgba(200,194,187,0.3)', cursor: 'pointer', fontFamily: 'inherit' }}>{t === 'video' ? 'Video' : 'Photo'}</button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="ec-shoot-date-row" style={{ display: 'grid', gridTemplateColumns: '110px 1fr 24px', gap: 10, marginBottom: 10, alignItems: 'end' }}>
+                      <div><label style={{ ...lbl, marginBottom: 4 }}>Qty</label><input style={inp} value={d.quantity} onChange={e => updateDel(d.id, 'quantity', e.target.value)} placeholder={d.type === 'photo' ? '50-100' : '1'} /></div>
+                      <div><label style={{ ...lbl, marginBottom: 4 }}>{d.type === 'photo' ? 'Style / notes' : 'Length'}</label><input style={inp} value={d.duration} onChange={e => updateDel(d.id, 'duration', e.target.value)} placeholder={d.type === 'photo' ? 'Lifestyle & architectural mix, per village' : '2-3 min'} /></div>
                       {deliverables.length > 1 && <button onClick={() => removeDel(d.id)} style={{ fontSize: 13, color: 'rgba(210,90,90,0.6)', background: 'transparent', border: 'none', cursor: 'pointer' }}>✕</button>}
                     </div>
                     <div>
                       <label style={{ ...lbl, marginBottom: 6 }}>Formats</label>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                        {[...VIDEO_FORMATS, ...PHOTO_FORMATS].map(fmt => (
+                        {(d.type === 'photo' ? PHOTO_FORMATS : VIDEO_FORMATS).map(fmt => (
                           <button key={fmt} onClick={() => toggleFmt(d.id, fmt)} style={{ fontSize: 10, padding: '4px 9px', borderRadius: 3, border: `0.5px solid ${d.formats.includes(fmt) ? '#C8C2BB' : 'rgba(200,194,187,0.12)'}`, background: d.formats.includes(fmt) ? 'rgba(200,194,187,0.1)' : 'transparent', color: d.formats.includes(fmt) ? '#C8C2BB' : 'rgba(200,194,187,0.3)', cursor: 'pointer', fontFamily: 'inherit' }}>{fmt}</button>
                         ))}
                       </div>
@@ -669,7 +680,7 @@ export default function QuotePage() {
               <div style={{ padding: 18 }}>
                 <div className="ec-form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
                   {[
-                    { label: 'Filming ($/hr)', val: rateFilming, set: setRateFilming },
+                    { label: 'Shooting ($/hr)', val: rateFilming, set: setRateFilming },
                     { label: 'Editing ($/hr)', val: rateEditing, set: setRateEditing },
                   ].map(({ label, val, set }) => (
                     <div key={label}><label style={lbl}>{label}</label><input style={inp} type="number" min="0" value={val} onChange={e => set(parseFloat(e.target.value) || 0)} /></div>
@@ -677,9 +688,9 @@ export default function QuotePage() {
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
                   <input style={{ ...inp, width: 70, padding: '7px 9px' }} type="number" min="0" value={shootHours} onChange={e => setShootHours(parseFloat(e.target.value) || 0)} />
-                  <span style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>hrs filming × ${rateFilming} = <strong style={{ color: '#C8C2BB' }}>${shootFee.toLocaleString()}</strong></span>
+                  <span style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>hrs shooting × ${rateFilming} = <strong style={{ color: '#C8C2BB' }}>${shootFee.toLocaleString()}</strong></span>
                 </div>
-                <input style={{ ...inp, marginBottom: 14 }} value={filmingNotes} onChange={e => setFilmingNotes(e.target.value)} placeholder="What's involved — e.g. on-location filming, 1 camera operator" />
+                <input style={{ ...inp, marginBottom: 14 }} value={filmingNotes} onChange={e => setFilmingNotes(e.target.value)} placeholder="What's involved — e.g. on-location filming or on-site photography, 1 operator" />
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
                   <input style={{ ...inp, width: 70, padding: '7px 9px' }} type="number" min="0" value={editHours} onChange={e => setEditHours(parseFloat(e.target.value) || 0)} />
                   <span style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>hrs editing × ${rateEditing} = <strong style={{ color: '#C8C2BB' }}>${editFee.toLocaleString()}</strong></span>

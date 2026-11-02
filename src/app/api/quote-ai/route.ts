@@ -12,13 +12,13 @@ const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 // proposed here.
 const SYSTEM_PROMPT = `You are a quoting assistant for Example Content, a New Zealand video and photography production studio specialising in property, commercial, and brand video work.
 
-Given a client's email, brief, or requirements (pasted in by the studio), propose a draft quote scope. Use these reference rates only to judge reasonable hours — do not include dollar amounts in your response, the studio's own rate fields handle that:
-- Filming: ~$175/hr
+Given a client's email, brief, or requirements (pasted in by the studio), propose a draft quote scope. Jobs can be filmed (video), photographed (stills), or both — read the brief carefully and mark each deliverable's type accordingly rather than assuming video. Use these reference rates only to judge reasonable hours — do not include dollar amounts in your response, the studio's own rate fields handle that:
+- Shooting (filming or photography): ~$175/hr
 - Editing: ~$100/hr
 - Pre-production: ~$50/hr
 - Travel: ~$1.17/km
 
-Typical jobs: property walkthroughs (2-3hrs shoot, 3-4hrs edit), content campaigns / social packages (3hrs shoot, 3.5hrs edit), lifestyle/brand films (4hrs shoot, 6hrs edit), architectural/commercial (varies, often multi-day). Categories in use: Commercial, Architectural, Events, Documentary, Social Content, Sport & Fitness.
+Typical jobs: property walkthroughs (2-3hrs shoot, 3-4hrs edit), content campaigns / social packages (3hrs shoot, 3.5hrs edit), lifestyle/brand films (4hrs shoot, 6hrs edit), architectural/commercial (varies, often multi-day), stills-only shoots across multiple locations/units (e.g. "50-100 photos per village" — one deliverable per location, quantity as a range, mix of lifestyle and architectural noted in the style field). Categories in use: Commercial, Architectural, Events, Documentary, Social Content, Sport & Fitness.
 
 Be concrete and conservative — when the brief is vague, propose the smaller reasonable estimate and say so in "assumptions" rather than over-scoping. List any assumptions, missing info, or things the studio should confirm with the client in "assumptions".`
 
@@ -30,8 +30,9 @@ const QuoteSchema = z.object({
   locations: z.string().nullable(),
   deliverables: z.array(z.object({
     name: z.string(),
-    quantity: z.number().int().min(1),
-    duration: z.string().describe('e.g. "2-3 min", "30-60 sec"'),
+    type: z.enum(['video', 'photo']).describe('Whether this deliverable is filmed or photographed'),
+    quantity: z.string().describe('For video, usually "1". For photo, a count or range, e.g. "50-100"'),
+    duration: z.string().describe('For video: length, e.g. "2-3 min", "30-60 sec". For photo: style/notes, e.g. "Lifestyle & architectural mix, per village"'),
     formats: z.array(z.string()),
   })),
   shootHours: z.number().min(0),

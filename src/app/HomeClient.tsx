@@ -218,12 +218,12 @@ function ShowreelHero({ onNavOpacity }: { onNavOpacity: (v: number) => void }) {
             // why the mute toggle never actually produced sound. Every
             // other param here reproduces the same chrome-free look
             // without that restriction.
-            src="https://player.vimeo.com/video/1238228672?autoplay=1&loop=1&muted=1&title=0&byline=0&portrait=0&controls=0&badge=0&autopause=0&dnt=1"
+            src="https://player.vimeo.com/video/1242523905?autoplay=1&loop=1&muted=1&title=0&byline=0&portrait=0&controls=0&badge=0&autopause=0&dnt=1"
             style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: 'calc(100vw + 400px)', height: 'calc(100vh + 400px)', minWidth: '200vh', minHeight: '56.25vw', border: 'none', pointerEvents: 'none' }}
             allow="autoplay; fullscreen"
             frameBorder="0"
           />
-          <div style={{ position: 'absolute', inset: 0, backgroundImage: 'url(https://i.vimeocdn.com/video/2215297298-a6ba2e6db0190fd8d744b6c883d5688aabdbb5b179d860737fcb474b9cc18a2a-d_1920x1080?region=us)', backgroundSize: 'cover', backgroundPosition: 'center', opacity: videoReady ? 0 : 1, transition: 'opacity 0.5s ease', pointerEvents: 'none' }} />
+          <div style={{ position: 'absolute', inset: 0, backgroundImage: 'url(https://vumbnail.com/1242523905_large.jpg)', backgroundSize: 'cover', backgroundPosition: 'center', opacity: videoReady ? 0 : 1, transition: 'opacity 0.5s ease', pointerEvents: 'none' }} />
         </div>
         {/* From-the-bottom gradient so the hero text sits on enough
             contrast on landing, fading out with the same scroll progress as

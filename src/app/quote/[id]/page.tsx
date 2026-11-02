@@ -135,7 +135,7 @@ export default function PublicQuoteViewer() {
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             {shootFee > 0 && (
               <div style={{ padding: '10px 0', borderBottom: `1px solid ${DOC.border}` }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: 13, color: DOC.muted }}>Filming — {d.shootHours} hrs</span><span style={{ fontSize: 13, color: DOC.heading, fontWeight: 600 }}>${shootFee.toLocaleString()}</span></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: 13, color: DOC.muted }}>Shooting — {d.shootHours} hrs</span><span style={{ fontSize: 13, color: DOC.heading, fontWeight: 600 }}>${shootFee.toLocaleString()}</span></div>
                 {d.filmingNotes && <div style={{ fontSize: 11, color: DOC.faint, marginTop: 3 }}>{d.filmingNotes}</div>}
               </div>
             )}

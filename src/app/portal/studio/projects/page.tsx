@@ -117,7 +117,9 @@ const PROPERTY_PACKAGES = [
   { name: 'The Walkthrough Package', price: 890 },
   { name: 'Lifestyle and Living Package', price: 1280 },
   { name: 'Media Release Package', price: 2480 },
+  { name: 'Photo Package', price: 450 },
 ]
+const CUSTOM_PACKAGE_VALUE = '__custom__'
 
 const STAGE_COLORS: Record<string, { color: string; bg: string; border: string }> = {
   'Enquiry': { color: 'rgba(200,194,187,0.55)', bg: 'rgba(200,194,187,0.06)', border: 'rgba(200,194,187,0.15)' },
@@ -664,7 +666,8 @@ function ProjectsPageInner() {
     category: 'Property', stage: 'Enquiry',
     brief_due: '', shoot_window_start: '', shoot_window_end: '',
     shoot_date: '', draft_due: '', delivery_due: '',
-    address: '', reference_url: '', supplied_info: '', shoot_package: ''
+    address: '', reference_url: '', supplied_info: '', shoot_package: '',
+    custom_package_name: '', custom_price: ''
   })
 
   useEffect(() => { loadProjects() }, [])
@@ -1060,8 +1063,11 @@ function ProjectsPageInner() {
   async function addProject() {
     if (!newForm.title || !newForm.client) return
     setSaving(true)
-    const { shoot_package, ...formRest } = newForm
+    const { shoot_package, custom_package_name, custom_price, ...formRest } = newForm
+    const isCustomPackage = shoot_package === CUSTOM_PACKAGE_VALUE
     const selectedPackage = PROPERTY_PACKAGES.find(p => p.name === shoot_package)
+    const resolvedPackageName = isCustomPackage ? custom_package_name : shoot_package
+    const resolvedAmount = isCustomPackage ? (parseFloat(custom_price) || null) : (selectedPackage?.price ?? null)
     const { data, error } = await supabase.from('projects1').insert([{
       ...formRest,
       brief_due: null,
@@ -1074,8 +1080,8 @@ function ProjectsPageInner() {
       from_booking: false,
       general_notes: newForm.brief_due === 'required' ? 'Property brief required\n\n' + (newForm.supplied_info || '') : (newForm.supplied_info || ''),
       editor_notes: '',
-      amount: selectedPackage?.price ?? null,
-      deliverables: shoot_package ? 'PACKAGE: ' + shoot_package : '',
+      amount: resolvedAmount,
+      deliverables: resolvedPackageName ? 'PACKAGE: ' + resolvedPackageName : '',
     }]).select().single()
     if (error) {
       console.error('Insert error:', error)
@@ -1091,7 +1097,7 @@ function ProjectsPageInner() {
       }
       setProjects(p => [data, ...p])
       setShowNewModal(false)
-      setNewForm({ title: '', client: '', contact: '', email: '', category: 'Property', stage: 'Enquiry', brief_due: '', shoot_window_start: '', shoot_window_end: '', shoot_date: '', draft_due: '', delivery_due: '', address: '', reference_url: '', supplied_info: '', shoot_package: '' })
+      setNewForm({ title: '', client: '', contact: '', email: '', category: 'Property', stage: 'Enquiry', brief_due: '', shoot_window_start: '', shoot_window_end: '', shoot_date: '', draft_due: '', delivery_due: '', address: '', reference_url: '', supplied_info: '', shoot_package: '', custom_package_name: '', custom_price: '' })
       // A project created directly at a stage past Enquiry is already a confirmed job
       // (no separate "Mark confirmed" step applies to it), so sync its shoot to the
       // calendar immediately rather than waiting on a confirmation that'll never happen.
@@ -1427,8 +1433,21 @@ function ProjectsPageInner() {
                     <select style={inp} value={newForm.shoot_package} onChange={e => setNewForm(f => ({ ...f, shoot_package: e.target.value }))}>
                       <option value="">Select a package...</option>
                       {PROPERTY_PACKAGES.map(pkg => <option key={pkg.name} value={pkg.name}>{pkg.name} — ${pkg.price.toLocaleString()}</option>)}
+                      <option value={CUSTOM_PACKAGE_VALUE}>Custom package...</option>
                     </select>
                   </div>
+                  {newForm.shoot_package === CUSTOM_PACKAGE_VALUE && (
+                    <>
+                      <div>
+                        <label style={lbl}>Custom package name</label>
+                        <input style={inp} value={newForm.custom_package_name} onChange={e => setNewForm(f => ({ ...f, custom_package_name: e.target.value }))} placeholder="e.g. Half-day shoot — 3 villages" />
+                      </div>
+                      <div>
+                        <label style={lbl}>Price ($)</label>
+                        <input style={inp} type="number" min="0" step="0.01" value={newForm.custom_price} onChange={e => setNewForm(f => ({ ...f, custom_price: e.target.value }))} placeholder="0.00" />
+                      </div>
+                    </>
+                  )}
                 </>
               ) : (
                 <div style={{ gridColumn: 'span 2' }}>
