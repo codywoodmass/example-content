@@ -3036,6 +3036,32 @@ export default function StudioPortal() {
                     if (respondingToCR && shootDate) {
                       if (respondingToCR.project_id) {
                         await supabase.from('projects1').update({ shoot_date: shootDate, shoot_window_start: startTime, shoot_window_end: endTime, general_notes: (respondingToCR.general_notes || '') + '\n\n[RESCHEDULED ' + new Date().toLocaleDateString('en-NZ') + '] New date: ' + new Date(shootDate + 'T12:00:00').toLocaleDateString('en-NZ',{weekday:'long',day:'numeric',month:'long',year:'numeric'}) + ' at ' + formatTime12(startTime) }).eq('id', respondingToCR.project_id)
+                        // Patch the existing Google Calendar event onto the new
+                        // date/time instead of leaving it untouched — this branch
+                        // used to skip the calendar entirely, so a reschedule here
+                        // never showed up on the studio's calendar at all.
+                        const crProject = dashProjects.find((p: any) => p.id === respondingToCR.project_id)
+                        try {
+                          const res = await fetch('/api/calendar', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              title: `Example Content — ${respondingToCR.project_title || 'Shoot'}`,
+                              date: shootDate,
+                              startTime, endTime,
+                              clientEmail: respondingToCR.client_email,
+                              location: crProject?.address || '',
+                              description: `Confirmed shoot for ${respondingToCR.client_name || respondingToCR.client_email}`,
+                              eventId: crProject?.calendar_event_id || undefined,
+                            }),
+                          })
+                          const calData = await res.json()
+                          if (calData.success && calData.eventId && calData.eventId !== crProject?.calendar_event_id) {
+                            await supabase.from('projects1').update({ calendar_event_id: calData.eventId }).eq('id', respondingToCR.project_id)
+                          } else if (!calData.success && calData.error !== 'Not authenticated') {
+                            notify('Shoot date updated, but the calendar event failed: ' + calData.error, 'error')
+                          }
+                        } catch (e) { console.error('Calendar reschedule error:', e) }
                       }
                       await supabase.from('change_requests').update({ status: 'resolved' }).eq('id', respondingToCR.id)
                       setChangeRequests((p: any[]) => p.filter((r: any) => r.id !== respondingToCR.id))

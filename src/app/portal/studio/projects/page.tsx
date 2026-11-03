@@ -898,7 +898,14 @@ function ProjectsPageInner() {
     await supabase.from('projects1').update(update).eq('id', project.id)
     setProjects(p => p.map(proj => proj.id === project.id ? { ...proj, ...update } : proj))
     setModalProject(p => p && p.id === project.id ? { ...p, ...update } : p)
-    createCalendarEventForProject({ ...project, ...update })
+    // Cancel any pending triggerCalendarSync debounce for this project before
+    // firing immediately below — otherwise a date/time edit made just before
+    // clicking Confirm fires both calls with neither having a calendar_event_id
+    // yet, inserting two separate events instead of one (every later edit then
+    // only patches whichever id won the race, leaving the other stranded).
+    if (calendarSyncTimer) clearTimeout(calendarSyncTimer)
+    const latestEventId = modalProjectRef.current?.id === project.id ? modalProjectRef.current.calendar_event_id : undefined
+    createCalendarEventForProject({ ...project, ...update, calendar_event_id: latestEventId || project.calendar_event_id })
   }
 
   // Puts a manually-added project's shoot on the studio's Google Calendar once it's
