@@ -657,7 +657,11 @@ function ProjectsPageInner() {
   const [showArchived, setShowArchived] = useState(false)
   const [dragOverStage, setDragOverStage] = useState<string | null>(null)
   const [sortBy, setSortBy] = useState<string>('created_at')
-  const [groupByStage, setGroupByStage] = useState(false)
+  // Defaults on for the list view — most useful ordering for a studio
+  // triaging work: what's closest to done at the top, most recently added
+  // first within each stage (the latter already falls out of filtered's own
+  // default 'created_at' sort below).
+  const [groupByStage, setGroupByStage] = useState(true)
   const [saving, setSaving] = useState(false)
   const [sendingInvoice, setSendingInvoice] = useState(false)
 
@@ -1342,7 +1346,10 @@ function ProjectsPageInner() {
         <div style={{ padding: 28 }}>
           {groupByStage ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-              {STAGES.map(stage => {
+              {/* Closest-to-done first — the reverse of the kanban's
+                  pipeline order (Enquiry → Completed), since triaging a
+                  list wants "what's nearly out the door" at the top. */}
+              {[...STAGES].reverse().map(stage => {
                 const stageProjects = filtered.filter(p => p.stage === stage)
                 if (stageProjects.length === 0) return null
                 const sc = STAGE_COLORS[stage] || { color: '#C8C2BB', border: 'rgba(200,194,187,0.2)' }
