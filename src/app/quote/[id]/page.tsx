@@ -171,7 +171,7 @@ export default function PublicQuoteViewer() {
         <div style={{ marginBottom: 36 }}>
           <div style={{ fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase', color: DOC.muted, marginBottom: 14, fontWeight: 700 }}>Terms & Conditions</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {[...TERMS, d.tcNotes].filter(Boolean).map((term, i) => (
+            {[...TERMS.filter((_: string, ti: number) => !(d.disabledTerms || []).includes(ti)), d.tcNotes].filter(Boolean).map((term, i) => (
               <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 12, color: DOC.muted, lineHeight: 1.6 }}>
                 <span style={{ flexShrink: 0, fontWeight: 700, color: DOC.faint }}>{i + 1}.</span>{term}
               </div>

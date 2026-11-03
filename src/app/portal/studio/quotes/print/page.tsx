@@ -37,7 +37,7 @@ export default function QuotePrintPage() {
   )
 
   const { clientName, contactName, projectName, category, jobType, jobDescription, shootDates, locations,
-    deliveryEstimate, deliverables, hireItems, openQuestions, tcNotes,
+    deliveryEstimate, deliverables, hireItems, openQuestions, tcNotes, disabledTerms,
     shootHours, editHours, preProdHours, travelKm, showPreProd, showTravel,
     shootFee, editFee, preProdFee, travelFee, subtotal, gst, total,
     filmingNotes, preProdNotes, editingNotes } = data
@@ -130,7 +130,7 @@ export default function QuotePrintPage() {
         <div>
           <div style={{ fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase', color: DOC.muted, marginBottom: 14, fontWeight: 700 }}>Terms & Conditions</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {[...TERMS, tcNotes].filter(Boolean).map((term, i) => (
+            {[...TERMS.filter((_: string, ti: number) => !(disabledTerms || []).includes(ti)), tcNotes].filter(Boolean).map((term, i) => (
               <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 12, color: DOC.muted, lineHeight: 1.6 }}>
                 <span style={{ flexShrink: 0, fontWeight: 700, color: DOC.faint }}>{i + 1}.</span>{term}
               </div>

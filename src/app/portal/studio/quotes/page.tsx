@@ -63,6 +63,11 @@ export default function QuotePage() {
 
   const [openQuestions, setOpenQuestions] = useState('')
   const [tcNotes, setTcNotes] = useState('')
+  // Indices into TERMS the studio has unticked for this quote — jobs vary
+  // enough (no deposit on a repeat client, a different cancellation window,
+  // etc.) that "always included" was too rigid. Empty by default so every
+  // existing saved quote still shows the full standard set.
+  const [disabledTerms, setDisabledTerms] = useState<number[]>([])
   const [shootHours, setShootHours] = useState(0)
   const [editHours, setEditHours] = useState(0)
   const [preProdHours, setPreProdHours] = useState(0)
@@ -186,7 +191,7 @@ export default function QuotePage() {
     setShootDates(''); setDraftDue(''); setFinalsDue('')
     setLocations(''); setLocationList([]); setDeliveryEstimate('10-14 business days')
     setDeliverables([{ id: '1', name: '', type: 'video', quantity: '1', duration: '', formats: [] }])
-    setHireItems([]); setOpenQuestions(''); setTcNotes('')
+    setHireItems([]); setOpenQuestions(''); setTcNotes(''); setDisabledTerms([])
     setShootHours(0); setEditHours(0); setPreProdHours(0); setTravelKm(0)
     setShowPreProd(false); setShowTravel(false)
     setRateFilming(175); setRateEditing(100); setRatePreProd(50); setRateTravelKm(1.17)
@@ -210,7 +215,7 @@ export default function QuotePage() {
     const quoteData = {
       clientName, contactName, clientEmail, projectName, category, jobType, jobDescription,
       shootDates, draftDue, finalsDue, locations, locationList, deliveryEstimate,
-      deliverables, hireItems, openQuestions, tcNotes,
+      deliverables, hireItems, openQuestions, tcNotes, disabledTerms,
       shootHours, editHours, preProdHours, travelKm, showPreProd, showTravel,
       rateFilming, rateEditing, ratePreProd, rateTravelKm,
       filmingNotes, preProdNotes, editingNotes,
@@ -304,7 +309,7 @@ export default function QuotePage() {
     return () => clearTimeout(timer)
   }, [clientName, contactName, clientEmail, projectName, category, jobType, jobDescription,
       shootDates, draftDue, finalsDue, locations, deliveryEstimate,
-      deliverables, hireItems, openQuestions, tcNotes,
+      deliverables, hireItems, openQuestions, tcNotes, disabledTerms,
       shootHours, editHours, preProdHours, travelKm, showPreProd, showTravel,
       rateFilming, rateEditing, ratePreProd, rateTravelKm, filmingNotes, preProdNotes, editingNotes, clientFeedback])
 
@@ -420,7 +425,7 @@ export default function QuotePage() {
         <div>
           <div style={{ fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase', color: DOC.muted, marginBottom: 14, fontWeight: 700 }}>Terms & Conditions</div>
           <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 10 }}>
-            {[...TERMS, tcNotes].filter(Boolean).map((term, i) => (
+            {[...TERMS.filter((_, ti) => !disabledTerms.includes(ti)), tcNotes].filter(Boolean).map((term, i) => (
               <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 12, color: DOC.muted, lineHeight: 1.6 }}>
                 <span style={{ flexShrink: 0, fontWeight: 700, color: DOC.faint }}>{i + 1}.</span>{term}
               </div>
@@ -457,7 +462,7 @@ export default function QuotePage() {
             </>}
             {view === 'preview' && <>
               <button style={btnG} onClick={() => {
-                localStorage.setItem('quote_print_data', JSON.stringify({ clientName, contactName, projectName, category, jobType, jobDescription, shootDates, locations, deliveryEstimate, deliverables, hireItems, openQuestions, tcNotes, shootHours, editHours, preProdHours, travelKm, showPreProd, showTravel, shootFee, editFee, preProdFee, travelFee, subtotal, gst, total, filmingNotes, preProdNotes, editingNotes }))
+                localStorage.setItem('quote_print_data', JSON.stringify({ clientName, contactName, projectName, category, jobType, jobDescription, shootDates, locations, deliveryEstimate, deliverables, hireItems, openQuestions, tcNotes, disabledTerms, shootHours, editHours, preProdHours, travelKm, showPreProd, showTravel, shootFee, editFee, preProdFee, travelFee, subtotal, gst, total, filmingNotes, preProdNotes, editingNotes }))
                 window.open('/portal/studio/quotes/print', '_blank')
               }}>↓ Save as PDF</button>
               <button style={btnG} onClick={() => acceptQuote()}>Mark accepted</button>
@@ -489,7 +494,7 @@ export default function QuotePage() {
                       setDeliveryEstimate(d.deliveryEstimate || '10-14 business days')
                       setDeliverables(d.deliverables && d.deliverables.length > 0 ? d.deliverables.map((del: any) => ({ ...del, type: del.type === 'photo' ? 'photo' : 'video', quantity: del.quantity != null ? String(del.quantity) : '1' })) : [{ id: '1', name: '', type: 'video', quantity: '1', duration: '', formats: [] }])
                       setHireItems(d.hireItems || [])
-                      setOpenQuestions(d.openQuestions || ''); setTcNotes(d.tcNotes || '')
+                      setOpenQuestions(d.openQuestions || ''); setTcNotes(d.tcNotes || ''); setDisabledTerms(d.disabledTerms || [])
                       setShootHours(d.shootHours || 0); setEditHours(d.editHours || 0)
                       setPreProdHours(d.preProdHours || 0); setTravelKm(d.travelKm || 0)
                       setShowPreProd(d.showPreProd || false); setShowTravel(d.showTravel || false)
@@ -757,8 +762,21 @@ export default function QuotePage() {
                   <textarea style={{ ...inp, resize: 'vertical' as const, lineHeight: 1.65 }} rows={2} value={tcNotes} onChange={e => setTcNotes(e.target.value)} placeholder="e.g. Talent release forms required..." />
                 </div>
                 <div style={{ marginTop: 14, padding: '12px 14px', background: 'rgba(200,194,187,0.03)', borderRadius: 4, border: '0.5px solid rgba(200,194,187,0.07)' }}>
-                  <div style={{ fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.3)', marginBottom: 8 }}>Standard terms (always included)</div>
-                  {TERMS.map((term, i) => <div key={i} style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', lineHeight: 1.6, marginBottom: 4 }}>{i + 1}. {term}</div>)}
+                  <div style={{ fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.3)', marginBottom: 8 }}>Standard terms — untick any that don't apply to this job</div>
+                  {TERMS.map((term, i) => {
+                    const enabled = !disabledTerms.includes(i)
+                    return (
+                      <label key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer', marginBottom: 6 }}>
+                        <input
+                          type="checkbox"
+                          checked={enabled}
+                          onChange={() => setDisabledTerms(p => p.includes(i) ? p.filter(x => x !== i) : [...p, i])}
+                          style={{ accentColor: '#C8C2BB', marginTop: 2, flexShrink: 0 }}
+                        />
+                        <span style={{ fontSize: 11, color: enabled ? 'rgba(200,194,187,0.4)' : 'rgba(200,194,187,0.18)', lineHeight: 1.6, textDecoration: enabled ? 'none' : 'line-through' }}>{term}</span>
+                      </label>
+                    )
+                  })}
                 </div>
               </div>
             </div>
