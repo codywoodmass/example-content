@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { requireStudioUser } from '@/lib/xero'
+import { renderEmail } from '@/lib/emailTemplate'
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
 
@@ -33,6 +34,7 @@ export async function POST(req: NextRequest) {
   }
 
   const lineRows = (items || []).map((i: any) => `<tr><td style="padding:6px 0;">${i.title}</td><td style="padding:6px 0;text-align:right;">$${(i.amount || 0).toLocaleString()}</td></tr>`).join('')
+  const portalUrl = new URL('/portal/client', req.nextUrl.origin).toString()
 
   try {
     const res = await fetch('https://api.resend.com/emails', {
@@ -42,13 +44,15 @@ export async function POST(req: NextRequest) {
         from: process.env.RESEND_FROM_EMAIL || 'Example Content <onboarding@resend.dev>',
         to: clientEmail,
         subject: `Invoice from Example Content — $${(total || 0).toLocaleString()}`,
-        html: `
-          <p>Hi ${clientName || ''},</p>
-          <p>Your invoice from Example Content is ready:</p>
-          <table style="width:100%;border-collapse:collapse;">${lineRows}</table>
-          <p style="margin-top:16px;">Subtotal: $${(subtotal || 0).toLocaleString()}<br/>GST: $${(gst || 0).toLocaleString()}<br/><strong>Total: $${(total || 0).toLocaleString()}</strong></p>
-          <p>View this invoice any time in your client portal.</p>
-        `,
+        html: renderEmail({
+          heading: 'Your invoice<br/>is ready.',
+          intro: `Hi ${clientName || ''},`,
+          bodyHtml: `
+            <table style="width:100%;border-collapse:collapse;margin:0 0 16px;">${lineRows}</table>
+            <p style="margin:0;">Subtotal: $${(subtotal || 0).toLocaleString()}<br/>GST: $${(gst || 0).toLocaleString()}<br/><strong style="color:#111111;">Total: $${(total || 0).toLocaleString()}</strong></p>
+          `,
+          cta: { label: 'View invoice', url: portalUrl },
+        }),
       }),
     })
     const emailData = await res.json()

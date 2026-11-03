@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { formatTime12 } from '@/lib/time'
 import { getWeatherForAddress, WEATHER_CODE_ICONS } from '@/lib/weather'
+import { renderEmail } from '@/lib/emailTemplate'
 
 const STUDIO_EMAIL = 'cody@examplecontent.co.nz'
 
@@ -88,14 +89,17 @@ export async function GET(req: NextRequest) {
       .sort((a, b) => (a.shoot!.start || '99:99').localeCompare(b.shoot!.start || '99:99'))
       .map(({ p, shoot }) => `
         <tr>
-          <td style="padding:8px 14px 8px 0;font-size:13px;color:#444;white-space:nowrap;vertical-align:top;">${shoot!.start ? formatTime12(shoot!.start) + (shoot!.end ? '–' + formatTime12(shoot!.end) : '') : 'Time TBC'}</td>
-          <td style="padding:8px 0;font-size:13px;vertical-align:top;"><strong>${p.title}</strong> — ${p.client || ''}${p.address ? `<br><span style="color:#888;font-size:12px;">${p.address}</span>` : ''}</td>
+          <td style="padding:8px 14px 8px 0;font-size:13px;color:#8c8577;white-space:nowrap;vertical-align:top;">${shoot!.start ? formatTime12(shoot!.start) + (shoot!.end ? '–' + formatTime12(shoot!.end) : '') : 'Time TBC'}</td>
+          <td style="padding:8px 0;font-size:13px;vertical-align:top;"><strong style="color:#111111;">${p.title}</strong> — ${p.client || ''}${p.address ? `<br><span style="color:#8c8577;font-size:12px;">${p.address}</span>` : ''}</td>
         </tr>`)
       .join('')
     studioSent = await sendEmail(
       STUDIO_EMAIL,
       `${todayShoots.length} shoot${todayShoots.length !== 1 ? 's' : ''} today`,
-      `<h2 style="font-family:sans-serif;font-size:18px;">Today's shoots</h2><table style="border-collapse:collapse;width:100%;font-family:sans-serif;">${rows}</table>`
+      renderEmail({
+        heading: "Today's<br/>shoots.",
+        bodyHtml: `<table style="border-collapse:collapse;width:100%;">${rows}</table>`,
+      })
     )
   }
   // Mark today as handled either way (including a quiet day with nothing on) so
@@ -110,15 +114,16 @@ export async function GET(req: NextRequest) {
     if (!p.email) continue
     const weather = p.address ? await getWeatherForAddress(tomorrowStr, p.address) : null
     const weatherHtml = weather
-      ? `<p style="font-family:sans-serif;font-size:13px;color:#444;">Forecast for tomorrow: ${WEATHER_CODE_ICONS[weather.code] || ''} ${weather.condition}, ${Math.round(weather.minTemp)}–${Math.round(weather.maxTemp)}°C, ${weather.rainChance}% chance of rain.</p>`
+      ? `<p style="margin:12px 0 0;">Forecast for tomorrow: ${WEATHER_CODE_ICONS[weather.code] || ''} ${weather.condition}, ${Math.round(weather.minTemp)}–${Math.round(weather.maxTemp)}°C, ${weather.rainChance}% chance of rain.</p>`
       : ''
     const ok = await sendEmail(
       p.email,
       `Reminder: your shoot is tomorrow`,
-      `
-        <p style="font-family:sans-serif;font-size:14px;">Hi ${p.client || 'there'}, just a reminder that your shoot — <strong>${p.title}</strong> — is scheduled for tomorrow${shoot!.start ? ' at ' + formatTime12(shoot!.start) : ''}${p.address ? ` at ${p.address}` : ''}.</p>
-        ${weatherHtml}
-      `
+      renderEmail({
+        heading: 'Your shoot is<br/>tomorrow.',
+        intro: `Hi ${p.client || 'there'},`,
+        bodyHtml: `<p style="margin:0;">Just a reminder that your shoot — <strong style="color:#111111;">${p.title}</strong> — is scheduled for tomorrow${shoot!.start ? ' at ' + formatTime12(shoot!.start) : ''}${p.address ? ` at ${p.address}` : ''}.</p>${weatherHtml}`,
+      })
     )
     if (ok) clientsSent++
   }

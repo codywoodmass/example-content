@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { renderEmail } from '@/lib/emailTemplate'
 
 const STUDIO_EMAIL = 'cody@examplecontent.co.nz'
 
@@ -18,11 +19,14 @@ export async function POST(req: NextRequest) {
         to: STUDIO_EMAIL,
         reply_to: email,
         subject: `New enquiry from ${name}${projectType ? ' — ' + projectType : ''}`,
-        html: `
-          <p><strong>${name}</strong> (${email}${phone ? ', ' + phone : ''}) sent a message via the website contact form.</p>
-          ${projectType ? `<p><strong>Project type:</strong> ${projectType}</p>` : ''}
-          <p style="white-space:pre-wrap;">${message}</p>
-        `,
+        html: renderEmail({
+          heading: 'New website<br/>enquiry.',
+          bodyHtml: `
+            <p style="margin:0 0 10px;"><strong style="color:#111111;">${name}</strong> (${email}${phone ? ', ' + phone : ''}) sent a message via the website contact form.</p>
+            ${projectType ? `<p style="margin:0 0 10px;"><strong style="color:#111111;">Project type:</strong> ${projectType}</p>` : ''}
+            <p style="white-space:pre-wrap;margin:0;">${message}</p>
+          `,
+        }),
       }),
     })
     if (!res.ok) { console.error('Resend error:', await res.json()); return NextResponse.json({ success: true, emailSent: false }) }

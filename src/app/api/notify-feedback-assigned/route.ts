@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { renderEmail } from '@/lib/emailTemplate'
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
 
@@ -38,7 +39,11 @@ export async function POST(req: NextRequest) {
         from: process.env.RESEND_FROM_EMAIL || 'Example Content <onboarding@resend.dev>',
         to: assigneeEmail,
         subject: `Feedback assigned to you — ${projectTitle || 'Project'}`,
-        html: `<p>Hey ${assigneeName || ''},</p><p>Feedback on <strong>${projectTitle || 'a project'}</strong> has been assigned to you:</p><p>${message}</p>`,
+        html: renderEmail({
+          heading: 'Feedback assigned<br/>to you.',
+          intro: `Hey ${assigneeName || ''},`,
+          bodyHtml: `<p style="margin:0;">Feedback on <strong style="color:#111111;">${projectTitle || 'a project'}</strong> has been assigned to you:</p><p style="margin:12px 0 0;">${message}</p>`,
+        }),
       }),
     })
     const emailData = await res.json()

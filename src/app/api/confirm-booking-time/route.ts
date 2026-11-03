@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { formatTime12, nzOffset } from '@/lib/time'
 import { getGoogleClients } from '@/lib/google'
+import { renderEmail } from '@/lib/emailTemplate'
 
 const STUDIO_EMAIL = 'cody@examplecontent.co.nz'
 
@@ -117,21 +118,23 @@ export async function POST(req: NextRequest) {
           from: process.env.RESEND_FROM_EMAIL || 'Example Content <onboarding@resend.dev>',
           to: STUDIO_EMAIL,
           subject: `Project created — ${project.title}`,
-          html: `
-            <p><strong>${booking.client_name || booking.client_email}</strong> (${booking.client_email}) confirmed ${dateLabel ? '<strong>' + dateLabel + '</strong>' : 'the proposed time'}${timeLabel ? ' at <strong>' + timeLabel + '</strong>' : ''}.</p>
-            <p>A project has automatically been created:</p>
-            <ul>
-              <li><strong>Title:</strong> ${project.title}</li>
-              <li><strong>Client:</strong> ${project.client}</li>
-              ${project.address ? `<li><strong>Address:</strong> ${project.address}</li>` : ''}
-              <li><strong>Category:</strong> ${project.category}</li>
-              ${booking.shoot_package ? `<li><strong>Package:</strong> ${booking.shoot_package}</li>` : ''}
-              ${booking.addons ? `<li><strong>Add-ons:</strong> ${booking.addons}</li>` : ''}
-              ${project.amount ? `<li><strong>Amount:</strong> $${project.amount}</li>` : ''}
-            </ul>
-            ${driveUrl ? `<p>Drive folder: <a href="${driveUrl}">${driveUrl}</a></p>` : ''}
-            <p><a href="${projectUrl}" style="display:inline-block;padding:10px 18px;background:#C8C2BB;color:#111;text-decoration:none;border-radius:4px;font-size:13px;">Open project →</a></p>
-          `,
+          html: renderEmail({
+            heading: 'Client confirmed<br/>a project.',
+            bodyHtml: `
+              <p style="margin:0 0 16px;"><strong style="color:#111111;">${booking.client_name || booking.client_email}</strong> (${booking.client_email}) confirmed ${dateLabel ? '<strong style="color:#111111;">' + dateLabel + '</strong>' : 'the proposed time'}${timeLabel ? ' at <strong style="color:#111111;">' + timeLabel + '</strong>' : ''}. A project has automatically been created:</p>
+              <ul style="padding-left:18px;margin:0 0 16px;">
+                <li style="margin-bottom:6px;"><strong style="color:#111111;">Title:</strong> ${project.title}</li>
+                <li style="margin-bottom:6px;"><strong style="color:#111111;">Client:</strong> ${project.client}</li>
+                ${project.address ? `<li style="margin-bottom:6px;"><strong style="color:#111111;">Address:</strong> ${project.address}</li>` : ''}
+                <li style="margin-bottom:6px;"><strong style="color:#111111;">Category:</strong> ${project.category}</li>
+                ${booking.shoot_package ? `<li style="margin-bottom:6px;"><strong style="color:#111111;">Package:</strong> ${booking.shoot_package}</li>` : ''}
+                ${booking.addons ? `<li style="margin-bottom:6px;"><strong style="color:#111111;">Add-ons:</strong> ${booking.addons}</li>` : ''}
+                ${project.amount ? `<li style="margin-bottom:6px;"><strong style="color:#111111;">Amount:</strong> $${project.amount}</li>` : ''}
+              </ul>
+              ${driveUrl ? `<p style="margin:0;">Drive folder: <a href="${driveUrl}" style="color:#111111;">${driveUrl}</a></p>` : ''}
+            `,
+            cta: { label: 'Open project', url: projectUrl },
+          }),
         }),
       })
       if (!res.ok) console.error('Resend error:', await res.json())

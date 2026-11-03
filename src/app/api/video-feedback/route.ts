@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { renderEmail } from '@/lib/emailTemplate'
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
 
@@ -65,14 +66,14 @@ export async function POST(req: NextRequest) {
 
   const bodyHtml = fileName
     ? `
-      <p><strong>${who}</strong> left ${batch.length > 1 ? `${batch.length} changes` : 'feedback'} on <strong>${fileName}</strong> (${projectTitle || 'project'}):</p>
-      <ul style="padding-left:18px;margin:12px 0;">
-        ${batch.map(s => `<li style="margin-bottom:8px;"><strong>${formatTimestamp(s.timestampSeconds)}</strong> — ${s.message}</li>`).join('')}
+      <p style="margin:0 0 12px;"><strong style="color:#111111;">${who}</strong> left ${batch.length > 1 ? `${batch.length} changes` : 'feedback'} on <strong style="color:#111111;">${fileName}</strong> (${projectTitle || 'project'}):</p>
+      <ul style="padding-left:18px;margin:0;">
+        ${batch.map(s => `<li style="margin-bottom:8px;"><strong style="color:#111111;">${formatTimestamp(s.timestampSeconds)}</strong> — ${s.message}</li>`).join('')}
       </ul>
     `
     : `
-      <p><strong>${who}</strong> left feedback on <strong>${projectTitle || 'the project'}</strong>:</p>
-      <p>${batch[0].message}</p>
+      <p style="margin:0 0 10px;"><strong style="color:#111111;">${who}</strong> left feedback on <strong style="color:#111111;">${projectTitle || 'the project'}</strong>:</p>
+      <p style="margin:0;">${batch[0].message}</p>
     `
 
   try {
@@ -83,7 +84,7 @@ export async function POST(req: NextRequest) {
         from: process.env.RESEND_FROM_EMAIL || 'Example Content <onboarding@resend.dev>',
         to: STUDIO_EMAIL,
         subject,
-        html: bodyHtml,
+        html: renderEmail({ heading: 'New video<br/>feedback.', bodyHtml }),
       }),
     })
     const emailData = await res.json()

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { formatTime12 } from '@/lib/time'
+import { renderEmail } from '@/lib/emailTemplate'
 
 export async function POST(req: NextRequest) {
   const { clientEmail, clientName, title, date, startTime, endTime, createdByEmail } = await req.json()
@@ -31,12 +32,12 @@ export async function POST(req: NextRequest) {
         from: process.env.RESEND_FROM_EMAIL || 'Example Content <onboarding@resend.dev>',
         to: emailTarget,
         subject: `A time has been proposed${title ? ' for ' + title : ''}`,
-        html: `
-          <p>Hi ${clientName || 'there'},</p>
-          <p>We'd like to propose <strong>${dateLabel}</strong> at <strong>${timeLabel}</strong>${title ? ' for <strong>' + title + '</strong>' : ''}.</p>
-          <p>Head to your portal to confirm this time, or request another one.</p>
-          <p><a href="${portalUrl}" style="display:inline-block;padding:10px 18px;background:#C8C2BB;color:#111;text-decoration:none;border-radius:4px;font-size:13px;">Open portal →</a></p>
-        `,
+        html: renderEmail({
+          heading: 'A time has<br/>been proposed.',
+          intro: `Hi ${clientName || 'there'},`,
+          bodyHtml: `<p style="margin:0;">We'd like to propose <strong style="color:#111111;">${dateLabel}</strong> at <strong style="color:#111111;">${timeLabel}</strong>${title ? ' for <strong style="color:#111111;">' + title + '</strong>' : ''}. Head to your portal to confirm this time, or request another one.</p>`,
+          cta: { label: 'Open portal', url: portalUrl },
+        }),
       }),
     })
     const emailData = await res.json()

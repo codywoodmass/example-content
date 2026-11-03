@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { formatTime12 } from '@/lib/time'
+import { renderEmail } from '@/lib/emailTemplate'
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
 
@@ -40,12 +41,15 @@ export async function POST(req: NextRequest) {
         from: process.env.RESEND_FROM_EMAIL || 'Example Content <onboarding@resend.dev>',
         to: STUDIO_EMAIL,
         subject: `${notifTitle} — ${clientName || clientEmail}${title ? ': ' + title : ''}`,
-        html: `
-          <p><strong>${clientName || clientEmail}</strong> (${clientEmail}) asked for a different time${title ? ' for <strong>' + title + '</strong>' : ''}.</p>
-          ${dateLabel ? `<p>Previously proposed: <strong>${dateLabel}</strong>${proposedStartTime ? ' at <strong>' + formatTime12(proposedStartTime) + '</strong>' : ''}</p>` : ''}
-          ${message ? `<p>Their note: <em>"${message}"</em></p>` : ''}
-          <p><a href="${bookingsUrl}" style="display:inline-block;padding:10px 18px;background:#C8C2BB;color:#111;text-decoration:none;border-radius:4px;font-size:13px;">Open in studio portal →</a></p>
-        `,
+        html: renderEmail({
+          heading: 'Different time<br/>requested.',
+          bodyHtml: `
+            <p style="margin:0 0 10px;"><strong style="color:#111111;">${clientName || clientEmail}</strong> (${clientEmail}) asked for a different time${title ? ' for <strong style="color:#111111;">' + title + '</strong>' : ''}.</p>
+            ${dateLabel ? `<p style="margin:0 0 10px;">Previously proposed: <strong style="color:#111111;">${dateLabel}</strong>${proposedStartTime ? ' at <strong style="color:#111111;">' + formatTime12(proposedStartTime) + '</strong>' : ''}</p>` : ''}
+            ${message ? `<p style="margin:0;">Their note: <em>"${message}"</em></p>` : ''}
+          `,
+          cta: { label: 'Open in studio portal', url: bookingsUrl },
+        }),
       }),
     })
     const emailData = await res.json()
