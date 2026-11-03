@@ -13,6 +13,7 @@ import LabeledNotes from '@/components/studio/LabeledNotes'
 import { useTimeTracking, elapsedLabel } from '@/lib/timeTracking'
 import TimeTrackerBar from '@/components/studio/TimeTrackerBar'
 import { PACKAGE_ESTIMATES } from '@/lib/packageEstimates'
+import { fuzzySearch } from '@/lib/fuzzySearch'
 
 function formatDate(dateStr: string | null | undefined): string {
   if (!dateStr) return '—'
@@ -662,6 +663,8 @@ function ProjectsPageInner() {
   // first within each stage (the latter already falls out of filtered's own
   // default 'created_at' sort below).
   const [groupByStage, setGroupByStage] = useState(true)
+  const [projectSearch, setProjectSearch] = useState('')
+  const [showProjectSearch, setShowProjectSearch] = useState(false)
   const [saving, setSaving] = useState(false)
   const [sendingInvoice, setSendingInvoice] = useState(false)
 
@@ -1132,6 +1135,13 @@ function ProjectsPageInner() {
     return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
   })
 
+  // Searches every project regardless of the current category/archived
+  // filters — this is "find it anywhere", not a refinement of what's on
+  // screen — and tolerates typos via fuzzySearch's Levenshtein matching.
+  const searchResults = projectSearch.trim()
+    ? fuzzySearch(projectSearch, projects, p => [p.title, p.client, p.address], 8)
+    : []
+
   const inp: React.CSSProperties = { background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }
   const lbl: React.CSSProperties = { fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)', marginBottom: 6, display: 'block' }
 
@@ -1299,7 +1309,41 @@ function ProjectsPageInner() {
         </div>
       </div>
 
-      <div style={{ padding: '10px 28px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', background: '#10141b' }}>
+      <div style={{ padding: '10px 28px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', background: '#10141b', display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+        <div style={{ position: 'relative', width: 280, flexShrink: 0 }}>
+          <input
+            value={projectSearch}
+            onChange={e => { setProjectSearch(e.target.value); setShowProjectSearch(true) }}
+            onFocus={() => setShowProjectSearch(true)}
+            onBlur={() => setTimeout(() => setShowProjectSearch(false), 200)}
+            placeholder="Search all projects..."
+            style={{ background: 'rgba(200,194,187,0.05)', border: '0.5px solid rgba(200,194,187,0.12)', borderRadius: 4, padding: '7px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }}
+          />
+          {showProjectSearch && projectSearch.trim() && (
+            <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, zIndex: 50, overflow: 'hidden', marginTop: 4, maxHeight: 320, overflowY: 'auto', boxShadow: '0 8px 24px rgba(0,0,0,0.4)' }}>
+              {searchResults.length === 0 ? (
+                <div style={{ padding: '14px', fontSize: 12, color: 'rgba(200,194,187,0.35)' }}>No projects match "{projectSearch}"</div>
+              ) : searchResults.map((p, i) => (
+                <div
+                  key={p.id}
+                  onClick={() => { setModalProject(p); setModalEditing(false); setProjectSearch(''); setShowProjectSearch(false) }}
+                  style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: i < searchResults.length - 1 ? '0.5px solid rgba(200,194,187,0.06)' : 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}
+                  onMouseEnter={e => (e.currentTarget.style.background = 'rgba(200,194,187,0.05)')}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                >
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 12, color: '#C8C2BB', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.title || 'Untitled'}</div>
+                    <div style={{ fontSize: 10, color: 'rgba(200,194,187,0.4)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.client}{p.address ? ' · ' + p.address : ''}</div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                    {p.archived && <span style={{ fontSize: 8, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '2px 6px', borderRadius: 2, background: 'rgba(210,175,80,0.12)', color: 'rgba(210,175,80,0.8)' }}>Archived</span>}
+                    <StagePill stage={p.stage} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
         <TimeTrackerBar projects={projects} person={tracker.person} mine={tracker.mine} others={tracker.others} now={tracker.now} busy={tracker.busy} onStart={tracker.start} onStop={tracker.stop} />
       </div>
 
