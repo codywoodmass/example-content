@@ -2504,7 +2504,7 @@ export default function ClientPortal() {
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                         <label style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#fff' }}>Property type</label>
                         <select style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }}>
-                          <option value=''>Select type...</option><option>Standard Residential</option><option>High End Residential</option><option>Lifestyle Property</option><option>Townhouse</option><option>Section</option>
+                          <option value=''>Select type...</option><option>Standard Residential</option><option>High End Residential</option><option>Character Home</option><option>Lifestyle Property</option><option>High End Lifestyle</option><option>Townhouse</option><option>Section</option>
                         </select>
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
