@@ -17,7 +17,10 @@ type Client = {
   company: string
   category: string
   notes: string
+  agency_id: string | null
 }
+
+type Agency = { id: string; name: string }
 
 export default function ClientsPage() {
   const router = useRouter()
@@ -32,7 +35,8 @@ export default function ClientsPage() {
   const [clientBriefs, setClientBriefs] = useState<any[]>([])
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
-  const [newForm, setNewForm] = useState({ name: '', email: '', phone: '', company: '', category: 'Property', notes: '' })
+  const [newForm, setNewForm] = useState({ name: '', email: '', phone: '', company: '', category: 'Property', notes: '', agency_id: '' })
+  const [agencies, setAgencies] = useState<Agency[]>([])
   const [studioEmail, setStudioEmail] = useState<string | null>(null)
   const [clientTeamMembers, setClientTeamMembers] = useState<{ id: string; member_email: string; member_name: string }[]>([])
   const [clientTeamInvites, setClientTeamInvites] = useState<{ id: string; invited_email: string; invited_name: string }[]>([])
@@ -47,7 +51,12 @@ export default function ClientsPage() {
   const inp: React.CSSProperties = { background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }
   const lbl: React.CSSProperties = { fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)', marginBottom: 6, display: 'block' }
 
-  useEffect(() => { loadClients() }, [])
+  useEffect(() => { loadClients(); loadAgencies() }, [])
+
+  async function loadAgencies() {
+    const { data } = await supabase.from('agencies').select('id, name').order('name', { ascending: true })
+    setAgencies(data || [])
+  }
 
   async function loadClients() {
     setLoading(true)
@@ -108,6 +117,7 @@ export default function ClientsPage() {
       company: selectedClient.company,
       category: selectedClient.category,
       notes: selectedClient.notes,
+      agency_id: selectedClient.agency_id || null,
     }).eq('id', selectedClient.id)
     if (!error) {
       setClients(p => p.map(c => c.id === selectedClient.id ? selectedClient : c))
@@ -120,12 +130,12 @@ export default function ClientsPage() {
   async function addClient() {
     if (!newForm.name || !newForm.email) return
     setSaving(true)
-    const { data, error } = await supabase.from('clients1').insert([{ ...newForm }]).select().single()
+    const { data, error } = await supabase.from('clients1').insert([{ ...newForm, agency_id: newForm.agency_id || null }]).select().single()
     if (error) { notify('Error: ' + error.message, 'error'); setSaving(false); return }
     if (!error && data) {
       setClients(p => [data, ...p])
       setShowNewModal(false)
-      setNewForm({ name: '', email: '', phone: '', company: '', category: 'Property', notes: '' })
+      setNewForm({ name: '', email: '', phone: '', company: '', category: 'Property', notes: '', agency_id: '' })
       loadClientDetails(data)
     }
     setSaving(false)
@@ -244,6 +254,13 @@ export default function ClientsPage() {
                   <div><label style={lbl}>Category</label>
                     <select style={inp} value={selectedClient.category} onChange={e => setSelectedClient(p => p ? { ...p, category: e.target.value } : p)}>
                       <option>Property</option><option>Commercial</option><option>Events</option><option>Socials</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={lbl}>Agency — groups property invoices</label>
+                    <select style={inp} value={selectedClient.agency_id || ''} onChange={e => setSelectedClient(p => p ? { ...p, agency_id: e.target.value || null } : p)}>
+                      <option value="">No agency — invoiced individually</option>
+                      {agencies.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
                     </select>
                   </div>
                 </div>
@@ -392,6 +409,13 @@ export default function ClientsPage() {
               <div><label style={lbl}>Email</label><input style={inp} type="email" value={newForm.email} onChange={e => setNewForm(f => ({ ...f, email: e.target.value }))} placeholder="james@example.co.nz" /></div>
               <div><label style={lbl}>Phone</label><input style={inp} value={newForm.phone} onChange={e => setNewForm(f => ({ ...f, phone: e.target.value }))} placeholder="021 123 4567" /></div>
               <div><label style={lbl}>Company</label><input style={inp} value={newForm.company} onChange={e => setNewForm(f => ({ ...f, company: e.target.value }))} placeholder="e.g. Blackwell Properties" /></div>
+              <div>
+                <label style={lbl}>Agency — groups property invoices</label>
+                <select style={inp} value={newForm.agency_id} onChange={e => setNewForm(f => ({ ...f, agency_id: e.target.value }))}>
+                  <option value="">No agency</option>
+                  {agencies.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                </select>
+              </div>
               <div style={{ gridColumn: 'span 2' }}>
                 <label style={lbl}>Category</label>
                 <div style={{ display: 'flex', gap: 8 }}>

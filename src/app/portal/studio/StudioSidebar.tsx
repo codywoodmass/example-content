@@ -25,6 +25,7 @@ const NAV = [
   ]},
   { label: 'Clients', items: [
     { id: 'clients', label: 'Clients', href: '/portal/studio/clients' },
+    { id: 'agencies', label: 'Agencies', href: '/portal/studio/agencies' },
     { id: 'pitches', label: 'Brief Creator', href: '/portal/studio/pitches' },
     { id: 'quotes', label: 'Quote Generator', href: '/portal/studio/quotes' },
   ]},

@@ -19,6 +19,7 @@ type Invoice = {
   sent_at: string | null
   paid_at: string | null
   xero_invoice_id: string | null
+  agency_id: string | null
 }
 
 // Every call site treats this as fire-and-forget (never awaits or checks the
@@ -194,7 +195,10 @@ export default function InvoicesPage() {
                       <div key={invoice.id} style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, padding: '18px 20px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
                           <div>
-                            <div style={{ fontSize: 14, fontWeight: 500, color: '#fff', marginBottom: 2 }}>{invoice.client_name || invoice.client_email}</div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+                              <span style={{ fontSize: 14, fontWeight: 500, color: '#fff' }}>{invoice.client_name || invoice.client_email}</span>
+                              {invoice.agency_id && <span style={{ fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '2px 7px', borderRadius: 2, background: 'rgba(100,150,220,0.15)', color: 'rgba(100,150,220,0.85)' }}>Agency</span>}
+                            </div>
                             <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>{invoice.client_email} · {new Date(invoice.created_at).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
                           </div>
                           <span style={{ fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '3px 9px', borderRadius: 2, background: sc.bg, color: sc.color, border: `0.5px solid ${sc.color}` }}>{invoice.status}</span>

@@ -1014,23 +1014,48 @@ function ProjectsPageInner() {
     if (!project.amount) { notify('Set an amount for this project before sending it to invoice.', 'error'); return }
     setSendingInvoice(true)
     try {
-      // Only ever reuse an existing draft when this project has a real,
-      // non-blank client email to match on — matching on '' or null would
-      // silently glom onto whichever OTHER still-open draft happens to also
-      // have no email recorded (e.g. an old internally-added project), which
-      // is exactly how unrelated projects ended up stacked onto a different
-      // client's invoice. No usable email means there's nothing safe to
-      // match against, so this always starts a fresh invoice instead.
+      // Property shoots for an agent who belongs to a managed agency (Lodge,
+      // Lugtons, Bayleys, etc.) get grouped onto that agency's own rolling
+      // draft invoice instead of the individual agent's — multiple agents at
+      // the same agency end up on one monthly invoice, billed to the agency
+      // directly. Commercial always stays on the account's own invoice.
+      let agency: { id: string; name: string; billing_email: string | null } | null = null
+      if (project.category === 'Property' && project.email && project.email.trim()) {
+        const { data: clientRow } = await supabase.from('clients1').select('agency_id').eq('email', project.email.trim()).maybeSingle()
+        if (clientRow?.agency_id) {
+          const { data: agencyRow } = await supabase.from('agencies').select('id, name, billing_email').eq('id', clientRow.agency_id).maybeSingle()
+          if (agencyRow) agency = agencyRow
+        }
+      }
+      if (agency && !agency.billing_email) {
+        notify(`${agency.name} has no billing email set yet — add one on the Agencies page before invoicing its agents.`, 'error')
+        return
+      }
+
+      // Only ever reuse an existing draft when there's a real, non-blank
+      // identity to match on (the agency, or this project's own client
+      // email) — matching on '' or null would silently glom onto whichever
+      // OTHER still-open draft happens to also have no identity recorded
+      // (e.g. an old internally-added project), which is exactly how
+      // unrelated projects ended up stacked onto a different client's
+      // invoice. No usable identity means there's nothing safe to match
+      // against, so this always starts a fresh invoice instead.
       let invoice: any = null
       let findError: any = null
-      if (project.email && project.email.trim()) {
+      if (agency) {
+        const res = await supabase.from('invoices1').select('*').eq('agency_id', agency.id).eq('status', 'draft').maybeSingle()
+        invoice = res.data
+        findError = res.error
+      } else if (project.email && project.email.trim()) {
         const res = await supabase.from('invoices1').select('*').eq('client_email', project.email.trim()).eq('status', 'draft').maybeSingle()
         invoice = res.data
         findError = res.error
       }
       if (findError) { notify('Invoice error: ' + findError.message, 'error'); return }
       if (!invoice) {
-        const { data: created, error: createError } = await supabase.from('invoices1').insert([{
+        const { data: created, error: createError } = await supabase.from('invoices1').insert([agency ? {
+          client_email: agency.billing_email, client_name: agency.name, agency_id: agency.id, status: 'draft',
+        } : {
           client_email: project.email, client_name: project.client, status: 'draft',
         }]).select().single()
         if (createError || !created) { notify('Invoice error: ' + (createError?.message || 'unknown'), 'error'); return }

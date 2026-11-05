@@ -922,8 +922,8 @@ export default function ClientPortal() {
   const [teamProfileOpen, setTeamProfileOpen] = useState<string | null>(null) // 'main', a member id, or null
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const [avatarUploadError, setAvatarUploadError] = useState('')
-  const [editingRoleTitle, setEditingRoleTitle] = useState(false)
-  const [roleTitleDraft, setRoleTitleDraft] = useState('')
+  const [editingProfile, setEditingProfile] = useState(false)
+  const [profileDraft, setProfileDraft] = useState({ name: '', company: '', phone: '', role: '' })
   const [teamInvites, setTeamInvites] = useState<{ id: string; invited_email: string; invited_name: string; created_at: string }[]>([])
   const [teamInviteName, setTeamInviteName] = useState('')
   const [teamInviteEmail, setTeamInviteEmail] = useState('')
@@ -1207,10 +1207,20 @@ export default function ClientPortal() {
     }
   }
 
-  async function saveRoleTitle(memberId: string, title: string) {
-    setTeamMembers(p => p.map(m => m.id === memberId ? { ...m, role_title: title } : m))
-    setEditingRoleTitle(false)
-    await supabase.from('client_members').update({ role_title: title }).eq('id', memberId)
+  // Saves the editable profile fields for whichever card is open — the
+  // main account's name/company/phone live on clients1, a sub-user's own
+  // name/role live on their client_members row (they have no separate
+  // business details of their own, those belong to the main account).
+  async function saveProfile(cardId: string, isMain: boolean) {
+    setEditingProfile(false)
+    if (isMain) {
+      const updates = { name: profileDraft.name, company: profileDraft.company, phone: profileDraft.phone }
+      setClientProfile((p: any) => p ? { ...p, ...updates } : p)
+      await supabase.from('clients1').update(updates).eq('email', accountEmail)
+    } else {
+      setTeamMembers(p => p.map(m => m.id === cardId ? { ...m, member_name: profileDraft.name, role_title: profileDraft.role } : m))
+      await supabase.from('client_members').update({ member_name: profileDraft.name, role_title: profileDraft.role }).eq('id', cardId)
+    }
   }
 
   async function handleRevokeTeamInvite(id: string) {
@@ -3440,7 +3450,7 @@ export default function ClientPortal() {
                 </div>
                 <button onClick={() => setActiveView('dashboard')} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>← Dashboard</button>
               </div>
-              <div style={{ padding: 28, maxWidth: 880 }}>
+              <div style={{ padding: 28 }}>
                 {isSubUser && (
                   <div style={{ fontSize: 12, color: 'rgba(210,175,80,0.85)', background: 'rgba(210,175,80,0.08)', border: '0.5px solid rgba(210,175,80,0.25)', borderRadius: 6, padding: '12px 16px', marginBottom: 20, lineHeight: 1.6 }}>
                     You're signed in as a teammate on this account ({user?.email}) — invites and removals here apply to the whole account, same as the main account holder.
@@ -3461,6 +3471,7 @@ export default function ClientPortal() {
                   ))}
                 </div>
 
+                <div style={{ maxWidth: 640 }}>
                 <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, overflow: 'hidden', marginBottom: 20 }}>
                   <div style={{ padding: '13px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>Invite a teammate</div>
                   <div style={{ padding: 18, display: 'flex', gap: 10, flexWrap: 'wrap' as const }}>
@@ -3495,13 +3506,14 @@ export default function ClientPortal() {
                     ))}
                   </div>
                 )}
+                </div>
               </div>
 
               {/* PROFILE MODAL */}
               {openCard && (
-                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }} onClick={e => { if (e.target === e.currentTarget) { setTeamProfileOpen(null); setEditingRoleTitle(false); setAvatarUploadError('') } }}>
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }} onClick={e => { if (e.target === e.currentTarget) { setTeamProfileOpen(null); setEditingProfile(false); setAvatarUploadError('') } }}>
                   <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 12, padding: 32, maxWidth: 400, width: '100%', textAlign: 'center', position: 'relative' }}>
-                    <button onClick={() => { setTeamProfileOpen(null); setEditingRoleTitle(false); setAvatarUploadError('') }} style={{ position: 'absolute', top: 14, right: 14, fontSize: 18, color: 'rgba(200,194,187,0.4)', background: 'transparent', border: 'none', cursor: 'pointer' }}>×</button>
+                    <button onClick={() => { setTeamProfileOpen(null); setEditingProfile(false); setAvatarUploadError('') }} style={{ position: 'absolute', top: 14, right: 14, fontSize: 18, color: 'rgba(200,194,187,0.4)', background: 'transparent', border: 'none', cursor: 'pointer' }}>×</button>
 
                     <div style={{ position: 'relative', display: 'inline-block', marginBottom: 16 }}>
                       <AvatarCircle url={openCard.avatar_url} name={openCard.name} email={openCard.email} size={88} />
@@ -3518,26 +3530,69 @@ export default function ClientPortal() {
                     </div>
                     {avatarUploadError && <div style={{ fontSize: 11, color: 'rgba(210,90,90,0.85)', marginBottom: 10 }}>{avatarUploadError}</div>}
 
-                    <div style={{ fontSize: 16, fontWeight: 600, color: '#fff', marginBottom: 4 }}>{openCard.name}</div>
-
-                    {openCard.isMain ? (
-                      <div style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(100,200,130,0.8)', marginBottom: 16 }}>Main account</div>
-                    ) : editingRoleTitle ? (
-                      <div style={{ display: 'flex', gap: 6, justifyContent: 'center', marginBottom: 16 }}>
-                        <input autoFocus defaultValue={openCard.role_title || ''} onChange={e => setRoleTitleDraft(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') saveRoleTitle(openCard.id, roleTitleDraft) }} placeholder="e.g. Marketing Manager" style={{ fontSize: 12, textAlign: 'center', background: 'rgba(200,194,187,0.06)', border: '0.5px solid rgba(200,194,187,0.2)', borderRadius: 4, padding: '6px 10px', color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: 180 }} />
-                        <button onClick={() => saveRoleTitle(openCard.id, roleTitleDraft)} style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '6px 10px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>Save</button>
+                    {editingProfile ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16, textAlign: 'left' as const }}>
+                        <div>
+                          <label style={{ fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', display: 'block', marginBottom: 4 }}>Full name</label>
+                          <input autoFocus value={profileDraft.name} onChange={e => setProfileDraft(d => ({ ...d, name: e.target.value }))} style={{ fontSize: 13, background: 'rgba(200,194,187,0.06)', border: '0.5px solid rgba(200,194,187,0.2)', borderRadius: 4, padding: '8px 10px', color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }} />
+                        </div>
+                        {openCard.isMain ? (
+                          <>
+                            <div>
+                              <label style={{ fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', display: 'block', marginBottom: 4 }}>Company / agency</label>
+                              <input value={profileDraft.company} onChange={e => setProfileDraft(d => ({ ...d, company: e.target.value }))} style={{ fontSize: 13, background: 'rgba(200,194,187,0.06)', border: '0.5px solid rgba(200,194,187,0.2)', borderRadius: 4, padding: '8px 10px', color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }} />
+                            </div>
+                            <div>
+                              <label style={{ fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', display: 'block', marginBottom: 4 }}>Phone</label>
+                              <input value={profileDraft.phone} onChange={e => setProfileDraft(d => ({ ...d, phone: e.target.value }))} placeholder="021 123 4567" style={{ fontSize: 13, background: 'rgba(200,194,187,0.06)', border: '0.5px solid rgba(200,194,187,0.2)', borderRadius: 4, padding: '8px 10px', color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }} />
+                            </div>
+                          </>
+                        ) : (
+                          <div>
+                            <label style={{ fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', display: 'block', marginBottom: 4 }}>Role</label>
+                            <input value={profileDraft.role} onChange={e => setProfileDraft(d => ({ ...d, role: e.target.value }))} placeholder="e.g. Marketing Manager" style={{ fontSize: 13, background: 'rgba(200,194,187,0.06)', border: '0.5px solid rgba(200,194,187,0.2)', borderRadius: 4, padding: '8px 10px', color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }} />
+                          </div>
+                        )}
+                        <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                          <button onClick={() => setEditingProfile(false)} style={{ flex: 1, fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 0', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+                          <button onClick={() => saveProfile(openCard.id, openCard.isMain)} style={{ flex: 1, fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 0', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>Save</button>
+                        </div>
                       </div>
                     ) : (
-                      <div onClick={() => { if (isOwnCard(openCard.id)) { setRoleTitleDraft(openCard.role_title || ''); setEditingRoleTitle(true) } }} style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(100,150,220,0.8)', marginBottom: 16, cursor: isOwnCard(openCard.id) ? 'pointer' : 'default' }}>
-                        {openCard.role_title || (isOwnCard(openCard.id) ? 'Teammate · + Add a title' : 'Teammate')}
-                      </div>
+                      <>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginBottom: 4 }}>
+                          <div style={{ fontSize: 16, fontWeight: 600, color: '#fff' }}>{openCard.name}</div>
+                          {isOwnCard(openCard.id) && (
+                            <button onClick={() => { setProfileDraft({ name: openCard.name || '', company: clientProfile?.company || '', phone: clientProfile?.phone || '', role: openCard.role_title || '' }); setEditingProfile(true) }} title="Edit profile" style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'rgba(200,194,187,0.4)', padding: 2, display: 'flex' }}>
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /></svg>
+                            </button>
+                          )}
+                        </div>
+                        {openCard.isMain ? (
+                          <div style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(100,200,130,0.8)', marginBottom: 16 }}>Main account</div>
+                        ) : (
+                          <div style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(100,150,220,0.8)', marginBottom: 16 }}>{openCard.role_title || 'Teammate'}</div>
+                        )}
+                      </>
                     )}
 
-                    <div style={{ background: 'rgba(200,194,187,0.03)', border: '0.5px solid rgba(200,194,187,0.07)', borderRadius: 6, padding: '14px 16px', marginBottom: 16, textAlign: 'left' as const }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: fmtJoined(openCard.created_at) ? 8 : 0 }}>
+                    <div style={{ background: 'rgba(200,194,187,0.03)', border: '0.5px solid rgba(200,194,187,0.07)', borderRadius: 6, padding: '14px 16px', marginBottom: 16, textAlign: 'left' as const, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
                         <span style={{ color: 'rgba(200,194,187,0.35)' }}>Email</span>
                         <span style={{ color: '#C8C2BB' }}>{openCard.email}</span>
                       </div>
+                      {openCard.isMain && clientProfile?.company && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+                          <span style={{ color: 'rgba(200,194,187,0.35)' }}>Company</span>
+                          <span style={{ color: '#C8C2BB' }}>{clientProfile.company}</span>
+                        </div>
+                      )}
+                      {openCard.isMain && clientProfile?.phone && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+                          <span style={{ color: 'rgba(200,194,187,0.35)' }}>Phone</span>
+                          <span style={{ color: '#C8C2BB' }}>{clientProfile.phone}</span>
+                        </div>
+                      )}
                       {fmtJoined(openCard.created_at) && (
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
                           <span style={{ color: 'rgba(200,194,187,0.35)' }}>Joined</span>
@@ -3546,7 +3601,7 @@ export default function ClientPortal() {
                       )}
                     </div>
 
-                    {!openCard.isMain && (
+                    {!openCard.isMain && !editingProfile && (
                       <button onClick={() => { handleRemoveTeamMember(openCard.id); setTeamProfileOpen(null) }} style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '9px 16px', borderRadius: 3, border: '0.5px solid rgba(210,90,90,0.3)', color: 'rgba(210,90,90,0.8)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit', width: '100%' }}>Remove from team</button>
                     )}
                   </div>
