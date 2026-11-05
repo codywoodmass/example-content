@@ -221,7 +221,7 @@ function DriveThumb({ project, onClick }: { project: any; onClick: () => void })
         transition: 'transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease',
       }}
     >
-      <div style={{ aspectRatio: '4/3', background: '#0E1014', position: 'relative', overflow: 'hidden' }}>
+      <div style={{ aspectRatio: '3/4', background: '#0E1014', position: 'relative', overflow: 'hidden' }}>
         {loading ? (
           <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(200,194,187,0.2)', fontSize: 11 }}>Loading...</div>
         ) : firstFile ? (
@@ -1964,13 +1964,20 @@ export default function ClientPortal() {
                       </div>
                     </div>
 
-                    {/* PENDING BOOKINGS */}
-                    {pendingBookings.length > 0 && (
+                    {/* PENDING BOOKINGS — only ones with something to actually
+                        respond to (a proposed time, a meeting to confirm); a
+                        plain "pending" booking with nothing to act on yet is
+                        already shown in Upcoming Shoots above, so repeating
+                        it here with no buttons was pure duplication. */}
+                    {(() => {
+                      const actionablePendingBookings = pendingBookings.filter((b: any) => b.status !== 'pending' && !(b.status === 'confirmed' && !b.project_id))
+                      if (actionablePendingBookings.length === 0) return null
+                      return (
                       <div style={{ marginTop: 20 }}>
                         <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 14 }}>Pending bookings</div>
                         <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, overflow: 'hidden' }}>
-                          {pendingBookings.map((b: any, i: number) => {
-                            const isLast = i === pendingBookings.length - 1
+                          {actionablePendingBookings.map((b: any, i: number) => {
+                            const isLast = i === actionablePendingBookings.length - 1
                             if (b.status === 'date_proposed') {
                               return (
                                 <div key={b.id} style={{ padding:'14px 18px', borderBottom: isLast ? 'none' : '0.5px solid rgba(200,194,187,0.06)' }}>
@@ -2044,7 +2051,8 @@ export default function ClientPortal() {
                           })}
                         </div>
                       </div>
-                    )}
+                      )
+                    })()}
                   </div>
                 </div>
 
