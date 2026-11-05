@@ -221,7 +221,7 @@ function DriveThumb({ project, onClick }: { project: any; onClick: () => void })
         transition: 'transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease',
       }}
     >
-      <div style={{ aspectRatio: '16/9', background: '#0E1014', position: 'relative', overflow: 'hidden' }}>
+      <div style={{ aspectRatio: '4/3', background: '#0E1014', position: 'relative', overflow: 'hidden' }}>
         {loading ? (
           <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(200,194,187,0.2)', fontSize: 11 }}>Loading...</div>
         ) : firstFile ? (
@@ -1018,6 +1018,7 @@ export default function ClientPortal() {
   const [clientBookings, setClientBookings] = useState<any[]>([])
   const [clientBriefs, setClientBriefs] = useState<any[]>([])
   const [clientInvoices, setClientInvoices] = useState<any[]>([])
+  const [pendingChangeRequests, setPendingChangeRequests] = useState<any[]>([])
   // Unlike clientProjects (active only — markSent archives every project on an
   // invoice), this includes archived ones too, so invoice line items and
   // lifetime stats don't go blank the moment an invoice is actually sent.
@@ -1119,6 +1120,8 @@ export default function ClientPortal() {
       if (briefs) setClientBriefs(briefs)
       const { data: invoices } = await supabase.from('invoices1').select('*').ilike('client_email', email || '').neq('status', 'draft').order('created_at', { ascending: false })
       if (invoices) setClientInvoices(invoices)
+      const { data: changeRequests } = await supabase.from('change_requests').select('*').eq('client_email', email).eq('status', 'pending').order('created_at', { ascending: false })
+      if (changeRequests) setPendingChangeRequests(changeRequests)
       const { data: notifs } = await supabase.from('notifications').select('*').eq('user_email', email).eq('read', false).order('created_at', { ascending: false })
       if (notifs) {
         // Content-delivered gets its own celebratory popup with a thumbnail
@@ -1787,6 +1790,23 @@ export default function ClientPortal() {
                   ))}
                 </div>
 
+                {pendingChangeRequests.length > 0 && (
+                  <div style={{ background: 'rgba(210,175,80,0.08)', border: '0.5px solid rgba(210,175,80,0.25)', borderRadius: 7, padding: '14px 18px', marginBottom: 18, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'rgba(210,175,80,0.9)', flexShrink: 0 }} />
+                      <span style={{ fontSize: 12, fontWeight: 600, color: 'rgba(210,175,80,0.95)' }}>{pendingChangeRequests.length} request{pendingChangeRequests.length !== 1 ? 's' : ''} awaiting a response from Example Content</span>
+                    </div>
+                    {pendingChangeRequests.map((cr: any) => (
+                      <div key={cr.id} onClick={() => { const proj = clientProjects.find((p: any) => p.id === cr.project_id); if (proj) setSelectedProject(proj) }} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, paddingLeft: 15, cursor: cr.project_id ? 'pointer' : 'default' }}>
+                        <div style={{ fontSize: 11, color: 'rgba(210,175,80,0.8)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          <strong style={{ color: 'rgba(210,175,80,0.95)', fontWeight: 600 }}>{cr.project_title || 'Project'}</strong> — {cr.type === 'cancellation' ? 'cancellation requested' : 'change requested'}
+                        </div>
+                        <span style={{ fontSize: 10, color: 'rgba(210,175,80,0.5)', flexShrink: 0 }}>{new Date(cr.created_at).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' })}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 <div className="ec-grid-sidebar-resp" style={{ gap: 16 }}>
                   {/* LEFT: UPCOMING SHOOTS + ACTIVE PROJECTS */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -1829,7 +1849,12 @@ export default function ClientPortal() {
                                 <div style={{ fontSize: 13, fontWeight: 500, color: '#C8C2BB', marginBottom: 3 }}>{p.title}</div>
                                 <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>{p.address ? p.address.split(',')[0] : p.client}</div>
                               </div>
-                              <span style={{ fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '3px 8px', borderRadius: 2, background: sc.bg, color: sc.color, whiteSpace: 'nowrap' }}>{stageLabel(p.stage)}</span>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                {pendingChangeRequests.some((cr: any) => cr.project_id === p.id) && (
+                                  <span title="Change request awaiting a response" style={{ width: 7, height: 7, borderRadius: '50%', background: 'rgba(210,175,80,0.9)', flexShrink: 0 }} />
+                                )}
+                                <span style={{ fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '3px 8px', borderRadius: 2, background: sc.bg, color: sc.color, whiteSpace: 'nowrap' }}>{stageLabel(p.stage)}</span>
+                              </div>
                             </div>
                           )
                         })
@@ -1857,6 +1882,9 @@ export default function ClientPortal() {
                               <div style={{ width: 80, height: 3, background: 'rgba(200,194,187,0.07)', borderRadius: 2 }}>
                                 <div style={{ height: '100%', width: p.progress + '%', background: '#C8C2BB', opacity: 0.5, borderRadius: 2 }} />
                               </div>
+                              {pendingChangeRequests.some((cr: any) => cr.project_id === p.id) && (
+                                <span title="Change request awaiting a response" style={{ width: 7, height: 7, borderRadius: '50%', background: 'rgba(210,175,80,0.9)', flexShrink: 0 }} />
+                              )}
                               <span style={{ fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '3px 8px', borderRadius: 2, background: sc.bg, color: sc.color, whiteSpace: 'nowrap' }}>{stageLabel(p.stage)}</span>
                             </div>
                           )
@@ -3750,14 +3778,15 @@ export default function ClientPortal() {
                     <textarea value={changeRequest} onChange={e => setChangeRequest(e.target.value)} placeholder="e.g. Can we move the shoot date to 15th August? Or add a twilight shoot..." style={{ width: '100%', background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '10px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', lineHeight: 1.65, resize: 'vertical' as const, minHeight: 80 }} />
                     <button onClick={async () => {
                       if (!changeRequest.trim()) return
-                      await supabase.from('change_requests').insert([{
+                      const { data: created } = await supabase.from('change_requests').insert([{
                         project_id: selectedProject.id || null,
                         client_email: accountEmail,
                         client_name: clientProfile?.name || accountEmail,
                         message: changeRequest,
                         status: 'pending',
                         project_title: selectedProject.title || '',
-                      }])
+                      }]).select().single()
+                      if (created) setPendingChangeRequests(p => [created, ...p])
                       setChangeRequestSent(true)
                       setChangeRequest('')
                     }} disabled={!changeRequest.trim()} style={{ marginTop: 10, fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '9px 18px', borderRadius: 3, background: changeRequest.trim() ? '#C8C2BB' : 'rgba(200,194,187,0.1)', color: changeRequest.trim() ? '#111' : 'rgba(200,194,187,0.2)', border: 'none', cursor: changeRequest.trim() ? 'pointer' : 'not-allowed', fontWeight: 500, fontFamily: 'inherit' }}>Send request</button>
@@ -3858,7 +3887,7 @@ export default function ClientPortal() {
                 <button onClick={async () => {
                   if (!cancelReason) return
                   const message = 'CANCELLATION REQUEST\nReason: ' + cancelReason + (cancelReason === 'Other' && cancelOther ? '\nDetails: ' + cancelOther : '')
-                  await supabase.from('change_requests').insert([{
+                  const { data: created } = await supabase.from('change_requests').insert([{
                     project_id: selectedProject.id || null,
                     client_email: accountEmail,
                     client_name: clientProfile?.name || accountEmail,
@@ -3866,7 +3895,8 @@ export default function ClientPortal() {
                     status: 'pending',
                     project_title: selectedProject.title || '',
                     type: 'cancellation',
-                  }])
+                  }]).select().single()
+                  if (created) setPendingChangeRequests(p => [created, ...p])
                   setShowCancelModal(false)
                   setCancellationSent(true)
                   setCancelReason('')
