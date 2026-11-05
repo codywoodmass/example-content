@@ -942,8 +942,6 @@ export default function ClientPortal() {
   const [selectedShoot, setSelectedShoot] = useState<any>(null)
   const [selectedDel, setSelectedDel] = useState<any>(null)
   const [selectedSubDel, setSelectedSubDel] = useState<any>(null)
-  const [showCustomPackageModal, setShowCustomPackageModal] = useState(false)
-  const [customPackageTitle, setCustomPackageTitle] = useState('')
   // Property package step: video-only packages, or every package with
   // photography bundled in as a main deliverable instead of the old
   // separate Photo Package add-on tile.
@@ -1512,7 +1510,7 @@ export default function ClientPortal() {
       name: 'Lifestyle and Living Package', price: 1280,
       tag: 'The lifestyle showcase',
       description: 'Everything in The Walkthrough Package, plus a full hour of lifestyle filming with talent to elevate the property narrative.',
-      includes: ['60–90s property tour', '1hr lifestyle shoot with talent', 'Agent lifestyle shots', 'Vertical formatting', '8-10 Slide Instagram Carousel'],
+      includes: ['60–90s property tour', '1hr lifestyle shoot with talent', 'Agent lifestyle shots', '8-10 Slide Instagram Carousel'],
       deliverables: [
         { name: 'Showcase Film (60–90s)', price: 0, includes: ['1x cinematic film', 'Vertical & landscape formats', 'Google Drive delivery'] },
         { name: '3x Reels', price: 0, includes: ['3x social reels', 'Vertical & landscape formats', 'Google Drive delivery'] },
@@ -1572,7 +1570,7 @@ export default function ClientPortal() {
   // everything else falls through to that default.
   const PHOTO_VIDEO_OVERRIDES: Record<string, { price: number; photoIncludes: string[] }> = {
     'Lifestyle and Living Package': { price: 1890, photoIncludes: ['25-35 Photos + 3 Drone Photos', '10 Lifestyle Photos'] },
-    'Media Release Package': { price: 2990, photoIncludes: ['50-60 Photos', 'Twilight Photos'] },
+    'Media Release Package': { price: 2990, photoIncludes: ['50-60 Photos', '5 Drone Photos', 'Twilight Photos'] },
   }
   const propertyShootPackagesWithPhoto = propertyShootPackages.map(pkg => {
     const override = PHOTO_VIDEO_OVERRIDES[pkg.name]
@@ -1684,7 +1682,7 @@ export default function ClientPortal() {
           ].map(item => {
             const active = activeView === item.id
             return (
-              <button key={item.id} onClick={() => { setMobileMenuOpen(false); setActiveView(item.id); setBookingStep(1); setSelectedCat(''); setSelectedShoot(null); setSelectedDel(null); setSelectedAddons([]); setTcAccepted(false); setPreferredDate(''); setDraftDue(''); setDeliveryDue(''); setBookingNotes(''); setAccessNotes(''); setPropertyAddress(''); setProjectType(''); setProjectTitle(''); setProjectDescription(''); setTargetAudience(''); setKeyMessage(''); setTalentDetails(''); setBriefDeliverables([{ id: '1', name: '', quantity: 1, duration: '', formats: [], notes: '' }]); setDateFlexible(false); setShootDuration(''); setReferenceLinks([]); setBudgetRange(''); setBookingAttachments([]); setTwilightDate(''); setTwilightTime(''); setPropertyFeatures(''); setShowBriefField(false); setShowTalentField(false); setShowShotListField(false); setShowPropertyFeaturesField(false); setPropertyCoords(null); setTravelFee(0); setCustomPackageTitle(''); setShowCustomPackageModal(false); setPackageMode('video') }} style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 11, width: '100%', padding: '11px 14px 11px 17px', borderRadius: 6, fontSize: 13, letterSpacing: '0.01em', fontWeight: active ? 600 : 500, color: active ? '#fff' : 'rgba(255,255,255,0.65)', background: active ? 'rgba(61,71,86,0.4)' : 'transparent', border: active ? '0.5px solid rgba(200,194,187,0.15)' : '0.5px solid transparent', cursor: 'pointer', marginBottom: 4, textAlign: 'left', fontFamily: 'inherit' }}>
+              <button key={item.id} onClick={() => { setMobileMenuOpen(false); setActiveView(item.id); setBookingStep(1); setSelectedCat(''); setSelectedShoot(null); setSelectedDel(null); setSelectedAddons([]); setTcAccepted(false); setPreferredDate(''); setDraftDue(''); setDeliveryDue(''); setBookingNotes(''); setAccessNotes(''); setPropertyAddress(''); setProjectType(''); setProjectTitle(''); setProjectDescription(''); setTargetAudience(''); setKeyMessage(''); setTalentDetails(''); setBriefDeliverables([{ id: '1', name: '', quantity: 1, duration: '', formats: [], notes: '' }]); setDateFlexible(false); setShootDuration(''); setReferenceLinks([]); setBudgetRange(''); setBookingAttachments([]); setTwilightDate(''); setTwilightTime(''); setPropertyFeatures(''); setShowBriefField(false); setShowTalentField(false); setShowShotListField(false); setShowPropertyFeaturesField(false); setPropertyCoords(null); setTravelFee(0); setPackageMode('video') }} style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 11, width: '100%', padding: '11px 14px 11px 17px', borderRadius: 6, fontSize: 13, letterSpacing: '0.01em', fontWeight: active ? 600 : 500, color: active ? '#fff' : 'rgba(255,255,255,0.65)', background: active ? 'rgba(61,71,86,0.4)' : 'transparent', border: active ? '0.5px solid rgba(200,194,187,0.15)' : '0.5px solid transparent', cursor: 'pointer', marginBottom: 4, textAlign: 'left', fontFamily: 'inherit' }}>
                 {active && <span style={{ position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)', width: 2.5, height: 15, borderRadius: 2, background: '#C8C2BB' }} />}
                 <item.Icon size={17} style={{ flexShrink: 0, opacity: active ? 1 : 0.75 }} />
                 {item.label}
@@ -2236,49 +2234,10 @@ export default function ClientPortal() {
                       </div>
                     ))}
                   </div>
-                  {selectedShoot?.price === null ? (
-                    <div style={{ border:'0.5px solid rgba(100,150,220,0.3)', borderRadius:8, padding:'14px 18px', marginBottom:20, display:'flex', justifyContent:'space-between', alignItems:'center', gap:14, background:'rgba(100,150,220,0.06)' }}>
-                      <div>
-                        <div style={{ fontSize:9, letterSpacing:'0.14em', textTransform:'uppercase', color:'rgba(100,150,220,0.8)', marginBottom:4 }}>Custom request</div>
-                        <div style={{ fontSize:13, fontWeight:500, color:'#fff' }}>{selectedShoot.name}</div>
-                        <div style={{ fontSize:11, color:'rgba(200,194,187,0.4)', marginTop:2 }}>Price to be confirmed — tell us more about it on the next page</div>
-                      </div>
-                      <button onClick={() => { setCustomPackageTitle(selectedShoot?.name || ''); setShowCustomPackageModal(true) }} style={{ fontSize:10, letterSpacing:'0.08em', textTransform:'uppercase', padding:'7px 12px', borderRadius:3, border:'0.5px solid rgba(200,194,187,0.2)', color:'rgba(200,194,187,0.5)', background:'transparent', cursor:'pointer', fontFamily:'inherit', flexShrink:0 }}>Edit</button>
-                    </div>
-                  ) : (
-                    <button onClick={() => { setCustomPackageTitle(''); setShowCustomPackageModal(true) }} style={{ width:'100%', textAlign:'center', fontSize:12, color:'rgba(200,194,187,0.45)', background:'transparent', border:'0.5px dashed rgba(200,194,187,0.2)', borderRadius:8, padding:'14px 18px', marginBottom:20, cursor:'pointer', fontFamily:'inherit' }}>Have something in mind but can't find it here? →</button>
-                  )}
                   <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 16, borderTop: '0.5px solid rgba(200,194,187,0.09)' }}>
                     <button onClick={() => setBookingStep(1)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>← Back</button>
                     <button onClick={() => { if (selectedShoot) setBookingStep(4) }} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, background: selectedShoot ? '#C8C2BB' : 'rgba(200,194,187,0.1)', color: selectedShoot ? '#111' : 'rgba(200,194,187,0.2)', border:'none', cursor: selectedShoot ? 'pointer' : 'not-allowed', fontWeight: 500, fontFamily: 'inherit' }}>Continue →</button>
                   </div>
-                  {showCustomPackageModal && (
-                    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }} onClick={() => setShowCustomPackageModal(false)}>
-                      <div onClick={e => e.stopPropagation()} style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 10, padding: '28px 30px', maxWidth: 420, width: '100%' }}>
-                        <div style={{ fontSize: 14, fontWeight: 500, color: '#fff', marginBottom: 18 }}>Tell us what you're after</div>
-                        <input autoFocus value={customPackageTitle} onChange={e => setCustomPackageTitle(e.target.value)} placeholder="Your project title here -" onKeyDown={e => { if (e.key === 'Enter' && customPackageTitle.trim()) e.currentTarget.form?.requestSubmit() }} style={{ width:'100%', background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '10px 12px', fontSize: 13, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', marginBottom: 10, boxSizing:'border-box' as const }} />
-                        <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', lineHeight: 1.5, marginBottom: 20 }}>Let us know the details at the last step.</div>
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-                          <button onClick={() => setShowCustomPackageModal(false)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '9px 16px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
-                          <button
-                            disabled={!customPackageTitle.trim()}
-                            onClick={() => {
-                              const title = customPackageTitle.trim()
-                              if (!title) return
-                              setSelectedShoot({ name: title, price: null, tag: 'Custom request', description: '', includes: [], deliverables: [] })
-                              setSelectedSubDel(null)
-                              setSelectedDel({ name: 'To be scoped', price: 0, includes: [] })
-                              // They clicked this specifically to describe something that
-                              // doesn't fit a package — open the Brief/Concept field on the
-                              // next step for them instead of making them find and tick it.
-                              setShowBriefField(true)
-                              setShowCustomPackageModal(false)
-                            }}
-                            style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '9px 20px', borderRadius: 3, background: customPackageTitle.trim() ? '#C8C2BB' : 'rgba(200,194,187,0.1)', color: customPackageTitle.trim() ? '#111' : 'rgba(200,194,187,0.2)', border: 'none', cursor: customPackageTitle.trim() ? 'pointer' : 'not-allowed', fontWeight: 500, fontFamily: 'inherit' }}>Continue</button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
                 </div>
               )}
 
@@ -2468,6 +2427,9 @@ export default function ClientPortal() {
                         })}
                       </div>
                     </div>
+                  )}
+                  {selectedCat === 'property' && packageMode === 'photo-video' && (
+                    <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.3)', marginBottom: 10 }}>Video package add-ons</div>
                   )}
                   <div className="ec-grid-resp" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 20 }}>
                     {addons.map(addon => {
