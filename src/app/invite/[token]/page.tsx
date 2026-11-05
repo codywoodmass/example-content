@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { resizeImageToDataUrl } from '@/lib/imageResize'
 import Link from 'next/link'
 
 type Invite = { id: string; account_email: string; invited_email: string; invited_name: string; status: string }
@@ -16,9 +17,20 @@ export default function AcceptInvitePage() {
   const [fullName, setFullName] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [avatarUrl, setAvatarUrl] = useState('')
+  const [avatarError, setAvatarError] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [awaitingConfirmation, setAwaitingConfirmation] = useState(false)
+
+  async function handleAvatarPick(file: File) {
+    setAvatarError('')
+    try {
+      setAvatarUrl(await resizeImageToDataUrl(file))
+    } catch {
+      setAvatarError("Couldn't read that image — try a different file.")
+    }
+  }
 
   const inputStyle: React.CSSProperties = { background: 'rgba(200,194,187,0.05)', border: '0.5px solid rgba(200,194,187,0.1)', borderRadius: 4, padding: '11px 14px', fontSize: 13, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }
   const labelStyle: React.CSSProperties = { fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)' }
@@ -43,7 +55,7 @@ export default function AcceptInvitePage() {
     const { data, error } = await supabase.auth.signUp({
       email: invite.invited_email,
       password,
-      options: { data: { full_name: fullName } },
+      options: { data: { full_name: fullName, avatar_url: avatarUrl || null } },
     })
 
     if (error) {
@@ -105,6 +117,21 @@ export default function AcceptInvitePage() {
         <div style={{ fontSize: 13, color: 'rgba(200,194,187,0.5)', textAlign: 'center', marginBottom: 28, lineHeight: 1.6 }}>Set up your login for full access to <strong style={{ color: '#C8C2BB' }}>{invite.account_email}</strong>'s Example Content account.</div>
 
         <form onSubmit={handleAccept} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 4 }}>
+            <label style={{ width: 56, height: 56, borderRadius: '50%', flexShrink: 0, background: avatarUrl ? 'transparent' : 'rgba(200,194,187,0.06)', border: '0.5px dashed rgba(200,194,187,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', overflow: 'hidden' }}>
+              {avatarUrl ? (
+                <img src={avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              ) : (
+                <span style={{ fontSize: 18, color: 'rgba(200,194,187,0.35)' }}>+</span>
+              )}
+              <input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) handleAvatarPick(f); e.target.value = '' }} />
+            </label>
+            <div>
+              <div style={{ fontSize: 12, color: '#C8C2BB', marginBottom: 2 }}>Add a profile photo</div>
+              <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', lineHeight: 1.5 }}>Optional, but it makes it a lot easier for your team to know who's who.</div>
+              {avatarError && <div style={{ fontSize: 11, color: 'rgba(210,90,90,0.85)', marginTop: 4 }}>{avatarError}</div>}
+            </div>
+          </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <label style={labelStyle}>Full name</label>
             <input type="text" value={fullName} onChange={e => setFullName(e.target.value)} placeholder="Jane Smith" required style={inputStyle} />

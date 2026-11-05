@@ -26,6 +26,10 @@ export async function ensureClientProfile(user: { id: string; email?: string | n
       company: meta.company || '',
       phone: meta.phone || '',
       category: meta.category || 'Property',
+      // Picked (optionally) at signup and carried through as auth
+      // user_metadata, since no session exists yet at that point to
+      // write it to the row directly.
+      avatar_url: meta.avatar_url || null,
     }], { onConflict: 'email', ignoreDuplicates: false })
   }
 }

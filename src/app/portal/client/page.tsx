@@ -3,6 +3,7 @@ import React from 'react'
 import { useEffect, useState } from 'react'
 import { supabase, ensureClientProfile } from '@/lib/supabase'
 import { sendTeamInvite, removeTeamMember, revokeTeamInvite } from '@/lib/clientTeam'
+import { resizeImageToDataUrl } from '@/lib/imageResize'
 import { formatTime12, localDateKey, addBusinessDays } from '@/lib/time'
 import { stageLabel } from '@/lib/stages'
 import { useRouter } from 'next/navigation'
@@ -917,7 +918,12 @@ export default function ClientPortal() {
   // sub-user would see/write against their own personal email instead of the
   // shared account they were invited into.
   const [accountEmail, setAccountEmail] = useState<string | null>(null)
-  const [teamMembers, setTeamMembers] = useState<{ id: string; member_email: string; member_name: string }[]>([])
+  const [teamMembers, setTeamMembers] = useState<{ id: string; member_email: string; member_name: string; avatar_url?: string | null; role_title?: string | null; created_at?: string }[]>([])
+  const [teamProfileOpen, setTeamProfileOpen] = useState<string | null>(null) // 'main', a member id, or null
+  const [uploadingAvatar, setUploadingAvatar] = useState(false)
+  const [avatarUploadError, setAvatarUploadError] = useState('')
+  const [editingRoleTitle, setEditingRoleTitle] = useState(false)
+  const [roleTitleDraft, setRoleTitleDraft] = useState('')
   const [teamInvites, setTeamInvites] = useState<{ id: string; invited_email: string; invited_name: string; created_at: string }[]>([])
   const [teamInviteName, setTeamInviteName] = useState('')
   const [teamInviteEmail, setTeamInviteEmail] = useState('')
@@ -1081,7 +1087,7 @@ export default function ClientPortal() {
         // invite addressed to it.
         const { data: pendingInvite } = await supabase.from('client_invites').select('*').eq('invited_email', loginEmail || '').eq('status', 'pending').maybeSingle()
         if (pendingInvite) {
-          await supabase.from('client_members').insert([{ account_email: pendingInvite.account_email, member_email: loginEmail, member_name: pendingInvite.invited_name || '', invited_by: pendingInvite.invited_by }])
+          await supabase.from('client_members').insert([{ account_email: pendingInvite.account_email, member_email: loginEmail, member_name: pendingInvite.invited_name || '', invited_by: pendingInvite.invited_by, avatar_url: session.user.user_metadata?.avatar_url || null }])
           await supabase.from('client_invites').update({ status: 'accepted', accepted_at: new Date().toISOString() }).eq('id', pendingInvite.id)
           resolvedAccountEmail = pendingInvite.account_email
           isSubUser = true
@@ -1175,6 +1181,36 @@ export default function ClientPortal() {
   async function handleRemoveTeamMember(id: string) {
     setTeamMembers(p => p.filter(m => m.id !== id))
     await removeTeamMember(id)
+  }
+
+  // Only the signed-in person can set their own photo/title — opening
+  // someone else's card is read-only (plus Remove, for the account owner).
+  const isOwnCard = (target: 'main' | string) =>
+    target === 'main' ? accountEmail === user?.email : teamMembers.find(m => m.id === target)?.member_email === user?.email
+
+  async function handleAvatarUpload(file: File, target: 'main' | string) {
+    setAvatarUploadError('')
+    setUploadingAvatar(true)
+    try {
+      const dataUrl = await resizeImageToDataUrl(file)
+      if (target === 'main') {
+        await supabase.from('clients1').update({ avatar_url: dataUrl }).eq('email', accountEmail)
+        setClientProfile((p: any) => p ? { ...p, avatar_url: dataUrl } : p)
+      } else {
+        await supabase.from('client_members').update({ avatar_url: dataUrl }).eq('id', target)
+        setTeamMembers(p => p.map(m => m.id === target ? { ...m, avatar_url: dataUrl } : m))
+      }
+    } catch {
+      setAvatarUploadError("Couldn't read that image — try a different file.")
+    } finally {
+      setUploadingAvatar(false)
+    }
+  }
+
+  async function saveRoleTitle(memberId: string, title: string) {
+    setTeamMembers(p => p.map(m => m.id === memberId ? { ...m, role_title: title } : m))
+    setEditingRoleTitle(false)
+    await supabase.from('client_members').update({ role_title: title }).eq('id', memberId)
   }
 
   async function handleRevokeTeamInvite(id: string) {
@@ -3376,6 +3412,25 @@ export default function ClientPortal() {
 
         {activeView === 'team' && (() => {
           const isSubUser = !!accountEmail && accountEmail !== user?.email
+          const initials = (name: string, email: string) => (name || email || '?').split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()
+          const fmtJoined = (d?: string) => d ? new Date(d).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' }) : null
+
+          function AvatarCircle({ url, name, email, size }: { url?: string | null; name: string; email: string; size: number }) {
+            return url ? (
+              <img src={url} alt={name} style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+            ) : (
+              <div style={{ width: size, height: size, borderRadius: '50%', background: 'linear-gradient(135deg, #3D4756 0%, #2A323E 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: size * 0.36, fontWeight: 600, color: '#C8C2BB', flexShrink: 0 }}>{initials(name, email)}</div>
+            )
+          }
+
+          // Card data for both the main account and every active teammate,
+          // in one shape so the grid and the profile modal can share logic.
+          const cards = [
+            { id: 'main', name: clientProfile?.name || accountEmail || '', email: accountEmail || '', avatar_url: clientProfile?.avatar_url, role_title: null as string | null, created_at: clientProfile?.created_at, isMain: true },
+            ...teamMembers.map(m => ({ id: m.id, name: m.member_name || m.member_email, email: m.member_email, avatar_url: m.avatar_url, role_title: m.role_title ?? null, created_at: m.created_at, isMain: false })),
+          ]
+          const openCard = cards.find(c => c.id === teamProfileOpen)
+
           return (
             <div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 28px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', background: '#14181F', position: 'sticky', top: 0, zIndex: 10 }}>
@@ -3385,12 +3440,27 @@ export default function ClientPortal() {
                 </div>
                 <button onClick={() => setActiveView('dashboard')} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>← Dashboard</button>
               </div>
-              <div style={{ padding: 28, maxWidth: 640 }}>
+              <div style={{ padding: 28, maxWidth: 880 }}>
                 {isSubUser && (
                   <div style={{ fontSize: 12, color: 'rgba(210,175,80,0.85)', background: 'rgba(210,175,80,0.08)', border: '0.5px solid rgba(210,175,80,0.25)', borderRadius: 6, padding: '12px 16px', marginBottom: 20, lineHeight: 1.6 }}>
                     You're signed in as a teammate on this account ({user?.email}) — invites and removals here apply to the whole account, same as the main account holder.
                   </div>
                 )}
+
+                {/* TEAM GRID — the main, bigger focus of the page now */}
+                <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 12 }}>{cards.length} {cards.length === 1 ? 'person' : 'people'} on this account</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 14, marginBottom: 28 }}>
+                  {cards.map(c => (
+                    <div key={c.id} onClick={() => setTeamProfileOpen(c.id)} style={{ background: 'linear-gradient(135deg, rgba(35,42,56,0.6) 0%, rgba(22,27,38,0.9) 100%)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 10, padding: 20, cursor: 'pointer', transition: 'border-color 0.15s' }} onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(200,194,187,0.25)')} onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(200,194,187,0.09)')}>
+                      <AvatarCircle url={c.avatar_url} name={c.name} email={c.email} size={52} />
+                      <div style={{ fontSize: 13, fontWeight: 600, color: '#fff', marginTop: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</div>
+                      <div style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: c.isMain ? 'rgba(100,200,130,0.75)' : 'rgba(100,150,220,0.75)', marginTop: 4 }}>{c.isMain ? 'Main account' : (c.role_title || 'Teammate')}</div>
+                      <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.35)', marginTop: 10, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.email}</div>
+                      {fmtJoined(c.created_at) && <div style={{ fontSize: 10, color: 'rgba(200,194,187,0.25)', marginTop: 4 }}>Joined {fmtJoined(c.created_at)}</div>}
+                    </div>
+                  ))}
+                </div>
+
                 <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, overflow: 'hidden', marginBottom: 20 }}>
                   <div style={{ padding: '13px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>Invite a teammate</div>
                   <div style={{ padding: 18, display: 'flex', gap: 10, flexWrap: 'wrap' as const }}>
@@ -3411,26 +3481,6 @@ export default function ClientPortal() {
                     }}>{teamInviteNotice.message}</div>
                   )}
                 </div>
-                <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, overflow: 'hidden', marginBottom: 20 }}>
-                  <div style={{ padding: '13px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>On this account</div>
-                  <div style={{ padding: '12px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '0.5px solid rgba(200,194,187,0.06)' }}>
-                    <div>
-                      <div style={{ fontSize: 12, color: '#C8C2BB' }}>{clientProfile?.name || accountEmail} <span style={{ color: 'rgba(200,194,187,0.35)', fontWeight: 400 }}>— main account</span></div>
-                      <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>{accountEmail}</div>
-                    </div>
-                  </div>
-                  {teamMembers.length === 0 ? (
-                    <div style={{ padding: '16px 18px', fontSize: 12, color: 'rgba(200,194,187,0.3)' }}>No teammates added yet</div>
-                  ) : teamMembers.map(m => (
-                    <div key={m.id} style={{ padding: '12px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '0.5px solid rgba(200,194,187,0.06)' }}>
-                      <div>
-                        <div style={{ fontSize: 12, color: '#C8C2BB' }}>{m.member_name || m.member_email}</div>
-                        <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>{m.member_email}</div>
-                      </div>
-                      <button onClick={() => handleRemoveTeamMember(m.id)} style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '6px 10px', borderRadius: 3, border: '0.5px solid rgba(210,90,90,0.3)', color: 'rgba(210,90,90,0.8)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Remove</button>
-                    </div>
-                  ))}
-                </div>
                 {teamInvites.length > 0 && (
                   <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, overflow: 'hidden' }}>
                     <div style={{ padding: '13px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>Pending invites</div>
@@ -3446,6 +3496,62 @@ export default function ClientPortal() {
                   </div>
                 )}
               </div>
+
+              {/* PROFILE MODAL */}
+              {openCard && (
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }} onClick={e => { if (e.target === e.currentTarget) { setTeamProfileOpen(null); setEditingRoleTitle(false); setAvatarUploadError('') } }}>
+                  <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 12, padding: 32, maxWidth: 400, width: '100%', textAlign: 'center', position: 'relative' }}>
+                    <button onClick={() => { setTeamProfileOpen(null); setEditingRoleTitle(false); setAvatarUploadError('') }} style={{ position: 'absolute', top: 14, right: 14, fontSize: 18, color: 'rgba(200,194,187,0.4)', background: 'transparent', border: 'none', cursor: 'pointer' }}>×</button>
+
+                    <div style={{ position: 'relative', display: 'inline-block', marginBottom: 16 }}>
+                      <AvatarCircle url={openCard.avatar_url} name={openCard.name} email={openCard.email} size={88} />
+                      {isOwnCard(openCard.id) && (
+                        <label style={{ position: 'absolute', bottom: 0, right: 0, width: 28, height: 28, borderRadius: '50%', background: '#C8C2BB', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: uploadingAvatar ? 'default' : 'pointer', border: '2px solid #1A1F28', fontSize: 12 }}>
+                          {uploadingAvatar ? (
+                            <span style={{ fontSize: 11, color: '#111' }}>…</span>
+                          ) : (
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#111" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /></svg>
+                          )}
+                          <input type="file" accept="image/*" disabled={uploadingAvatar} style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) handleAvatarUpload(f, openCard.id); e.target.value = '' }} />
+                        </label>
+                      )}
+                    </div>
+                    {avatarUploadError && <div style={{ fontSize: 11, color: 'rgba(210,90,90,0.85)', marginBottom: 10 }}>{avatarUploadError}</div>}
+
+                    <div style={{ fontSize: 16, fontWeight: 600, color: '#fff', marginBottom: 4 }}>{openCard.name}</div>
+
+                    {openCard.isMain ? (
+                      <div style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(100,200,130,0.8)', marginBottom: 16 }}>Main account</div>
+                    ) : editingRoleTitle ? (
+                      <div style={{ display: 'flex', gap: 6, justifyContent: 'center', marginBottom: 16 }}>
+                        <input autoFocus defaultValue={openCard.role_title || ''} onChange={e => setRoleTitleDraft(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') saveRoleTitle(openCard.id, roleTitleDraft) }} placeholder="e.g. Marketing Manager" style={{ fontSize: 12, textAlign: 'center', background: 'rgba(200,194,187,0.06)', border: '0.5px solid rgba(200,194,187,0.2)', borderRadius: 4, padding: '6px 10px', color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: 180 }} />
+                        <button onClick={() => saveRoleTitle(openCard.id, roleTitleDraft)} style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '6px 10px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>Save</button>
+                      </div>
+                    ) : (
+                      <div onClick={() => { if (isOwnCard(openCard.id)) { setRoleTitleDraft(openCard.role_title || ''); setEditingRoleTitle(true) } }} style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(100,150,220,0.8)', marginBottom: 16, cursor: isOwnCard(openCard.id) ? 'pointer' : 'default' }}>
+                        {openCard.role_title || (isOwnCard(openCard.id) ? 'Teammate · + Add a title' : 'Teammate')}
+                      </div>
+                    )}
+
+                    <div style={{ background: 'rgba(200,194,187,0.03)', border: '0.5px solid rgba(200,194,187,0.07)', borderRadius: 6, padding: '14px 16px', marginBottom: 16, textAlign: 'left' as const }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: fmtJoined(openCard.created_at) ? 8 : 0 }}>
+                        <span style={{ color: 'rgba(200,194,187,0.35)' }}>Email</span>
+                        <span style={{ color: '#C8C2BB' }}>{openCard.email}</span>
+                      </div>
+                      {fmtJoined(openCard.created_at) && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+                          <span style={{ color: 'rgba(200,194,187,0.35)' }}>Joined</span>
+                          <span style={{ color: '#C8C2BB' }}>{fmtJoined(openCard.created_at)}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {!openCard.isMain && (
+                      <button onClick={() => { handleRemoveTeamMember(openCard.id); setTeamProfileOpen(null) }} style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '9px 16px', borderRadius: 3, border: '0.5px solid rgba(210,90,90,0.3)', color: 'rgba(210,90,90,0.8)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit', width: '100%' }}>Remove from team</button>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           )
         })()}
