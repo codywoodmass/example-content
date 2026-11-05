@@ -13,6 +13,7 @@ import LabeledNotes from '@/components/studio/LabeledNotes'
 import { useTimeTracking, mondayOf } from '@/lib/timeTracking'
 import TimeTrackerBar from '@/components/studio/TimeTrackerBar'
 import RingProgress from '@/components/studio/RingProgress'
+import { parseLabeledNotes } from '@/lib/parseNotes'
 
 // Small local icon set — mirrors the client portal's line icons so the
 // studio file browser reads the same way instead of falling back to emoji.
@@ -975,6 +976,38 @@ export default function StudioPortal() {
     setCreatingEvent(false)
   }
 
+  // A commercial booking's rich brief fields (project description, key
+  // message, overall goal, talent, deliverables) only ever land in the
+  // booking's single labeled-paragraph `notes` blob (see src/lib/parseNotes.ts)
+  // — there's no separate column per field. Rather than leave the project's
+  // Brief tab at its fully-blank default template, this parses that same
+  // blob back into its labeled segments and pre-fills a matching document,
+  // so the studio isn't retyping what the client already gave us.
+  function commercialBriefFromBooking(title: string, notes: string): string {
+    const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    const segments = parseLabeledNotes(notes)
+    const find = (label: string) => segments.find(s => s.label?.toLowerCase() === label.toLowerCase())?.body || ''
+    const para = (heading: string, value: string, hint: string) =>
+      `<h2>${heading}</h2><p${value ? '' : ` data-placeholder="${esc(hint)}"`}>${esc(value)}</p><hr/>`
+    const deliverableLines = find('Deliverables').split('\n').map(l => l.replace(/^[-•]\s*/, '').trim()).filter(Boolean)
+    const list = (heading: string, items: string[], hint: string) =>
+      `<h2>${heading}</h2><ul>${items.length ? items.map(i => `<li>${esc(i)}</li>`).join('') : `<li data-placeholder="${esc(hint)}"></li>`}</ul><hr/>`
+    const leftovers = ['Estimated duration', 'Budget range', 'References'].map(l => { const v = find(l); return v ? `${l}: ${v}` : '' }).filter(Boolean)
+    if (segments.some(s => !s.label && /preferred date is flexible/i.test(s.body))) leftovers.push('Preferred date is flexible')
+
+    return (
+      `<h1>${esc(title)}</h1>` +
+      para('Project Overview', find('Project description'), "What's the story behind this shoot, and what outcome are we aiming for?") +
+      `<h2>Creative Direction</h2><p data-placeholder="Describe the visual style, mood, pacing and tone we’re going for..."></p><hr/>` +
+      list('Key Messages', find('Key message') ? [find('Key message')] : [], "What's the single most important thing viewers should take away?") +
+      para('Overall Goal for the Project', find('Overall goal for the project'), 'Who is this content for, and what do they care about?') +
+      `<h2>Audio / Music</h2><p data-placeholder="Voiceover, music style or reference tracks, or silence?"></p><hr/>` +
+      list('Deliverables', deliverableLines, 'List each deliverable with its format and length...') +
+      para('Talent / On-Camera', find('Talent / interviews'), 'Who, if anyone, is on camera — interviews, presenters, staff?') +
+      `<h2>Additional Notes</h2><p>${esc(leftovers.join(' · '))}</p>`
+    )
+  }
+
   // Shared by confirmBooking and bookMeeting — creates the project, Drive folder and
   // deliverables checklist from a pending booking. shootDateForProject is only set when
   // an actual shoot date is being locked in (not for a discovery/scoping meeting).
@@ -989,8 +1022,16 @@ export default function StudioPortal() {
   // it goes straight to Pre-Production, already marked confirmed.
   async function createProjectFromBooking(booking: any, shootDateForProject: string | null, extraNotes: string, shootStartTime?: string | null, shootEndTime?: string | null, needsBrief: boolean = false) {
     const confirmed_at = new Date().toISOString()
+    const isCommercial = booking.category !== 'property'
+    // A commercial booking's actual project title only ever lands in the
+    // notes blob ("Project title: ..."), not a column — shoot_package is
+    // the project *type* for these (e.g. "Brand / commercial video"), so
+    // using it as the title fell back to a generic category label instead
+    // of what the client actually called their project.
+    const commercialTitle = isCommercial ? parseLabeledNotes(booking.notes).find(s => s.label?.toLowerCase() === 'project title')?.body : null
+    const title = commercialTitle || booking.address || booking.shoot_package || 'New project'
     const { data, error: projectError } = await supabase.from('projects1').insert([{
-      title: booking.address || booking.shoot_package || 'New project',
+      title,
       client: booking.client_name || booking.client_email || '',
       contact: booking.client_name || "",
       email: booking.client_email || '',
@@ -1012,6 +1053,9 @@ export default function StudioPortal() {
       from_booking: true,
       general_notes: (booking.notes || '') + extraNotes,
       editor_notes: '',
+      // Pre-fills the Brief tab from the client's submitted details instead
+      // of leaving it at the fully-blank default template.
+      studio_brief: isCommercial && booking.notes ? commercialBriefFromBooking(title, booking.notes) : null,
       amount: booking.total_price ?? null,
       attachment_urls: booking.attachment_urls || [],
       deliverables: [

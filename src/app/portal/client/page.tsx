@@ -1518,13 +1518,24 @@ export default function ClientPortal() {
   // Package's deliverables folded in as a main part of each one (not an
   // add-on), priced at the video package's price plus the Photo Package's
   // own price, no bundle discount.
-  const propertyShootPackagesWithPhoto = propertyShootPackages.map(pkg => ({
-    ...pkg,
-    name: pkg.name + ' + Photography',
-    price: pkg.price + PHOTO_PACKAGE.price,
-    includes: [...pkg.includes, '25-35 Photos + 3 Drone Photos'],
-    deliverables: [...pkg.deliverables, { name: '25-35 Photos + 3 Drone Photos', price: 0, includes: ['25-35 edited photos', '3 edited drone photos', 'Google Drive delivery'] }],
-  }))
+  // A couple of packages have their own specific price/photo inclusions
+  // rather than the generic package-price + $450 / 25-35 photos formula —
+  // everything else falls through to that default.
+  const PHOTO_VIDEO_OVERRIDES: Record<string, { price: number; photoIncludes: string[] }> = {
+    'Lifestyle and Living Package': { price: 1890, photoIncludes: ['25-35 Photos + 3 Drone Photos', '10 Lifestyle Photos'] },
+    'Media Release Package': { price: 2990, photoIncludes: ['50-60 Photos', 'Twilight Photos'] },
+  }
+  const propertyShootPackagesWithPhoto = propertyShootPackages.map(pkg => {
+    const override = PHOTO_VIDEO_OVERRIDES[pkg.name]
+    const photoIncludes = override?.photoIncludes || ['25-35 Photos + 3 Drone Photos']
+    return {
+      ...pkg,
+      name: pkg.name + ' + Photography',
+      price: override?.price ?? (pkg.price + PHOTO_PACKAGE.price),
+      includes: [...pkg.includes, ...photoIncludes],
+      deliverables: [...pkg.deliverables, { name: photoIncludes.join(' + '), price: 0, includes: [...photoIncludes.map(p => p + ' (edited)'), 'Google Drive delivery'] }],
+    }
+  })
   // Only make sense once the base Photo Package is actually added.
   const photoPackageAddons = [
     { name: 'Lifestyle Agent Photo Shoot', price: 150, desc: 'A styled lifestyle photo shoot with the listing agent' },
@@ -2225,8 +2236,8 @@ export default function ClientPortal() {
                       </select>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, gridColumn: 'span 2' }}>
-                      <label style={cLbl}>Target audience</label>
-                      <input value={targetAudience} onChange={e => setTargetAudience(e.target.value)} placeholder="e.g. First-home buyers aged 25–40" style={cInp} />
+                      <label style={cLbl}>Overall goal for the project</label>
+                      <input value={targetAudience} onChange={e => setTargetAudience(e.target.value)} placeholder="e.g. Drive bookings for our new summer menu" style={cInp} />
                     </div>
                   </div>
 
@@ -2622,7 +2633,7 @@ export default function ClientPortal() {
                           notes: [
                             projectTitle ? 'Project title: ' + projectTitle : '',
                             projectDescription ? 'Project description: ' + projectDescription : '',
-                            targetAudience ? 'Target audience: ' + targetAudience : '',
+                            targetAudience ? 'Overall goal for the project: ' + targetAudience : '',
                             keyMessage ? 'Key message: ' + keyMessage : '',
                             talentDetails ? 'Talent / interviews: ' + talentDetails : '',
                             briefDeliverables.filter(d => d.name).length ? 'Deliverables:\n' + briefDeliverables.filter(d => d.name).map(d => `- ${d.quantity}x ${d.name}${d.duration ? ' (' + d.duration + ')' : ''}${d.formats.length ? ' [' + d.formats.join(', ') + ']' : ''}${d.notes ? ' — ' + d.notes : ''}`).join('\n') : '',
@@ -2690,7 +2701,7 @@ export default function ClientPortal() {
                         const details = selectedCat === 'commercial' ? [
                           { label: 'Business / brand', value: clientContactName },
                           { label: 'Project type', value: projectType },
-                          { label: 'Target audience', value: targetAudience },
+                          { label: 'Overall goal for the project', value: targetAudience },
                           { label: 'Key message', value: keyMessage },
                           { label: 'Talent / interviews', value: talentDetails },
                           { label: 'Deliverables', value: briefDeliverables.filter(d => d.name).map(d => `${d.quantity}x ${d.name}${d.duration ? ' (' + d.duration + ')' : ''}`).join(', ') || 'To be discussed' },
