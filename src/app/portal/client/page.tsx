@@ -971,6 +971,7 @@ export default function ClientPortal() {
   const [propertyLiveDate, setPropertyLiveDate] = useState("")
   const [shotList, setShotList] = useState("• \n• \n• \n• \n• ")
   const [propertyFeatures, setPropertyFeatures] = useState('')
+  const [homeType, setHomeType] = useState('')
   // These four fields on the Details step are optional and most bookings
   // don't need them — ticking the box is what reveals the textbox, rather
   // than showing four empty textareas by default regardless of whether the
@@ -1682,7 +1683,7 @@ export default function ClientPortal() {
           ].map(item => {
             const active = activeView === item.id
             return (
-              <button key={item.id} onClick={() => { setMobileMenuOpen(false); setActiveView(item.id); setBookingStep(1); setSelectedCat(''); setSelectedShoot(null); setSelectedDel(null); setSelectedAddons([]); setTcAccepted(false); setPreferredDate(''); setDraftDue(''); setDeliveryDue(''); setBookingNotes(''); setAccessNotes(''); setPropertyAddress(''); setProjectType(''); setProjectTitle(''); setProjectDescription(''); setTargetAudience(''); setKeyMessage(''); setTalentDetails(''); setBriefDeliverables([{ id: '1', name: '', quantity: 1, duration: '', formats: [], notes: '' }]); setDateFlexible(false); setShootDuration(''); setReferenceLinks([]); setBudgetRange(''); setBookingAttachments([]); setTwilightDate(''); setTwilightTime(''); setPropertyFeatures(''); setShowBriefField(false); setShowTalentField(false); setShowShotListField(false); setShowPropertyFeaturesField(false); setPropertyCoords(null); setTravelFee(0); setPackageMode('video') }} style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 11, width: '100%', padding: '11px 14px 11px 17px', borderRadius: 6, fontSize: 13, letterSpacing: '0.01em', fontWeight: active ? 600 : 500, color: active ? '#fff' : 'rgba(255,255,255,0.65)', background: active ? 'rgba(61,71,86,0.4)' : 'transparent', border: active ? '0.5px solid rgba(200,194,187,0.15)' : '0.5px solid transparent', cursor: 'pointer', marginBottom: 4, textAlign: 'left', fontFamily: 'inherit' }}>
+              <button key={item.id} onClick={() => { setMobileMenuOpen(false); setActiveView(item.id); setBookingStep(1); setSelectedCat(''); setSelectedShoot(null); setSelectedDel(null); setSelectedAddons([]); setTcAccepted(false); setPreferredDate(''); setDraftDue(''); setDeliveryDue(''); setBookingNotes(''); setAccessNotes(''); setPropertyAddress(''); setProjectType(''); setProjectTitle(''); setProjectDescription(''); setTargetAudience(''); setKeyMessage(''); setTalentDetails(''); setBriefDeliverables([{ id: '1', name: '', quantity: 1, duration: '', formats: [], notes: '' }]); setDateFlexible(false); setShootDuration(''); setReferenceLinks([]); setBudgetRange(''); setBookingAttachments([]); setTwilightDate(''); setTwilightTime(''); setPropertyFeatures(''); setHomeType(''); setShowBriefField(false); setShowTalentField(false); setShowShotListField(false); setShowPropertyFeaturesField(false); setPropertyCoords(null); setTravelFee(0); setPackageMode('video') }} style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 11, width: '100%', padding: '11px 14px 11px 17px', borderRadius: 6, fontSize: 13, letterSpacing: '0.01em', fontWeight: active ? 600 : 500, color: active ? '#fff' : 'rgba(255,255,255,0.65)', background: active ? 'rgba(61,71,86,0.4)' : 'transparent', border: active ? '0.5px solid rgba(200,194,187,0.15)' : '0.5px solid transparent', cursor: 'pointer', marginBottom: 4, textAlign: 'left', fontFamily: 'inherit' }}>
                 {active && <span style={{ position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)', width: 2.5, height: 15, borderRadius: 2, background: '#C8C2BB' }} />}
                 <item.Icon size={17} style={{ flexShrink: 0, opacity: active ? 1 : 0.75 }} />
                 {item.label}
@@ -2503,7 +2504,7 @@ export default function ClientPortal() {
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                         <label style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#fff' }}>Property type</label>
-                        <select style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }}>
+                        <select value={homeType} onChange={e => setHomeType(e.target.value)} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '9px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }}>
                           <option value=''>Select type...</option><option>Standard Residential</option><option>High End Residential</option><option>Character Home</option><option>Lifestyle Property</option><option>High End Lifestyle</option><option>Townhouse</option><option>Section</option>
                         </select>
                       </div>
@@ -2710,6 +2711,7 @@ export default function ClientPortal() {
                           notes: [
                             selectedShoot?.price == null ? `CUSTOM REQUEST — "${selectedShoot?.name}". No package selected; set a price manually once scoped.` : '',
                             bookingNotes ? 'Brief/Concept: ' + bookingNotes : '',
+                            homeType ? 'Property type: ' + homeType : '',
                             propertyFeatures ? 'Property features: ' + propertyFeatures : '',
                             accessNotes ? 'Access: ' + accessNotes : '',
                             talentDetails ? 'Talent required: ' + talentDetails : '',
@@ -2765,6 +2767,7 @@ export default function ClientPortal() {
                           { label: 'Add-ons', value: selectedAddons.length ? selectedAddons.map(a => a.name).join(', ') : 'None' },
                           { label: 'Travel fee', value: travelFee > 0 ? `$${travelFee} + GST (auto-calculated)` : '' },
                           { label: 'Address', value: propertyAddress },
+                          { label: 'Property type', value: homeType },
                           { label: 'Preferred date', value: preferredDate ? preferredDate + (preferredTime ? ' at ' + formatTime12(preferredTime) : '') : 'TBC' },
                           { label: 'Notes', value: bookingNotes },
                           { label: 'Property features', value: propertyFeatures },
