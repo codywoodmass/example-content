@@ -938,8 +938,11 @@ export default function ClientPortal() {
   const [selectedSubDel, setSelectedSubDel] = useState<any>(null)
   const [showCustomPackageModal, setShowCustomPackageModal] = useState(false)
   const [customPackageTitle, setCustomPackageTitle] = useState('')
+  // Property package step: video-only packages, or every package with
+  // photography bundled in as a main deliverable instead of the old
+  // separate Photo Package add-on tile.
+  const [packageMode, setPackageMode] = useState<'video' | 'photo-video'>('video')
   const [selectedAddons, setSelectedAddons] = useState<any[]>([])
-  const [showPhotoOnlyWarning, setShowPhotoOnlyWarning] = useState(false)
   const [preferredDate, setPreferredDate] = useState("")
   const [propertyAddress, setPropertyAddress] = useState("")
   const [addressSuggestions, setAddressSuggestions] = useState<any[]>([])
@@ -1419,17 +1422,6 @@ export default function ClientPortal() {
     )
   }
 
-  // Dropping the base Photo Package should drop anything that only makes
-  // sense on top of it too — "10 Additional Photos" with no base package
-  // selected doesn't mean anything.
-  function togglePhotoPackage() {
-    setSelectedAddons(prev => {
-      const has = prev.find(a => a.name === PHOTO_PACKAGE.name)
-      if (has) return prev.filter(a => a.name !== PHOTO_PACKAGE.name && !photoPackageAddons.some(pa => pa.name === a.name))
-      return [...prev, PHOTO_PACKAGE]
-    })
-  }
-
   const addonTotal = selectedAddons.reduce((sum, a) => sum + a.price, 0)
   const grandTotal = (selectedShoot?.price || 0) + (selectedDel?.price || 0) + addonTotal + (selectedCat === 'property' ? travelFee : 0)
 
@@ -1522,6 +1514,17 @@ export default function ClientPortal() {
   // standalone product (yet), so it gets its own toggle card on the add-ons
   // step instead of sitting in either list.
   const PHOTO_PACKAGE = { name: 'Photo Package', price: 450, desc: '25-35 photos + 3 drone photos' }
+  // The "Photo & Video Packages" tab — same packages, with the Photo
+  // Package's deliverables folded in as a main part of each one (not an
+  // add-on), priced at the video package's price plus the Photo Package's
+  // own price, no bundle discount.
+  const propertyShootPackagesWithPhoto = propertyShootPackages.map(pkg => ({
+    ...pkg,
+    name: pkg.name + ' + Photography',
+    price: pkg.price + PHOTO_PACKAGE.price,
+    includes: [...pkg.includes, '25-35 Photos + 3 Drone Photos'],
+    deliverables: [...pkg.deliverables, { name: '25-35 Photos + 3 Drone Photos', price: 0, includes: ['25-35 edited photos', '3 edited drone photos', 'Google Drive delivery'] }],
+  }))
   // Only make sense once the base Photo Package is actually added.
   const photoPackageAddons = [
     { name: 'Lifestyle Agent Photo Shoot', price: 150, desc: 'A styled lifestyle photo shoot with the listing agent' },
@@ -1534,7 +1537,9 @@ export default function ClientPortal() {
     { name: 'Voiceover & Sound Design', price: 260, desc: 'Professional voiceover and custom sound design' },
     { name: 'Extra Shoot Hours', price: 290, desc: 'Add additional hours to any package' },
   ]
-  const shootPackages = selectedCat === 'property' ? propertyShootPackages : commercialShootPackages
+  const shootPackages = selectedCat === 'property'
+    ? (packageMode === 'photo-video' ? propertyShootPackagesWithPhoto : propertyShootPackages)
+    : commercialShootPackages
   const deliverables = selectedCat === 'property' ? propertyDeliverables : commercialDeliverables
   // Several property packages now bundle a carousel in directly — hide
   // the paid Carousel add-on when the chosen package already includes
@@ -1619,7 +1624,7 @@ export default function ClientPortal() {
           ].map(item => {
             const active = activeView === item.id
             return (
-              <button key={item.id} onClick={() => { setMobileMenuOpen(false); setActiveView(item.id); setBookingStep(1); setSelectedCat(''); setSelectedShoot(null); setSelectedDel(null); setSelectedAddons([]); setTcAccepted(false); setPreferredDate(''); setDraftDue(''); setDeliveryDue(''); setBookingNotes(''); setAccessNotes(''); setPropertyAddress(''); setProjectType(''); setProjectTitle(''); setProjectDescription(''); setTargetAudience(''); setKeyMessage(''); setTalentDetails(''); setBriefDeliverables([{ id: '1', name: '', quantity: 1, duration: '', formats: [], notes: '' }]); setDateFlexible(false); setShootDuration(''); setReferenceLinks([]); setBudgetRange(''); setBookingAttachments([]); setTwilightDate(''); setTwilightTime(''); setPropertyFeatures(''); setShowBriefField(false); setShowTalentField(false); setShowShotListField(false); setShowPropertyFeaturesField(false); setPropertyCoords(null); setTravelFee(0); setCustomPackageTitle(''); setShowCustomPackageModal(false) }} style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 11, width: '100%', padding: '11px 14px 11px 17px', borderRadius: 6, fontSize: 13, letterSpacing: '0.01em', fontWeight: active ? 600 : 500, color: active ? '#fff' : 'rgba(255,255,255,0.65)', background: active ? 'rgba(61,71,86,0.4)' : 'transparent', border: active ? '0.5px solid rgba(200,194,187,0.15)' : '0.5px solid transparent', cursor: 'pointer', marginBottom: 4, textAlign: 'left', fontFamily: 'inherit' }}>
+              <button key={item.id} onClick={() => { setMobileMenuOpen(false); setActiveView(item.id); setBookingStep(1); setSelectedCat(''); setSelectedShoot(null); setSelectedDel(null); setSelectedAddons([]); setTcAccepted(false); setPreferredDate(''); setDraftDue(''); setDeliveryDue(''); setBookingNotes(''); setAccessNotes(''); setPropertyAddress(''); setProjectType(''); setProjectTitle(''); setProjectDescription(''); setTargetAudience(''); setKeyMessage(''); setTalentDetails(''); setBriefDeliverables([{ id: '1', name: '', quantity: 1, duration: '', formats: [], notes: '' }]); setDateFlexible(false); setShootDuration(''); setReferenceLinks([]); setBudgetRange(''); setBookingAttachments([]); setTwilightDate(''); setTwilightTime(''); setPropertyFeatures(''); setShowBriefField(false); setShowTalentField(false); setShowShotListField(false); setShowPropertyFeaturesField(false); setPropertyCoords(null); setTravelFee(0); setCustomPackageTitle(''); setShowCustomPackageModal(false); setPackageMode('video') }} style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 11, width: '100%', padding: '11px 14px 11px 17px', borderRadius: 6, fontSize: 13, letterSpacing: '0.01em', fontWeight: active ? 600 : 500, color: active ? '#fff' : 'rgba(255,255,255,0.65)', background: active ? 'rgba(61,71,86,0.4)' : 'transparent', border: active ? '0.5px solid rgba(200,194,187,0.15)' : '0.5px solid transparent', cursor: 'pointer', marginBottom: 4, textAlign: 'left', fontFamily: 'inherit' }}>
                 {active && <span style={{ position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)', width: 2.5, height: 15, borderRadius: 2, background: '#C8C2BB' }} />}
                 <item.Icon size={17} style={{ flexShrink: 0, opacity: active ? 1 : 0.75 }} />
                 {item.label}
@@ -2016,6 +2021,7 @@ export default function ClientPortal() {
                         title: 'Property &\nArchitecture',
                         desc: 'Luxury, High End, Bold & Characteristic Residential, Lifestyle and Architectural Video.',
                         video: '/videos/property.mp4',
+                        poster: '/images/booking/property-poster.jpg',
                         gradient: 'linear-gradient(160deg, #1a2535 0%, #0a0e14 100%)',
                       },
                       {
@@ -2023,6 +2029,7 @@ export default function ClientPortal() {
                         title: 'Commercial\n& Events',
                         desc: 'Photo & Video Branding, Event Coverage, Commercial/Corporate Work, Other..',
                         video: '/videos/commercial.mp4',
+                        poster: '/images/booking/commercial-poster.jpg',
                         gradient: 'linear-gradient(160deg, #1a1a1a 0%, #0a0a0a 100%)',
                       },
                     ].map((cat, i) => (
@@ -2034,9 +2041,12 @@ export default function ClientPortal() {
                         onMouseEnter={e => { const ov = e.currentTarget.querySelector('.overlay') as HTMLElement; if(ov) ov.style.background = 'rgba(0,0,0,0.2)' }}
                         onMouseLeave={e => { const ov = e.currentTarget.querySelector('.overlay') as HTMLElement; if(ov) ov.style.background = 'rgba(0,0,0,0.55)' }}
                       >
-                        {/* VIDEO BG */}
+                        {/* VIDEO BG — poster shows immediately so there's a real frame
+                            in place while the (large, locally-hosted) mp4 loads in,
+                            instead of flashing through to the bare gradient. */}
                         <video
                           src={cat.video}
+                          poster={cat.poster}
                           autoPlay
                           loop
                           muted
@@ -2071,6 +2081,29 @@ export default function ClientPortal() {
               )}
               {bookingStep === 2 && selectedCat === 'property' && (
                 <div>
+                  {/* VIDEO / PHOTO+VIDEO TOGGLE — an iOS-style segmented control: a
+                      pill track with a sliding highlight behind whichever side is
+                      active, rather than two separate buttons. */}
+                  <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 24 }}>
+                    <div style={{ position: 'relative', display: 'flex', width: 340, maxWidth: '100%', background: 'rgba(200,194,187,0.06)', border: '0.5px solid rgba(200,194,187,0.12)', borderRadius: 999, padding: 3 }}>
+                      <div style={{ position: 'absolute', top: 3, bottom: 3, left: 3, width: 'calc(50% - 3px)', borderRadius: 999, background: '#C8C2BB', transform: packageMode === 'photo-video' ? 'translateX(100%)' : 'translateX(0)', transition: 'transform 0.25s cubic-bezier(0.4, 0, 0.2, 1)' }} />
+                      {([{ id: 'video', label: 'Video Packages' }, { id: 'photo-video', label: 'Photo & Video Packages' }] as const).map(opt => (
+                        <button
+                          key={opt.id}
+                          onClick={() => {
+                            setPackageMode(opt.id)
+                            setSelectedShoot(null)
+                            setSelectedDel(null)
+                            // Leaving photo+video mode should drop any photo-only
+                            // upsell add-ons picked on the next step — they only
+                            // make sense once a photography-included package is chosen.
+                            if (opt.id === 'video') setSelectedAddons(prev => prev.filter(a => !photoPackageAddons.some(pa => pa.name === a.name)))
+                          }}
+                          style={{ position: 'relative', zIndex: 1, flex: 1, padding: '9px 10px', fontSize: 11, letterSpacing: '0.02em', fontWeight: 600, textAlign: 'center', background: 'transparent', border: 'none', borderRadius: 999, cursor: 'pointer', fontFamily: 'inherit', color: packageMode === opt.id ? '#111' : 'rgba(200,194,187,0.55)', transition: 'color 0.25s ease' }}
+                        >{opt.label}</button>
+                      ))}
+                    </div>
+                  </div>
                   <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 12 }}>Select package</div>
                   <div className="ec-grid-resp" style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:14, marginBottom:22 }}>
                     {shootPackages.map((pkg: any) => (
@@ -2109,28 +2142,6 @@ export default function ClientPortal() {
                         )}
                       </div>
                     ))}
-                    {(() => {
-                      const photoPackageSelected = selectedAddons.some(a => a.name === PHOTO_PACKAGE.name)
-                      return (
-                        <div onClick={togglePhotoPackage} style={{ border:`0.5px solid ${photoPackageSelected ? 'rgba(210,175,80,0.5)' : 'rgba(210,175,80,0.2)'}`, borderRadius:12, padding:'22px 24px', cursor:'pointer', background: photoPackageSelected ? 'linear-gradient(135deg, rgba(56,46,20,0.5) 0%, rgba(22,27,38,0.98) 100%)' : 'linear-gradient(135deg, rgba(26,31,40,0.9) 0%, rgba(18,22,30,0.95) 100%)', position:'relative', transition:'all 0.2s', boxShadow: photoPackageSelected ? '0 0 30px rgba(210,175,80,0.05) inset' : 'none', overflow:'hidden' }}>
-                          <div style={{ position:'absolute', top:0, left:0, right:0, height:'1px', background: photoPackageSelected ? 'linear-gradient(90deg, transparent, rgba(210,175,80,0.3), transparent)' : 'linear-gradient(90deg, transparent, rgba(200,194,187,0.06), transparent)' }} />
-                          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:14 }}>
-                            <div>
-                              <div style={{ fontSize:9, letterSpacing:'0.14em', textTransform:'uppercase', color:'rgba(210,175,80,0.7)', marginBottom:6, display:'flex', alignItems:'center', gap:5 }}><span style={{ width:4, height:4, borderRadius:'50%', background:'rgba(210,175,80,0.7)', display:'inline-block' }} />Add-on — needs a video package too</div>
-                              <div style={{ fontSize:16, fontWeight:600, color:'#fff', letterSpacing:'-0.01em' }}>{PHOTO_PACKAGE.name}</div>
-                            </div>
-                            <div style={{ display:'flex', alignItems:'center', gap:8, flexShrink:0, marginLeft:16 }}>
-                              {photoPackageSelected && <div style={{ width:20, height:20, borderRadius:'50%', background:'rgba(210,175,80,0.9)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, boxShadow:'0 0 12px rgba(210,175,80,0.3)' }}><span style={{ fontSize:10, color:'#111', fontWeight:700 }}>✓</span></div>}
-                              <div style={{ textAlign:'right' }}>
-                                <div style={{ fontSize:24, fontWeight:700, color:'#fff', letterSpacing:'-0.03em', lineHeight:1 }}>${PHOTO_PACKAGE.price.toLocaleString()}</div>
-                                <div style={{ fontSize:9, color:'rgba(200,194,187,0.3)', letterSpacing:'0.08em', marginTop:2 }}>+ GST</div>
-                              </div>
-                            </div>
-                          </div>
-                          <div style={{ fontSize:12, color:'rgba(200,194,187,0.45)', lineHeight:1.7 }}>{PHOTO_PACKAGE.desc}</div>
-                        </div>
-                      )
-                    })()}
                   </div>
                   {selectedShoot?.price === null ? (
                     <div style={{ border:'0.5px solid rgba(100,150,220,0.3)', borderRadius:8, padding:'14px 18px', marginBottom:20, display:'flex', justifyContent:'space-between', alignItems:'center', gap:14, background:'rgba(100,150,220,0.06)' }}>
@@ -2146,13 +2157,7 @@ export default function ClientPortal() {
                   )}
                   <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 16, borderTop: '0.5px solid rgba(200,194,187,0.09)' }}>
                     <button onClick={() => setBookingStep(1)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>← Back</button>
-                    <button onClick={() => {
-                      if (!selectedShoot) {
-                        if (selectedAddons.some(a => a.name === PHOTO_PACKAGE.name)) setShowPhotoOnlyWarning(true)
-                        return
-                      }
-                      setBookingStep(4)
-                    }} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, background: selectedShoot ? '#C8C2BB' : 'rgba(200,194,187,0.1)', color: selectedShoot ? '#111' : 'rgba(200,194,187,0.2)', border:'none', cursor: selectedShoot ? 'pointer' : 'not-allowed', fontWeight: 500, fontFamily: 'inherit' }}>Continue →</button>
+                    <button onClick={() => { if (selectedShoot) setBookingStep(4) }} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, background: selectedShoot ? '#C8C2BB' : 'rgba(200,194,187,0.1)', color: selectedShoot ? '#111' : 'rgba(200,194,187,0.2)', border:'none', cursor: selectedShoot ? 'pointer' : 'not-allowed', fontWeight: 500, fontFamily: 'inherit' }}>Continue →</button>
                   </div>
                   {showCustomPackageModal && (
                     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }} onClick={() => setShowCustomPackageModal(false)}>
@@ -2178,15 +2183,6 @@ export default function ClientPortal() {
                             }}
                             style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '9px 20px', borderRadius: 3, background: customPackageTitle.trim() ? '#C8C2BB' : 'rgba(200,194,187,0.1)', color: customPackageTitle.trim() ? '#111' : 'rgba(200,194,187,0.2)', border: 'none', cursor: customPackageTitle.trim() ? 'pointer' : 'not-allowed', fontWeight: 500, fontFamily: 'inherit' }}>Continue</button>
                         </div>
-                      </div>
-                    </div>
-                  )}
-                  {showPhotoOnlyWarning && (
-                    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }} onClick={() => setShowPhotoOnlyWarning(false)}>
-                      <div onClick={e => e.stopPropagation()} style={{ background: '#1A1F28', border: '0.5px solid rgba(210,175,80,0.3)', borderRadius: 10, padding: '28px 30px', maxWidth: 380, width: '100%', textAlign: 'center' }}>
-                        <div style={{ fontSize: 14, fontWeight: 500, color: '#fff', marginBottom: 10 }}>Video package needed</div>
-                        <div style={{ fontSize: 13, color: 'rgba(200,194,187,0.55)', lineHeight: 1.6, marginBottom: 22 }}>We can only offer photos alongside our video packages, not individually. Please select a video package.</div>
-                        <button onClick={() => setShowPhotoOnlyWarning(false)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '10px 24px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>Got it</button>
                       </div>
                     </div>
                   )}
@@ -2360,9 +2356,9 @@ export default function ClientPortal() {
               {bookingStep === 4 && (
                 <div>
                   <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 6 }}>Add-ons <span style={{ color: 'rgba(200,194,187,0.2)', fontSize: 10, textTransform: 'none', letterSpacing: 0, marginLeft: 8 }}>Optional — select any that apply</span></div>
-                  {selectedCat === 'property' && selectedAddons.some(a => a.name === PHOTO_PACKAGE.name) && (
+                  {selectedCat === 'property' && packageMode === 'photo-video' && (
                     <div style={{ marginBottom: 20 }}>
-                      <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(210,175,80,0.7)', marginBottom: 10 }}>Photo Package add-ons</div>
+                      <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(210,175,80,0.7)', marginBottom: 10 }}>Photo package add-ons</div>
                       <div className="ec-grid-resp" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10 }}>
                         {photoPackageAddons.map(addon => {
                           const selected = selectedAddons.find(a => a.name === addon.name)
