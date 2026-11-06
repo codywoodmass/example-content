@@ -1129,6 +1129,24 @@ export default function StudioPortal() {
         project_id: data.id,
         read: false,
       }])
+      // The in-app notification above only reaches someone who opens the
+      // portal themselves — email them directly too, same as proposing a
+      // date already does.
+      try {
+        await fetch('/api/notify-booking-confirmed', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            clientEmail: booking.client_email,
+            createdByEmail: booking.created_by_email,
+            clientName: booking.client_name,
+            title: booking.address || booking.shoot_package || null,
+            date: finalShootDate,
+            startTime: finalShootDate ? startTime : null,
+            endTime: finalShootDate ? endTime : null,
+          }),
+        })
+      } catch (e) { console.error('notify-booking-confirmed error:', e) }
     }
     loadBookings()
     return data
@@ -1180,6 +1198,30 @@ export default function StudioPortal() {
 
   // Opens the week-calendar modal for proposing (or re-proposing) a date/time,
   // defaulting to the week containing whatever date is already on the booking.
+  // Keeps the Confirm modal's start/end selects in sync with whatever the
+  // client actually requested — without this, "Confirm directly" silently
+  // reused leftover state from the state's hardcoded 07:30 default (or
+  // whichever booking's modal was last opened), so the project and
+  // calendar event could end up created at the wrong time entirely.
+  function defaultEndTime(start: string) {
+    const [h, m] = start.split(':').map(Number)
+    const totalMin = Math.min(h * 60 + m + 270, 19 * 60)
+    const snapped = Math.round(totalMin / 30) * 30
+    return `${String(Math.floor(snapped / 60)).padStart(2, '0')}:${String(snapped % 60).padStart(2, '0')}`
+  }
+
+  function openConfirmModal(booking: any) {
+    setSelectedBooking(booking)
+    setShootDate(booking.preferred_date || '')
+    const start = booking.preferred_time || '07:30'
+    setStartTime(start)
+    setEndTime(defaultEndTime(start))
+    setMeetingMode(false)
+    setNeedsBrief(false)
+    setScheduleMonthOffset(0)
+    setScheduleModal(true)
+  }
+
   function openProposeModal(booking: any) {
     const base = booking.proposed_date || booking.preferred_date || new Date().toISOString().split('T')[0]
     const thisMonday = mondayOf(new Date())
@@ -2075,7 +2117,7 @@ export default function StudioPortal() {
                         </>
                       ) : booking.status === 'meeting_booked' ? (
                         <>
-                          <button onClick={() => { setSelectedBooking(booking); setShootDate(booking.preferred_date || ''); setMeetingMode(false); setNeedsBrief(false); setScheduleMonthOffset(0); setScheduleModal(true) }} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>Confirm shoot</button>
+                          <button onClick={() => openConfirmModal(booking)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>Confirm shoot</button>
                           <button onClick={() => openProposeModal(booking)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Change meeting time</button>
                           <button onClick={() => declineBooking(booking.id)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 3, border: '0.5px solid rgba(210,90,90,0.4)', color: 'rgba(210,90,90,0.8)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Decline</button>
                         </>
@@ -2087,7 +2129,7 @@ export default function StudioPortal() {
                       ) : (
                         <>
                           <button onClick={() => openProposeModal(booking)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>Propose date/time</button>
-                          <button onClick={() => { setSelectedBooking(booking); setShootDate(booking.preferred_date || ''); setMeetingMode(false); setNeedsBrief(false); setScheduleMonthOffset(0); setScheduleModal(true) }} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Confirm directly</button>
+                          <button onClick={() => openConfirmModal(booking)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Confirm directly</button>
                           <button onClick={() => { setSelectedBooking(booking); setShootDate(''); setMeetingMode(true); setScheduleMonthOffset(0); setScheduleModal(true) }} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 3, border: '0.5px solid rgba(100,150,220,0.35)', color: 'rgba(100,150,220,0.9)', background: 'rgba(100,150,220,0.08)', cursor: 'pointer', fontFamily: 'inherit' }}>Book a meeting</button>
                           <button onClick={() => declineBooking(booking.id)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 3, border: '0.5px solid rgba(210,90,90,0.4)', color: 'rgba(210,90,90,0.8)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Decline</button>
                         </>
