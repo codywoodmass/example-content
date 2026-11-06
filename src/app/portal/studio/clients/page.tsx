@@ -29,6 +29,10 @@ export default function ClientsPage() {
   const [search, setSearch] = useState('')
   const [filterCat, setFilterCat] = useState('All')
   const [showNewModal, setShowNewModal] = useState(false)
+  const [showInviteModal, setShowInviteModal] = useState(false)
+  const [inviteEmail, setInviteEmail] = useState('')
+  const [inviteName, setInviteName] = useState('')
+  const [sendingInvite, setSendingInvite] = useState(false)
   const [selectedClient, setSelectedClient] = useState<Client | null>(null)
   const [clientBookings, setClientBookings] = useState<any[]>([])
   const [clientProjects, setClientProjects] = useState<any[]>([])
@@ -141,6 +145,31 @@ export default function ClientsPage() {
     setSaving(false)
   }
 
+  // Unlike addClient, no clients1 row is created here — the invitee isn't a
+  // client yet, just an email address. They become one the normal way,
+  // through ensureClientProfile, once they actually sign up off this link.
+  async function sendClientInvite() {
+    if (!inviteEmail.trim()) return
+    setSendingInvite(true)
+    try {
+      const res = await fetch('/api/notify-client-invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invitedEmail: inviteEmail.trim(), invitedName: inviteName.trim() }),
+      })
+      const data = await res.json()
+      notify(data.emailSent ? `Invite sent to ${inviteEmail.trim()}.` : 'Could not send the invite email — check Resend is configured.', data.emailSent ? 'success' : 'error')
+      if (data.emailSent) {
+        setShowInviteModal(false)
+        setInviteEmail('')
+        setInviteName('')
+      }
+    } catch (e: any) {
+      notify('Error sending invite: ' + e.message, 'error')
+    }
+    setSendingInvite(false)
+  }
+
   const filtered = clients.filter(c => {
     const matchesCat = filterCat === 'All' || c.category === filterCat
     const matchesSearch = !search || c.name?.toLowerCase().includes(search.toLowerCase()) || c.email?.toLowerCase().includes(search.toLowerCase()) || c.company?.toLowerCase().includes(search.toLowerCase())
@@ -167,7 +196,10 @@ export default function ClientsPage() {
           <div style={{ padding: '16px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', background: '#14181F', flexShrink: 0 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <div style={{ fontSize: 14, fontWeight: 500, color: '#fff' }}>Clients</div>
-              <button onClick={() => setShowNewModal(true)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '6px 12px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>+ New</button>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button onClick={() => setShowInviteModal(true)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '6px 12px', borderRadius: 3, background: 'transparent', color: '#C8C2BB', border: '0.5px solid rgba(200,194,187,0.25)', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>+ Invite Client</button>
+                <button onClick={() => setShowNewModal(true)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '6px 12px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>+ New</button>
+              </div>
             </div>
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search clients..." style={{ ...inp, marginBottom: 10 }} />
             <div style={{ display: 'flex', gap: 6 }}>
@@ -428,6 +460,24 @@ export default function ClientsPage() {
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
               <button onClick={() => setShowNewModal(false)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
               <button onClick={addClient} disabled={!newForm.name || !newForm.email} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, background: !newForm.name || !newForm.email ? 'rgba(200,194,187,0.1)' : '#C8C2BB', color: !newForm.name || !newForm.email ? 'rgba(200,194,187,0.2)' : '#111', border: 'none', cursor: !newForm.name || !newForm.email ? 'not-allowed' : 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>Create client</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* INVITE CLIENT MODAL */}
+      {showInviteModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 10, padding: 28, width: 420, maxWidth: '95vw' }}>
+            <div style={{ fontSize: 14, fontWeight: 500, color: '#fff', marginBottom: 8 }}>Invite a client</div>
+            <div style={{ fontSize: 12, color: 'rgba(200,194,187,0.4)', lineHeight: 1.6, marginBottom: 20 }}>Sends a signup link so they can set up their own client portal account — their business details, agency and avatar are all filled in once they sign up.</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginBottom: 20 }}>
+              <div><label style={lbl}>Email</label><input style={inp} type="email" value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} placeholder="james@example.co.nz" /></div>
+              <div><label style={lbl}>Name (optional)</label><input style={inp} value={inviteName} onChange={e => setInviteName(e.target.value)} placeholder="James Blackwell" /></div>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button onClick={() => setShowInviteModal(false)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+              <button onClick={sendClientInvite} disabled={!inviteEmail.trim() || sendingInvite} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, background: !inviteEmail.trim() || sendingInvite ? 'rgba(200,194,187,0.1)' : '#C8C2BB', color: !inviteEmail.trim() || sendingInvite ? 'rgba(200,194,187,0.2)' : '#111', border: 'none', cursor: !inviteEmail.trim() || sendingInvite ? 'not-allowed' : 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>{sendingInvite ? 'Sending...' : 'Send invite'}</button>
             </div>
           </div>
         </div>

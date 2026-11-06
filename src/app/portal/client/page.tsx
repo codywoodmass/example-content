@@ -171,6 +171,49 @@ function DragScrollRow({ children, style }: { children: React.ReactNode; style?:
   )
 }
 
+// Shown once, the first time a new account lands on the dashboard after
+// signing up (see the ec_welcome_pending localStorage flag set by the
+// signup page and checked in this page's session-load effect — it has to
+// be checked here rather than on the signup page itself, since the normal
+// case is email confirmation, meaning that first real landing happens on
+// a completely separate page load days/minutes later). Confetti fires
+// once on mount; the heading's second word flicks between two variants
+// every ~2.5s for a bit of personality.
+function WelcomeScreen({ name, onDismiss }: { name: string; onDismiss: () => void }) {
+  const [confetti, setConfetti] = React.useState<{ id: number; dx: number; dy: number; rot: number; color: string; fired: boolean }[]>([])
+  const [wordIndex, setWordIndex] = React.useState(0)
+  const words = ['Example Content', 'the Team']
+
+  React.useEffect(() => {
+    const colors = ['#C8C2BB', '#D2AF50', '#64C882', '#ffffff']
+    const pieces = Array.from({ length: 32 }, (_, i) => {
+      const angle = (Math.PI * 2 * i) / 32 + Math.random() * 0.4
+      const dist = 160 + Math.random() * 200
+      return { id: i, dx: Math.cos(angle) * dist, dy: Math.sin(angle) * dist - 60, rot: Math.random() * 540, color: colors[i % colors.length], fired: false }
+    })
+    setConfetti(pieces)
+    const t = setTimeout(() => setConfetti(p => p.map(c => ({ ...c, fired: true }))), 30)
+    const cycle = setInterval(() => setWordIndex(i => (i + 1) % words.length), 2500)
+    return () => { clearTimeout(t); clearInterval(cycle) }
+  }, [])
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(14,16,20,0.92)', backdropFilter: 'blur(3px)', zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+      {confetti.map(c => (
+        <div key={c.id} style={{ position: 'absolute', top: '50%', left: '50%', width: 8, height: 14, background: c.color, opacity: c.fired ? 0 : 1, transform: c.fired ? `translate(${c.dx}px, ${c.dy + 260}px) rotate(${c.rot}deg)` : 'translate(0,0) rotate(0deg)', transition: 'transform 1.1s cubic-bezier(.17,.67,.35,1), opacity 1.1s ease' }} />
+      ))}
+      <div style={{ textAlign: 'center', padding: '0 24px', position: 'relative', zIndex: 1 }}>
+        <div style={{ fontSize: 10, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)', marginBottom: 14 }}>{name}</div>
+        <h1 style={{ fontSize: 'clamp(32px, 6vw, 52px)', fontWeight: 800, color: '#fff', margin: '0 0 12px', letterSpacing: '-0.02em', display: 'flex', flexWrap: 'wrap' as const, justifyContent: 'center', gap: '0.3em' }}>
+          Welcome to <span style={{ position: 'relative', display: 'inline-block' }}>{words[wordIndex]}</span>
+        </h1>
+        <p style={{ fontSize: 13, color: 'rgba(200,194,187,0.5)', margin: '0 0 28px' }}>Your account's ready — let's get your first shoot booked.</p>
+        <button onClick={onDismiss} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '12px 28px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 600, fontFamily: 'inherit' }}>Continue to dashboard →</button>
+      </div>
+    </div>
+  )
+}
+
 function DriveThumb({ project, onClick }: { project: any; onClick: () => void }) {
   const [firstFile, setFirstFile] = React.useState<any>(null)
   const [loading, setLoading] = React.useState(true)
@@ -1059,12 +1102,22 @@ export default function ClientPortal() {
   const [cancelReason, setCancelReason] = useState('')
   const [cancelOther, setCancelOther] = useState('')
   const [cancellationSent, setCancellationSent] = useState(false)
+  const [showWelcome, setShowWelcome] = useState(false)
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!session) { router.push('/login'); return }
       setUser(session.user)
       setLoading(false)
+      // Set by the signup page right before it navigates away — the real
+      // first landing here usually happens on a totally separate page load
+      // after email confirmation, so this can't just be a signup-page state.
+      try {
+        if (localStorage.getItem('ec_welcome_pending')) {
+          setShowWelcome(true)
+          localStorage.removeItem('ec_welcome_pending')
+        }
+      } catch {}
       const loginEmail = session.user.email
       // Redirect studio staff to studio portal
       if (loginEmail === 'cody@examplecontent.co.nz') {
@@ -1619,6 +1672,7 @@ export default function ClientPortal() {
 
   return (
     <main style={{ background: '#0E1014', minHeight: '100vh', fontFamily: 'Geist, sans-serif', color: '#C8C2BB', display: 'flex' }}>
+      {showWelcome && <WelcomeScreen name={clientProfile?.name || clientProfile?.company || ''} onDismiss={() => setShowWelcome(false)} />}
       <style>{`
         .ec-client-topbar { display: none; }
         .ec-client-backdrop { display: none; }

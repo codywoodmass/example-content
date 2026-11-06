@@ -1,14 +1,22 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { supabase, ensureClientProfile } from '@/lib/supabase'
 import { resizeImageToDataUrl } from '@/lib/imageResize'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 
-export default function SignupPage() {
+const CATEGORIES = ['Property', 'Commercial', 'Events', 'Socials']
+
+function SignupForm() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [fullName, setFullName] = useState('')
   const [company, setCompany] = useState('')
+  const [phone, setPhone] = useState('')
+  const [category, setCategory] = useState('Property')
+  const [agencies, setAgencies] = useState<{ id: string; name: string }[]>([])
+  const [agencyId, setAgencyId] = useState('')
+  const [agencyOther, setAgencyOther] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -17,6 +25,17 @@ export default function SignupPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [awaitingConfirmation, setAwaitingConfirmation] = useState(false)
+
+  // Studio-sent invite links carry the client's email along so they don't
+  // have to retype it.
+  useEffect(() => {
+    const prefill = searchParams.get('email')
+    if (prefill) setEmail(prefill)
+  }, [searchParams])
+
+  useEffect(() => {
+    supabase.from('agencies').select('id, name').order('name', { ascending: true }).then(({ data }) => setAgencies(data || []))
+  }, [])
 
   async function handleAvatarPick(file: File) {
     setAvatarError('')
@@ -27,8 +46,9 @@ export default function SignupPage() {
     }
   }
 
-  const inputStyle: React.CSSProperties = { background: 'rgba(200,194,187,0.05)', border: '0.5px solid rgba(200,194,187,0.1)', borderRadius: 4, padding: '11px 14px', fontSize: 13, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }
+  const inputStyle: React.CSSProperties = { background: 'rgba(200,194,187,0.05)', border: '0.5px solid rgba(200,194,187,0.1)', borderRadius: 4, padding: '11px 14px', fontSize: 13, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%', boxSizing: 'border-box' as const }
   const labelStyle: React.CSSProperties = { fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)' }
+  const sectionLabelStyle: React.CSSProperties = { fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.3)', marginTop: 6 }
 
   async function handleSignup(e: React.FormEvent) {
     e.preventDefault()
@@ -40,7 +60,15 @@ export default function SignupPage() {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { full_name: fullName, company, avatar_url: avatarUrl || null } },
+      options: { data: {
+        full_name: fullName,
+        company,
+        phone,
+        category,
+        agency_id: category === 'Property' && agencyId && agencyId !== 'other' ? agencyId : null,
+        agency_name: category === 'Property' && agencyId === 'other' ? agencyOther : null,
+        avatar_url: avatarUrl || null,
+      } },
     })
 
     if (error) {
@@ -48,6 +76,12 @@ export default function SignupPage() {
       setLoading(false)
       return
     }
+
+    // The welcome screen fires once, the first time this browser lands on
+    // the dashboard after signing up — checked there rather than here,
+    // since email confirmation (the normal case) means that first real
+    // login happens on a completely separate page load.
+    try { localStorage.setItem('ec_welcome_pending', '1') } catch {}
 
     if (data.session && data.user) {
       await ensureClientProfile(data.user)
@@ -74,8 +108,8 @@ export default function SignupPage() {
   }
 
   return (
-    <main style={{ background: '#0E1014', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Geist, sans-serif' }}>
-      <div style={{ width: '100%', maxWidth: 420, padding: '0 24px' }}>
+    <main style={{ background: '#0E1014', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Geist, sans-serif', padding: '40px 0' }}>
+      <div style={{ width: '100%', maxWidth: 440, padding: '0 24px' }}>
 
         <div style={{ textAlign: 'center', marginBottom: 40 }}>
           <img src='/images/Pale_logo_EX.png' alt='Example Content' style={{ height: 48, objectFit: 'contain', display: 'block', margin: '0 auto' }} />
@@ -99,14 +133,44 @@ export default function SignupPage() {
               {avatarError && <div style={{ fontSize: 11, color: 'rgba(210,90,90,0.85)', marginTop: 4 }}>{avatarError}</div>}
             </div>
           </div>
+
+          <div style={sectionLabelStyle}>About you</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <label style={labelStyle}>Full name</label>
             <input type="text" value={fullName} onChange={e => setFullName(e.target.value)} placeholder="Jane Smith" required style={inputStyle} />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <label style={labelStyle}>Company (optional)</label>
+            <label style={labelStyle}>Phone</label>
+            <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="021 123 4567" style={inputStyle} />
+          </div>
+
+          <div style={sectionLabelStyle}>About your business</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <label style={labelStyle}>Company / agency name</label>
             <input type="text" value={company} onChange={e => setCompany(e.target.value)} placeholder="Smith Realty" style={inputStyle} />
           </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <label style={labelStyle}>What do you need from us?</label>
+            <select value={category} onChange={e => setCategory(e.target.value)} style={inputStyle}>
+              {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          {category === 'Property' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <label style={labelStyle}>Agency</label>
+              <select value={agencyId} onChange={e => setAgencyId(e.target.value)} style={inputStyle}>
+                <option value="">No agency</option>
+                {agencies.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                <option value="other">Other...</option>
+              </select>
+              {agencyId === 'other' && (
+                <input type="text" value={agencyOther} onChange={e => setAgencyOther(e.target.value)} placeholder="Agency name" style={{ ...inputStyle, marginTop: 6 }} />
+              )}
+              <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.35)', lineHeight: 1.5 }}>If other agents at your agency also book with us, this groups your shoots onto one shared invoice.</div>
+            </div>
+          )}
+
+          <div style={sectionLabelStyle}>Login</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <label style={labelStyle}>Email</label>
             <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" required style={inputStyle} />
@@ -137,5 +201,13 @@ export default function SignupPage() {
 
       </div>
     </main>
+  )
+}
+
+export default function SignupPage() {
+  return (
+    <Suspense fallback={null}>
+      <SignupForm />
+    </Suspense>
   )
 }
