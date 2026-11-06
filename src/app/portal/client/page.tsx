@@ -459,6 +459,7 @@ function DriveFolder({ project, clientEmail, clientName }: { project: any; clien
   const [loading, setLoading] = React.useState(true)
   const [previewFile, setPreviewFile] = React.useState<any>(null)
   const [stack, setStack] = React.useState<{ id: string; name: string }[]>([])
+  const [rootFolderId, setRootFolderId] = React.useState<string | null>(null)
   const [selectedFileIds, setSelectedFileIds] = React.useState<Set<string>>(new Set())
   const [feedbackList, setFeedbackList] = React.useState<any[]>([])
   const [feedbackTimestamp, setFeedbackTimestamp] = React.useState('')
@@ -603,6 +604,8 @@ function DriveFolder({ project, clientEmail, clientName }: { project: any; clien
   function loadRoot() {
     if (!project.drive_url) return
     setLoading(true)
+    const match = project.drive_url.match(/folders\/([a-zA-Z0-9_-]+)/) || project.drive_url.match(/id=([a-zA-Z0-9_-]+)/)
+    setRootFolderId(match ? match[1] : null)
     fetch(`/api/drive?url=${encodeURIComponent(project.drive_url)}`)
       .then(r => r.json())
       .then(data => { setFiles(data.files || []); setStack([]); setSelectedFileIds(new Set()); setLoading(false) })
@@ -709,17 +712,29 @@ function DriveFolder({ project, clientEmail, clientName }: { project: any; clien
           ))}
         </div>
       )}
-      {files.some(f => !isFolder(f.mimeType)) && (
-        <div style={{ display:'flex', justifyContent:'flex-end', alignItems:'center', gap:10, marginBottom:12, minHeight:28 }}>
-          {selectedFileIds.size > 0 && (
-            <>
-              <span style={{ fontSize:11, color:'rgba(200,194,187,0.5)' }}>{selectedFileIds.size} selected</span>
-              <button onClick={() => setSelectedFileIds(new Set())} style={{ fontSize:10, letterSpacing:'0.08em', textTransform:'uppercase', padding:'6px 12px', borderRadius:3, border:'0.5px solid rgba(200,194,187,0.12)', color:'rgba(200,194,187,0.5)', background:'transparent', cursor:'pointer', fontFamily:'inherit' }}>Clear</button>
-              <button onClick={downloadSelected} style={{ fontSize:11, letterSpacing:'0.09em', textTransform:'uppercase', padding:'8px 16px', borderRadius:3, background:'#C8C2BB', color:'#111', border:'none', cursor:'pointer', fontFamily:'inherit', fontWeight:500 }}>Download selected ({selectedFileIds.size})</button>
-            </>
-          )}
-        </div>
-      )}
+      {files.length > 0 && (() => {
+        const currentFolderId = stack.length > 0 ? stack[stack.length - 1].id : rootFolderId
+        const currentFolderName = stack.length > 0 ? stack[stack.length - 1].name : project.title
+        return (
+          <div style={{ display:'flex', justifyContent:'flex-end', alignItems:'center', gap:10, marginBottom:12, minHeight:28, flexWrap: 'wrap' as const }}>
+            {selectedFileIds.size > 0 && (
+              <>
+                <span style={{ fontSize:11, color:'rgba(200,194,187,0.5)' }}>{selectedFileIds.size} selected</span>
+                <button onClick={() => setSelectedFileIds(new Set())} style={{ fontSize:10, letterSpacing:'0.08em', textTransform:'uppercase', padding:'6px 12px', borderRadius:3, border:'0.5px solid rgba(200,194,187,0.12)', color:'rgba(200,194,187,0.5)', background:'transparent', cursor:'pointer', fontFamily:'inherit' }}>Clear</button>
+                <button onClick={downloadSelected} style={{ fontSize:11, letterSpacing:'0.09em', textTransform:'uppercase', padding:'8px 16px', borderRadius:3, background:'#C8C2BB', color:'#111', border:'none', cursor:'pointer', fontFamily:'inherit', fontWeight:500 }}>Download selected ({selectedFileIds.size})</button>
+              </>
+            )}
+            {currentFolderId && (
+              <a
+                href={`/api/drive/download-all?folderId=${currentFolderId}&name=${encodeURIComponent(currentFolderName)}`}
+                style={{ fontSize:11, letterSpacing:'0.09em', textTransform:'uppercase', padding:'8px 16px', borderRadius:3, border:'0.5px solid rgba(200,194,187,0.2)', color:'rgba(200,194,187,0.6)', background:'transparent', cursor:'pointer', fontFamily:'inherit', textDecoration:'none', fontWeight:500 }}
+              >
+                Download all (.zip)
+              </a>
+            )}
+          </div>
+        )
+      })()}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(190px, 1fr))', gap:14 }}>
         {files.map((file: any) => (
           <div key={file.id} style={{ background:'#1A1F28', border:'0.5px solid rgba(200,194,187,0.09)', borderRadius:7, overflow:'hidden', cursor:'pointer' }} onClick={() => { if (isFolder(file.mimeType)) openFolder(file); else setPreviewFile(file) }}>
