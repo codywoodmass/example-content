@@ -38,6 +38,12 @@ export default function StudioSidebar({ active, onViewChange }: { active?: strin
   const [menuOpen, setMenuOpen] = useState(false)
   const [photoUrl, setPhotoUrl] = useState<string | null>(null)
   const [photoBroken, setPhotoBroken] = useState(false)
+  // Scoped to whoever is actually logged in — Cody only ever sees
+  // notifications addressed to his own email, Fin only his, each mounting
+  // of this sidebar (every studio page) re-fetches fresh.
+  const [myEmail, setMyEmail] = useState<string | null>(null)
+  const [notifs, setNotifs] = useState<{ id: string; title: string; message: string; project_id: string | null; created_at: string }[]>([])
+  const [notifOpen, setNotifOpen] = useState(false)
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
@@ -45,6 +51,7 @@ export default function StudioSidebar({ active, onViewChange }: { active?: strin
       const { data: profile } = await supabase.from('profiles').select('role, full_name').eq('id', session.user.id).maybeSingle()
       setRole(profile?.role || null)
       setName(profile?.full_name || session.user.email || 'Studio')
+      setMyEmail(session.user.email || null)
       // Reuses whatever photo is set on the person's Team & Time profile —
       // matched by email, same resolution used for live time-tracking
       // attribution, so this stays consistent with that rather than
@@ -52,9 +59,26 @@ export default function StudioSidebar({ active, onViewChange }: { active?: strin
       if (session.user.email) {
         const { data: member } = await supabase.from('team1').select('photo_url').ilike('email', session.user.email).maybeSingle()
         if (member?.photo_url) setPhotoUrl(member.photo_url)
+        const { data: n } = await supabase.from('notifications').select('id,title,message,project_id,created_at').ilike('user_email', session.user.email).eq('read', false).order('created_at', { ascending: false })
+        if (n) setNotifs(n)
       }
     })
   }, [])
+
+  async function openNotif(n: { id: string; project_id: string | null }) {
+    await supabase.from('notifications').update({ read: true }).eq('id', n.id)
+    setNotifs(p => p.filter(x => x.id !== n.id))
+    setNotifOpen(false)
+    if (n.project_id) router.push('/portal/studio/projects?open=' + n.project_id)
+    else router.push('/portal/studio#bookings')
+  }
+
+  async function markAllNotifsRead() {
+    if (!myEmail) return
+    await supabase.from('notifications').update({ read: true }).ilike('user_email', myEmail).eq('read', false)
+    setNotifs([])
+    setNotifOpen(false)
+  }
 
   // Editors get everything except Finance, Team & Time / Equipment, and booking
   // requests. Fail closed while role is still loading (null) so none of this
@@ -139,13 +163,37 @@ export default function StudioSidebar({ active, onViewChange }: { active?: strin
           <img src="/images/Pale_logo_EX.png" alt="Example Content" style={{ height: 44, objectFit: 'contain', maxWidth: 174 }} />
           <button onClick={() => setMenuOpen(false)} aria-label="Close menu" className="ec-studio-sidebar-close" style={{ background: 'transparent', border: 'none', color: 'rgba(200,194,187,0.5)', fontSize: 20, cursor: 'pointer', lineHeight: 1 }}>×</button>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 16px', borderBottom: '0.5px solid rgba(200,194,187,0.09)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 16px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', position: 'relative' }}>
           {photoUrl && !photoBroken ? (
             <img src={photoUrl} alt={name} onError={() => setPhotoBroken(true)} style={{ width: 30, height: 30, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
           ) : (
             <div style={{ width: 30, height: 30, borderRadius: '50%', background: 'rgba(200,194,187,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 12, fontWeight: 600, color: '#C8C2BB' }}>{initial}</div>
           )}
-          <div style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>{name}</div>
+          <div style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</div>
+          <button onClick={() => setNotifOpen(p => !p)} aria-label="Notifications" style={{ position: 'relative', background: 'transparent', border: 'none', cursor: 'pointer', padding: 4, flexShrink: 0, color: 'rgba(200,194,187,0.6)' }}>
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" /></svg>
+            {notifs.length > 0 && <span style={{ position: 'absolute', top: -2, right: -2, minWidth: 14, height: 14, padding: '0 3px', borderRadius: 7, background: 'rgba(210,90,90,0.9)', color: '#fff', fontSize: 9, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>{notifs.length}</span>}
+          </button>
+          {notifOpen && (
+            <>
+              <div onClick={() => setNotifOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 300 }} />
+              <div style={{ position: 'absolute', top: '100%', right: 10, marginTop: 6, width: 300, maxHeight: 360, overflowY: 'auto', background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 8, boxShadow: '0 16px 40px rgba(0,0,0,0.5)', zIndex: 301 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderBottom: '0.5px solid rgba(200,194,187,0.09)' }}>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: '#fff' }}>Notifications</span>
+                  {notifs.length > 0 && <button onClick={markAllNotifsRead} style={{ fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)', background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>Mark all read</button>}
+                </div>
+                {notifs.length === 0 ? (
+                  <div style={{ padding: '24px 14px', textAlign: 'center', fontSize: 11, color: 'rgba(200,194,187,0.3)' }}>You're all caught up</div>
+                ) : notifs.map(n => (
+                  <div key={n.id} onClick={() => openNotif(n)} style={{ padding: '10px 14px', borderBottom: '0.5px solid rgba(200,194,187,0.06)', cursor: 'pointer' }}>
+                    <div style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB', marginBottom: 3 }}>{n.title}</div>
+                    <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.45)', lineHeight: 1.5 }}>{n.message}</div>
+                    <div style={{ fontSize: 10, color: 'rgba(200,194,187,0.25)', marginTop: 4 }}>{new Date(n.created_at).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' })}</div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
         </div>
         <nav style={{ padding: '12px 10px', flex: 1, overflowY: 'auto' }}>
           {nav.map(group => (

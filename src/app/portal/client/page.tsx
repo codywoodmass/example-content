@@ -1111,6 +1111,14 @@ export default function ClientPortal() {
   const [changeRequestType, setChangeRequestType] = useState<'package' | 'date' | 'addons' | 'other'>('other')
   const [changeRequestMessage, setChangeRequestMessage] = useState('')
   const [submittingChangeRequest, setSubmittingChangeRequest] = useState(false)
+  // Lets a client add details (notes and/or files) they didn't include at
+  // booking time, once the booking is pending or confirmed — 'b:<id>' or
+  // 'p:<id>' so a pending booking and its eventual project never collide.
+  const [addDetailsOpenId, setAddDetailsOpenId] = useState<string | null>(null)
+  const [addDetailsText, setAddDetailsText] = useState('')
+  const [addDetailsFiles, setAddDetailsFiles] = useState<{ name: string; url: string; size: number }[]>([])
+  const [uploadingAddDetails, setUploadingAddDetails] = useState(false)
+  const [submittingAddDetails, setSubmittingAddDetails] = useState(false)
   const [showNotifications, setShowNotifications] = useState(false)
   const [changeRequest, setChangeRequest] = useState('')
   const [changeRequestSent, setChangeRequestSent] = useState(false)
@@ -1407,6 +1415,100 @@ export default function ClientPortal() {
       setChangeRequestType('other')
     } finally {
       setSubmittingChangeRequest(false)
+    }
+  }
+
+  async function uploadAddDetailsFiles(files: FileList) {
+    setUploadingAddDetails(true)
+    try {
+      for (const file of Array.from(files)) {
+        const safeName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_')
+        const path = `${Date.now()}-${safeName}`
+        const { error } = await supabase.storage.from('booking-attachments').upload(path, file)
+        if (error) { console.error('Attachment upload error:', error); continue }
+        const { data: { publicUrl } } = supabase.storage.from('booking-attachments').getPublicUrl(path)
+        setAddDetailsFiles(prev => [...prev, { name: file.name, url: publicUrl, size: file.size }])
+      }
+    } finally {
+      setUploadingAddDetails(false)
+    }
+  }
+
+  function removeAddDetailsFile(url: string) {
+    setAddDetailsFiles(prev => prev.filter(a => a.url !== url))
+  }
+
+  // Covers both a still-pending booking (writes onto bookings1) and an
+  // already-confirmed one (writes onto its projects1 row instead, since
+  // that's what studio actually works from once a project exists) — same
+  // append-a-labeled-block pattern as submitBookingChangeRequest above, plus
+  // an actual notification (not just a write nothing reads) and an email,
+  // since studio asked specifically to be notified when this happens rather
+  // than finding it buried in notes later.
+  async function submitAdditionalDetails(target: { kind: 'booking' | 'project'; booking?: any; project?: any }) {
+    if (!addDetailsText.trim() && addDetailsFiles.length === 0) return
+    setSubmittingAddDetails(true)
+    try {
+      const dateLabel = new Date().toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })
+      const block = `--- Client added details · ${dateLabel} ---\n${addDetailsText.trim()}` +
+        (addDetailsFiles.length ? '\n' + addDetailsFiles.map(f => `Attached: ${f.name} — ${f.url}`).join('\n') : '')
+      const titleLabel = target.kind === 'project'
+        ? (target.project?.title || 'their project')
+        : (target.booking?.address || target.booking?.shoot_package || 'their booking')
+      let projectIdForNotif: string | null = null
+
+      if (target.kind === 'booking') {
+        const b = target.booking
+        const newNotes = (b.notes ? b.notes + '\n\n' : '') + block
+        const newAttachments = [...(b.attachment_urls || []), ...addDetailsFiles]
+        const { error } = await supabase.from('bookings1').update({ notes: newNotes, attachment_urls: newAttachments }).eq('id', b.id)
+        if (error) { console.error('Add details error:', error); return }
+        setClientBookings(prev => prev.map(x => x.id === b.id ? { ...x, notes: newNotes, attachment_urls: newAttachments } : x))
+      } else {
+        const p = target.project
+        const newNotes = (p.general_notes ? p.general_notes + '\n\n' : '') + block
+        const newAttachments = [...(p.attachment_urls || []), ...addDetailsFiles]
+        const { error } = await supabase.from('projects1').update({ general_notes: newNotes, attachment_urls: newAttachments }).eq('id', p.id)
+        if (error) { console.error('Add details error:', error); return }
+        setClientProjects(prev => prev.map(x => x.id === p.id ? { ...x, general_notes: newNotes, attachment_urls: newAttachments } : x))
+        setAllClientProjects(prev => prev.map(x => x.id === p.id ? { ...x, general_notes: newNotes, attachment_urls: newAttachments } : x))
+        setSelectedProject((sp: any) => sp && sp.id === p.id ? { ...sp, general_notes: newNotes, attachment_urls: newAttachments } : sp)
+        projectIdForNotif = p.id
+      }
+
+      const notifMessage = `${clientProfile?.name || accountEmail} added more details to ${titleLabel}` +
+        (addDetailsFiles.length ? ` (${addDetailsFiles.length} file${addDetailsFiles.length > 1 ? 's' : ''} attached)` : '') +
+        (addDetailsText.trim() ? `: ${addDetailsText.trim()}` : '.')
+      try {
+        await supabase.from('notifications').insert([{
+          user_email: 'cody@examplecontent.co.nz',
+          type: 'additional_details',
+          title: 'Client added more details',
+          message: notifMessage,
+          project_id: projectIdForNotif,
+          read: false,
+        }])
+      } catch (e) { console.error('Add-details notification error:', e) }
+
+      try {
+        await fetch('/api/notify-additional-details', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            clientName: clientProfile?.name || accountEmail,
+            title: titleLabel,
+            text: addDetailsText.trim(),
+            fileCount: addDetailsFiles.length,
+            projectId: projectIdForNotif,
+          }),
+        })
+      } catch (e) { console.error('notify-additional-details error:', e) }
+
+      setAddDetailsOpenId(null)
+      setAddDetailsText('')
+      setAddDetailsFiles([])
+    } finally {
+      setSubmittingAddDetails(false)
     }
   }
 
@@ -1971,6 +2073,11 @@ export default function ClientPortal() {
                               {pendingChangeRequests.some((cr: any) => cr.project_id === p.id) && (
                                 <span title="Change request awaiting a response" style={{ width: 7, height: 7, borderRadius: '50%', background: 'rgba(210,175,80,0.9)', flexShrink: 0 }} />
                               )}
+                              <button
+                                title="Add additional details"
+                                onClick={e => { e.stopPropagation(); setSelectedProject(p); setAddDetailsOpenId('p:' + p.id); setAddDetailsText(''); setAddDetailsFiles([]) }}
+                                style={{ width: 22, height: 22, borderRadius: '50%', border: '0.5px solid rgba(200,194,187,0.2)', background: 'transparent', color: 'rgba(200,194,187,0.5)', fontSize: 13, lineHeight: 1, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontFamily: 'inherit' }}
+                              >+</button>
                               <span style={{ fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '3px 8px', borderRadius: 2, background: sc.bg, color: sc.color, whiteSpace: 'nowrap' }}>{stageLabel(p.stage)}</span>
                             </div>
                           )
@@ -3043,8 +3150,20 @@ export default function ClientPortal() {
                                       <button disabled={submittingChangeRequest || !changeRequestMessage.trim()} onClick={() => submitBookingChangeRequest(b)} style={{ fontSize:11, letterSpacing:'0.09em', textTransform:'uppercase', padding:'7px 14px', borderRadius:3, background: submittingChangeRequest || !changeRequestMessage.trim() ? 'rgba(200,194,187,0.1)' : '#C8C2BB', color: submittingChangeRequest || !changeRequestMessage.trim() ? 'rgba(200,194,187,0.3)' : '#111', border:'none', cursor: submittingChangeRequest || !changeRequestMessage.trim() ? 'not-allowed' : 'pointer', fontWeight:500, fontFamily:'inherit' }}>{submittingChangeRequest ? 'Sending...' : 'Send request'}</button>
                                     </div>
                                   </div>
+                                ) : addDetailsOpenId === 'b:' + b.id ? (
+                                  <div onClick={e => e.stopPropagation()}>
+                                    <textarea value={addDetailsText} onChange={e => setAddDetailsText(e.target.value)} placeholder="Anything you didn't get to add before — brief notes, shot requests, access info..." rows={3} style={{ width:'100%', background:'rgba(200,194,187,0.04)', border:'0.5px solid rgba(200,194,187,0.09)', borderRadius:4, padding:'8px 10px', fontSize:12, color:'#C8C2BB', fontFamily:'inherit', outline:'none', resize:'vertical', marginBottom:8 }} />
+                                    <AttachmentUploader attachments={addDetailsFiles} uploading={uploadingAddDetails} onUpload={uploadAddDetailsFiles} onRemove={removeAddDetailsFile} />
+                                    <div style={{ display:'flex', gap:8, marginTop:8 }}>
+                                      <button onClick={() => { setAddDetailsOpenId(null); setAddDetailsText(''); setAddDetailsFiles([]) }} style={{ fontSize:11, letterSpacing:'0.09em', textTransform:'uppercase', padding:'7px 14px', borderRadius:3, border:'0.5px solid rgba(200,194,187,0.2)', color:'rgba(200,194,187,0.5)', background:'transparent', cursor:'pointer', fontFamily:'inherit' }}>Cancel</button>
+                                      <button disabled={submittingAddDetails || (!addDetailsText.trim() && addDetailsFiles.length === 0)} onClick={() => submitAdditionalDetails({ kind: 'booking', booking: b })} style={{ fontSize:11, letterSpacing:'0.09em', textTransform:'uppercase', padding:'7px 14px', borderRadius:3, background: submittingAddDetails || (!addDetailsText.trim() && addDetailsFiles.length === 0) ? 'rgba(200,194,187,0.1)' : '#C8C2BB', color: submittingAddDetails || (!addDetailsText.trim() && addDetailsFiles.length === 0) ? 'rgba(200,194,187,0.3)' : '#111', border:'none', cursor: submittingAddDetails ? 'not-allowed' : 'pointer', fontWeight:500, fontFamily:'inherit' }}>{submittingAddDetails ? 'Sending...' : 'Add details'}</button>
+                                    </div>
+                                  </div>
                                 ) : (
-                                  <button onClick={e => { e.stopPropagation(); setChangeRequestBookingId(b.id); setChangeRequestType('other'); setChangeRequestMessage('') }} style={{ fontSize:11, letterSpacing:'0.09em', textTransform:'uppercase', padding:'7px 14px', borderRadius:3, border:'0.5px solid rgba(200,194,187,0.2)', color:'rgba(200,194,187,0.5)', background:'transparent', cursor:'pointer', fontFamily:'inherit' }}>Request a change</button>
+                                  <div style={{ display:'flex', gap:8, flexWrap:'wrap' as const }}>
+                                    <button onClick={e => { e.stopPropagation(); setChangeRequestBookingId(b.id); setChangeRequestType('other'); setChangeRequestMessage('') }} style={{ fontSize:11, letterSpacing:'0.09em', textTransform:'uppercase', padding:'7px 14px', borderRadius:3, border:'0.5px solid rgba(200,194,187,0.2)', color:'rgba(200,194,187,0.5)', background:'transparent', cursor:'pointer', fontFamily:'inherit' }}>Request a change</button>
+                                    <button onClick={e => { e.stopPropagation(); setAddDetailsOpenId('b:' + b.id); setAddDetailsText(''); setAddDetailsFiles([]) }} style={{ fontSize:11, letterSpacing:'0.09em', textTransform:'uppercase', padding:'7px 14px', borderRadius:3, border:'0.5px solid rgba(200,194,187,0.2)', color:'rgba(200,194,187,0.5)', background:'transparent', cursor:'pointer', fontFamily:'inherit' }}>Add details / brief</button>
+                                  </div>
                                 )}
                               </div>
                             )}
@@ -3883,6 +4002,25 @@ export default function ClientPortal() {
                       setChangeRequest('')
                     }} disabled={!changeRequest.trim()} style={{ marginTop: 10, fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '9px 18px', borderRadius: 3, background: changeRequest.trim() ? '#C8C2BB' : 'rgba(200,194,187,0.1)', color: changeRequest.trim() ? '#111' : 'rgba(200,194,187,0.2)', border: 'none', cursor: changeRequest.trim() ? 'pointer' : 'not-allowed', fontWeight: 500, fontFamily: 'inherit' }}>Send request</button>
                   </div>
+                )}
+              </div>
+
+              {/* ADD ADDITIONAL DETAILS — for anything not included at booking time,
+                  a brief, reference files, access notes, etc. */}
+              <div style={{ borderTop: '0.5px solid rgba(200,194,187,0.09)', paddingTop: 20, marginTop: 20 }}>
+                <div style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB', marginBottom: 6 }}>Add additional details</div>
+                <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', marginBottom: 12 }}>Forgot to add a brief, shot list or reference files? Add them here any time before the shoot.</div>
+                {addDetailsOpenId === 'p:' + selectedProject.id ? (
+                  <div>
+                    <textarea value={addDetailsText} onChange={e => setAddDetailsText(e.target.value)} placeholder="Brief notes, shot requests, access info, anything else we should know..." rows={3} style={{ width: '100%', background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 4, padding: '10px 12px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', lineHeight: 1.65, resize: 'vertical' as const, minHeight: 80, marginBottom: 10 }} />
+                    <AttachmentUploader attachments={addDetailsFiles} uploading={uploadingAddDetails} onUpload={uploadAddDetailsFiles} onRemove={removeAddDetailsFile} />
+                    <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                      <button onClick={() => { setAddDetailsOpenId(null); setAddDetailsText(''); setAddDetailsFiles([]) }} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '9px 16px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+                      <button disabled={submittingAddDetails || (!addDetailsText.trim() && addDetailsFiles.length === 0)} onClick={() => submitAdditionalDetails({ kind: 'project', project: selectedProject })} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '9px 18px', borderRadius: 3, background: submittingAddDetails || (!addDetailsText.trim() && addDetailsFiles.length === 0) ? 'rgba(200,194,187,0.1)' : '#C8C2BB', color: submittingAddDetails || (!addDetailsText.trim() && addDetailsFiles.length === 0) ? 'rgba(200,194,187,0.2)' : '#111', border: 'none', cursor: submittingAddDetails ? 'not-allowed' : 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>{submittingAddDetails ? 'Sending...' : 'Add details'}</button>
+                    </div>
+                  </div>
+                ) : (
+                  <button onClick={() => { setAddDetailsOpenId('p:' + selectedProject.id); setAddDetailsText(''); setAddDetailsFiles([]) }} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.6)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>+ Add additional details</button>
                 )}
               </div>
             </div>
