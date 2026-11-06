@@ -8,17 +8,27 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 // Creates a profiles row (role: client) and a matching clients1 CRM record
 // the first time a client account is seen with no profile yet — covers both
 // self-signup (after email confirmation) and any account created by hand.
+//
+// The clients1 upsert runs every call, not just when profiles is first
+// created — the two writes used to be gated by the same "profiles already
+// exists" check, which meant a clients1 write that failed (e.g. a schema
+// migration not run yet) left the client invisible forever: profiles
+// existing short-circuited every future attempt to create its clients1
+// row. This showed up for real — an invited client signed up, got a
+// profiles row, but never appeared in the studio's client list.
 export async function ensureClientProfile(user: { id: string; email?: string | null; user_metadata?: Record<string, any> }) {
-  const { data: existing } = await supabase.from('profiles').select('id').eq('id', user.id).maybeSingle()
-  if (existing) return
+  const { data: existingProfile } = await supabase.from('profiles').select('id').eq('id', user.id).maybeSingle()
   const meta = user.user_metadata || {}
-  await supabase.from('profiles').insert([{
-    id: user.id,
-    role: 'client',
-    full_name: meta.full_name || '',
-    company: meta.company || '',
-    phone: meta.phone || '',
-  }])
+  if (!existingProfile) {
+    const { error: profileError } = await supabase.from('profiles').insert([{
+      id: user.id,
+      role: 'client',
+      full_name: meta.full_name || '',
+      company: meta.company || '',
+      phone: meta.phone || '',
+    }])
+    if (profileError) console.error('ensureClientProfile: profiles insert failed', profileError)
+  }
   if (user.email) {
     // The Agency field only ever gives us a known agency's id, or (for
     // "Other...") a free-typed name — resolve that to a row now that a
@@ -37,7 +47,7 @@ export async function ensureClientProfile(user: { id: string; email?: string | n
         }
       }
     }
-    await supabase.from('clients1').upsert([{
+    const { error: clientError } = await supabase.from('clients1').upsert([{
       email: user.email,
       name: meta.full_name || '',
       company: meta.company || '',
@@ -53,5 +63,6 @@ export async function ensureClientProfile(user: { id: string; email?: string | n
       // actually sign up.
       status: 'active',
     }], { onConflict: 'email', ignoreDuplicates: false })
+    if (clientError) console.error('ensureClientProfile: clients1 upsert failed', clientError)
   }
 }
