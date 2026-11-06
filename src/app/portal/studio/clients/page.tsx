@@ -18,6 +18,7 @@ type Client = {
   category: string
   notes: string
   agency_id: string | null
+  status: string
 }
 
 type Agency = { id: string; name: string }
@@ -145,29 +146,78 @@ export default function ClientsPage() {
     setSaving(false)
   }
 
-  // Unlike addClient, no clients1 row is created here — the invitee isn't a
-  // client yet, just an email address. They become one the normal way,
-  // through ensureClientProfile, once they actually sign up off this link.
+  // A clients1 row is created with status 'invited' right away (rather than
+  // waiting for them to actually sign up) so the studio can see who's been
+  // invited and hasn't come back yet. ensureClientProfile's upsert flips it
+  // to 'active' and fills in the real details the moment they do sign up.
   async function sendClientInvite() {
-    if (!inviteEmail.trim()) return
+    const email = inviteEmail.trim()
+    if (!email) return
+    setSendingInvite(true)
+    try {
+      const { data: existing } = await supabase.from('clients1').select('*').ilike('email', email).maybeSingle()
+      if (existing && existing.status !== 'invited') {
+        notify(`${existing.name || email} is already a client.`, 'error')
+        setSendingInvite(false)
+        return
+      }
+      const res = await fetch('/api/notify-client-invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invitedEmail: email, invitedName: inviteName.trim() }),
+      })
+      const data = await res.json()
+      if (!data.emailSent) {
+        notify('Could not send the invite email — check Resend is configured.', 'error')
+        setSendingInvite(false)
+        return
+      }
+      if (existing) {
+        // Re-inviting someone who hasn't signed up yet — just refresh the
+        // name if one was given this time, no duplicate row.
+        if (inviteName.trim() && inviteName.trim() !== existing.name) {
+          await supabase.from('clients1').update({ name: inviteName.trim() }).eq('id', existing.id)
+          setClients(p => p.map(c => c.id === existing.id ? { ...c, name: inviteName.trim() } : c))
+        }
+      } else {
+        const { data: created, error } = await supabase.from('clients1').insert([{
+          name: inviteName.trim(), email, phone: '', company: '', category: '', notes: '', agency_id: null, status: 'invited',
+        }]).select().single()
+        if (error) { notify('Invite sent, but could not save it to the client list: ' + error.message, 'error'); setSendingInvite(false); return }
+        if (created) setClients(p => [created, ...p])
+      }
+      notify(`Invite sent to ${email}.`, 'success')
+      setShowInviteModal(false)
+      setInviteEmail('')
+      setInviteName('')
+    } catch (e: any) {
+      notify('Error sending invite: ' + e.message, 'error')
+    }
+    setSendingInvite(false)
+  }
+
+  async function resendClientInvite(client: Client) {
     setSendingInvite(true)
     try {
       const res = await fetch('/api/notify-client-invite', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ invitedEmail: inviteEmail.trim(), invitedName: inviteName.trim() }),
+        body: JSON.stringify({ invitedEmail: client.email, invitedName: client.name }),
       })
       const data = await res.json()
-      notify(data.emailSent ? `Invite sent to ${inviteEmail.trim()}.` : 'Could not send the invite email — check Resend is configured.', data.emailSent ? 'success' : 'error')
-      if (data.emailSent) {
-        setShowInviteModal(false)
-        setInviteEmail('')
-        setInviteName('')
-      }
+      notify(data.emailSent ? `Invite resent to ${client.email}.` : 'Could not send the invite email — check Resend is configured.', data.emailSent ? 'success' : 'error')
     } catch (e: any) {
       notify('Error sending invite: ' + e.message, 'error')
     }
     setSendingInvite(false)
+  }
+
+  async function cancelClientInvite(client: Client) {
+    if (!(await confirmDialog(`Cancel the invite to ${client.email}? This removes them from the client list until invited again.`))) return
+    const { error } = await supabase.from('clients1').delete().eq('id', client.id)
+    if (error) { notify('Error: ' + error.message, 'error'); return }
+    setClients(p => p.filter(c => c.id !== client.id))
+    setSelectedClient(null)
   }
 
   const filtered = clients.filter(c => {
@@ -214,8 +264,12 @@ export default function ClientsPage() {
             {filtered.map(client => (
               <div key={client.id} onClick={() => loadClientDetails(client)} style={{ padding: '12px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.06)', cursor: 'pointer', background: selectedClient?.id === client.id ? 'rgba(200,194,187,0.05)' : 'transparent', borderLeft: `2px solid ${selectedClient?.id === client.id ? '#C8C2BB' : 'transparent'}` }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
-                  <div style={{ fontSize: 13, fontWeight: 500, color: '#C8C2BB' }}>{client.name || client.email}</div>
-                  <span style={{ fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '2px 7px', borderRadius: 2, background: client.category === 'Property' ? 'rgba(100,150,220,0.15)' : 'rgba(160,100,220,0.15)', color: client.category === 'Property' ? 'rgba(100,150,220,0.8)' : 'rgba(160,100,220,0.8)' }}>{client.category}</span>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: client.status === 'invited' ? 'rgba(200,194,187,0.6)' : '#C8C2BB' }}>{client.name || client.email}</div>
+                  {client.status === 'invited' ? (
+                    <span style={{ fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '2px 7px', borderRadius: 2, background: 'rgba(210,175,80,0.12)', color: 'rgba(210,175,80,0.85)' }}>Invited</span>
+                  ) : client.category && (
+                    <span style={{ fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '2px 7px', borderRadius: 2, background: client.category === 'Property' ? 'rgba(100,150,220,0.15)' : 'rgba(160,100,220,0.15)', color: client.category === 'Property' ? 'rgba(100,150,220,0.8)' : 'rgba(160,100,220,0.8)' }}>{client.category}</span>
+                  )}
                 </div>
                 <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>{client.email}</div>
                 {client.company && <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.3)', marginTop: 2 }}>{client.company}</div>}
@@ -238,12 +292,24 @@ export default function ClientsPage() {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 28px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', background: '#14181F', position: 'sticky', top: 0, zIndex: 10 }}>
               <div>
                 <div style={{ fontSize: 15, fontWeight: 500, color: '#fff' }}>{selectedClient.name || selectedClient.email}</div>
-                <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', marginTop: 2 }}>{selectedClient.category} client{selectedClient.company ? ` · ${selectedClient.company}` : ''}</div>
+                <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', marginTop: 2 }}>{selectedClient.status === 'invited' ? 'Invited' : (selectedClient.category || 'No category') + ' client'}{selectedClient.company ? ` · ${selectedClient.company}` : ''}</div>
               </div>
-              <button onClick={saveClient} disabled={saving} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 16px', borderRadius: 3, background: saved ? 'rgba(100,200,130,0.2)' : '#C8C2BB', color: saved ? 'rgba(100,200,130,0.9)' : '#111', border: saved ? '0.5px solid rgba(100,200,130,0.4)' : 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>
-                {saving ? 'Saving...' : saved ? '✓ Saved' : 'Save changes'}
-              </button>
+              {selectedClient.status === 'invited' ? (
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={() => resendClientInvite(selectedClient)} disabled={sendingInvite} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 16px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.6)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>{sendingInvite ? 'Sending...' : 'Resend invite'}</button>
+                  <button onClick={() => cancelClientInvite(selectedClient)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 16px', borderRadius: 3, border: '0.5px solid rgba(210,90,90,0.3)', color: 'rgba(210,90,90,0.8)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Cancel invite</button>
+                </div>
+              ) : (
+                <button onClick={saveClient} disabled={saving} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 16px', borderRadius: 3, background: saved ? 'rgba(100,200,130,0.2)' : '#C8C2BB', color: saved ? 'rgba(100,200,130,0.9)' : '#111', border: saved ? '0.5px solid rgba(100,200,130,0.4)' : 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>
+                  {saving ? 'Saving...' : saved ? '✓ Saved' : 'Save changes'}
+                </button>
+              )}
             </div>
+            {selectedClient.status === 'invited' && (
+              <div style={{ margin: '18px 28px 0', background: 'rgba(210,175,80,0.08)', border: '0.5px solid rgba(210,175,80,0.25)', borderRadius: 7, padding: '12px 16px', fontSize: 12, color: 'rgba(210,175,80,0.9)', lineHeight: 1.6 }}>
+                Invited {new Date(selectedClient.created_at).toLocaleDateString()} — hasn't signed up yet. Everything below fills in automatically once they do.
+              </div>
+            )}
             <div style={{ padding: 28 }}>
               {(() => {
                 const confirmed = clientBookings.filter((b: any) => b.status === 'confirmed')

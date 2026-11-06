@@ -48,6 +48,10 @@ export async function ensureClientProfile(user: { id: string; email?: string | n
       // user_metadata, since no session exists yet at that point to
       // write it to the row directly.
       avatar_url: meta.avatar_url || null,
+      // Flips a studio-invited 'invited' placeholder row (see the Clients
+      // page's "+ Invite Client") over to a real client the moment they
+      // actually sign up.
+      status: 'active',
     }], { onConflict: 'email', ignoreDuplicates: false })
   }
 }

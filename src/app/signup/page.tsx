@@ -80,8 +80,13 @@ function SignupForm() {
     // The welcome screen fires once, the first time this browser lands on
     // the dashboard after signing up — checked there rather than here,
     // since email confirmation (the normal case) means that first real
-    // login happens on a completely separate page load.
-    try { localStorage.setItem('ec_welcome_pending', '1') } catch {}
+    // login happens on a completely separate page load. ec_team_nudge_pending
+    // is the same idea for a one-time callout the first time this account
+    // visits the Team page specifically, pushing them to invite teammates.
+    try {
+      localStorage.setItem('ec_welcome_pending', '1')
+      localStorage.setItem('ec_team_nudge_pending', '1')
+    } catch {}
 
     if (data.session && data.user) {
       await ensureClientProfile(data.user)

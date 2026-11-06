@@ -1103,6 +1103,19 @@ export default function ClientPortal() {
   const [cancelOther, setCancelOther] = useState('')
   const [cancellationSent, setCancellationSent] = useState(false)
   const [showWelcome, setShowWelcome] = useState(false)
+  const [showTeamInviteNudge, setShowTeamInviteNudge] = useState(false)
+  // One-time callout pushing a brand-new account toward inviting teammates,
+  // set at signup time (see ec_team_nudge_pending) and consumed the first
+  // time this account actually opens the Team view, not before.
+  useEffect(() => {
+    if (activeView !== 'team') return
+    try {
+      if (localStorage.getItem('ec_team_nudge_pending')) {
+        setShowTeamInviteNudge(true)
+        localStorage.removeItem('ec_team_nudge_pending')
+      }
+    } catch {}
+  }, [activeView])
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
@@ -3527,6 +3540,18 @@ export default function ClientPortal() {
                 </div>
 
                 <div style={{ maxWidth: 640 }}>
+                {showTeamInviteNudge && !isSubUser && (
+                  <div style={{ position: 'relative', marginBottom: 16 }}>
+                    <div style={{ background: 'linear-gradient(135deg, rgba(210,175,80,0.14), rgba(210,175,80,0.05))', border: '0.5px solid rgba(210,175,80,0.3)', borderRadius: 8, padding: '12px 16px', display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                      <div style={{ fontSize: 15, lineHeight: 1.3 }}>👋</div>
+                      <div style={{ flex: 1, fontSize: 12, color: 'rgba(230,205,140,0.95)', lineHeight: 1.6 }}>
+                        Working with others? Invite your team below so everyone sees the same bookings, deliverables and invoices.
+                      </div>
+                      <button onClick={() => setShowTeamInviteNudge(false)} style={{ background: 'transparent', border: 'none', color: 'rgba(210,175,80,0.6)', cursor: 'pointer', fontSize: 15, lineHeight: 1, padding: 0 }}>×</button>
+                    </div>
+                    <div style={{ position: 'absolute', bottom: -6, left: 28, width: 11, height: 11, background: '#211c13', borderRight: '0.5px solid rgba(210,175,80,0.3)', borderBottom: '0.5px solid rgba(210,175,80,0.3)', transform: 'rotate(45deg)' }} />
+                  </div>
+                )}
                 <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, overflow: 'hidden', marginBottom: 20 }}>
                   <div style={{ padding: '13px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>Invite a teammate</div>
                   <div style={{ padding: 18, display: 'flex', gap: 10, flexWrap: 'wrap' as const }}>
