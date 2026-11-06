@@ -6,6 +6,7 @@ import { sendTeamInvite, removeTeamMember, revokeTeamInvite } from '@/lib/client
 import { resizeImageToDataUrl } from '@/lib/imageResize'
 import { formatTime12, localDateKey, addBusinessDays } from '@/lib/time'
 import { stageLabel } from '@/lib/stages'
+import { parseLabeledNotes } from '@/lib/parseNotes'
 import { buildShootIcs, downloadIcsFile } from '@/lib/ics'
 import { useRouter } from 'next/navigation'
 import LoadingScreen from '@/components/public/LoadingScreen'
@@ -936,6 +937,87 @@ function ReferenceLinksInput({ links, onAdd, onRemove, placeholder }: { links: s
               <button type="button" onClick={() => onRemove(i)} aria-label="Remove link" style={{ background: 'transparent', border: 'none', color: 'rgba(200,194,187,0.4)', cursor: 'pointer', fontSize: 15, lineHeight: 1, padding: 0, flexShrink: 0 }}>×</button>
             </div>
           ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Reconstructs every field offered at booking time (Step 5 — Property or
+// Commercial/Events), filled in or not, from a bookings1 row or (once
+// confirmed) its projects1 row — general_notes starts as a copy of the
+// booking's notes, carrying the same "Label: value" segments through.
+// Shown with explicit "Not provided" rather than just omitting a field, so
+// the client can see at a glance what they skipped and still add it.
+function fullDetailRows(record: any, isCommercial: boolean): { label: string; value: string }[] {
+  const segments = parseLabeledNotes(record.notes ?? record.general_notes ?? '')
+  const find = (label: string) => segments.find(s => s.label?.toLowerCase() === label.toLowerCase())?.body || ''
+  const fmtDate = (d?: string | null) => d ? new Date(d + 'T12:00:00').toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' }) : ''
+  const preferredDate = record.preferred_date ?? record.shoot_date
+  const preferredTime = record.preferred_time ?? record.shoot_window_start
+  const shootDateLine = preferredDate ? fmtDate(preferredDate) + (preferredTime ? ' · ' + formatTime12(preferredTime) : '') : ''
+
+  if (isCommercial) {
+    return [
+      { label: 'Business / brand', value: record.client_name || record.client || '' },
+      { label: 'Contact email', value: record.client_email || record.email || '' },
+      { label: 'Phone', value: find('Phone') },
+      { label: 'Project title', value: find('Project title') },
+      { label: 'Project description', value: find('Project description') },
+      { label: 'Overall goal for the project', value: find('Overall goal for the project') },
+      { label: 'Key message', value: find('Key message') },
+      { label: 'Talent / interviews', value: find('Talent / interviews') },
+      { label: 'Deliverables', value: find('Deliverables') || record.deliverables || '' },
+      { label: 'Estimated duration', value: find('Estimated duration') },
+      { label: 'Preferred date', value: shootDateLine },
+      { label: 'Location', value: record.address || '' },
+      { label: 'References', value: find('References') },
+      { label: 'Budget range', value: find('Budget range') },
+      { label: 'Additional notes', value: find('Additional notes') },
+      { label: 'Final delivery needed by', value: fmtDate(record.delivery_due) },
+    ]
+  }
+  return [
+    { label: 'Listing agent name', value: record.client_name || record.client || '' },
+    { label: 'Contact email', value: record.client_email || record.email || '' },
+    { label: 'Phone', value: find('Phone') },
+    { label: 'Property address', value: record.address || '' },
+    { label: 'Property type', value: find('Property type') },
+    { label: 'Access / key notes', value: find('Access') },
+    { label: 'Preferred shoot date', value: shootDateLine },
+    { label: 'Property going live', value: fmtDate(record.property_live_date) },
+    { label: 'Final delivery needed by', value: fmtDate(record.delivery_due) },
+    { label: 'Brief / concept', value: find('Brief/Concept') },
+    { label: 'Property features', value: find('Property features') },
+    { label: 'Talent required', value: find('Talent required') },
+    { label: 'Suggested shot list', value: find('Suggested shot list') },
+    { label: 'Reference links', value: find('References') },
+    { label: 'Twilight shoot', value: find('Twilight shoot requested') },
+    { label: 'Filming orientation', value: find('Filming orientation') },
+  ]
+}
+
+function FullBookingDetails({ record, isCommercial }: { record: any; isCommercial: boolean }) {
+  const rows = fullDetailRows(record, isCommercial)
+  const attachments: { name: string; url: string }[] = record.attachment_urls || []
+  return (
+    <div>
+      <div className="ec-grid-resp" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: 14 }}>
+        {rows.map(r => (
+          <div key={r.label}>
+            <div style={{ fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 4 }}>{r.label}</div>
+            <div style={{ fontSize: 12, color: r.value ? '#C8C2BB' : 'rgba(200,194,187,0.22)', whiteSpace: 'pre-wrap', lineHeight: 1.55 }}>{r.value || 'Not provided'}</div>
+          </div>
+        ))}
+      </div>
+      {attachments.length > 0 && (
+        <div style={{ marginTop: 16 }}>
+          <div style={{ fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>Attachments</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {attachments.map((a, i) => (
+              <a key={i} href={a.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: 'rgba(100,150,220,0.9)', textDecoration: 'none' }}>{a.name}</a>
+            ))}
+          </div>
         </div>
       )}
     </div>
@@ -2041,6 +2123,13 @@ export default function ClientPortal() {
                                 {pendingChangeRequests.some((cr: any) => cr.project_id === p.id) && (
                                   <span title="Change request awaiting a response" style={{ width: 7, height: 7, borderRadius: '50%', background: 'rgba(210,175,80,0.9)', flexShrink: 0 }} />
                                 )}
+                                {!p.isPending && (
+                                  <button
+                                    title="Add additional details"
+                                    onClick={e => { e.stopPropagation(); setSelectedProject(p); setAddDetailsOpenId('p:' + p.id); setAddDetailsText(''); setAddDetailsFiles([]) }}
+                                    style={{ width: 22, height: 22, borderRadius: '50%', border: '0.5px solid rgba(200,194,187,0.2)', background: 'transparent', color: 'rgba(200,194,187,0.5)', fontSize: 13, lineHeight: 1, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontFamily: 'inherit' }}
+                                  >+</button>
+                                )}
                                 <span style={{ fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '3px 8px', borderRadius: 2, background: sc.bg, color: sc.color, whiteSpace: 'nowrap' }}>{stageLabel(p.stage)}</span>
                               </div>
                             </div>
@@ -3132,10 +3221,11 @@ export default function ClientPortal() {
                                   {b.shoot_package && <div><span style={{color:'#C8C2BB', fontWeight:500}}>Package: </span>{b.shoot_package}{b.total ? ' — ' + b.total : ''}</div>}
                                   {b.deliverables && <div><span style={{color:'#C8C2BB', fontWeight:500}}>Deliverables: </span>{b.deliverables}</div>}
                                   {b.addons && <div><span style={{color:'#C8C2BB', fontWeight:500}}>Add-ons: </span>{b.addons}</div>}
-                                  {b.address && <div><span style={{color:'#C8C2BB', fontWeight:500}}>Address: </span>{b.address}</div>}
                                   {isMeeting && b.proposed_date && <div><span style={{color:'#C8C2BB', fontWeight:500}}>Meeting time: </span>{new Date(b.proposed_date+'T12:00:00').toLocaleDateString('en-NZ',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}{b.proposed_start_time ? ' · '+formatTime12(b.proposed_start_time) : ''}</div>}
-                                  {b.preferred_date && <div><span style={{color:'#C8C2BB', fontWeight:500}}>Preferred date: </span>{new Date(b.preferred_date+'T12:00:00').toLocaleDateString('en-NZ',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}{b.preferred_time ? ' · '+formatTime12(b.preferred_time) : ''}</div>}
-                                  {b.notes && <div style={{whiteSpace:'pre-wrap'}}><span style={{color:'#C8C2BB', fontWeight:500}}>Notes: </span>{b.notes}</div>}
+                                </div>
+                                <div style={{ marginBottom: 16, paddingTop: 14, borderTop: '0.5px solid rgba(200,194,187,0.07)' }}>
+                                  <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.28)', marginBottom: 12 }}>Details submitted with this booking</div>
+                                  <FullBookingDetails record={b} isCommercial={b.category !== 'property'} />
                                 </div>
                                 {changeRequestBookingId === b.id ? (
                                   <div onClick={e => e.stopPropagation()}>
@@ -3192,6 +3282,11 @@ export default function ClientPortal() {
                               <div style={{ fontSize:13, fontWeight:500, color:'#C8C2BB', marginBottom:2 }}>{p.title}</div>
                               <div style={{ fontSize:11, color:'rgba(200,194,187,0.4)' }}>{p.address?.split(',')[0]} {p.delivery_due ? '· Due: '+new Date(p.delivery_due+'T12:00:00').toLocaleDateString('en-NZ',{day:'numeric',month:'short'}) : ''}</div>
                             </div>
+                            <button
+                              title="Add additional details"
+                              onClick={e => { e.stopPropagation(); setSelectedProject(p); setAddDetailsOpenId('p:' + p.id); setAddDetailsText(''); setAddDetailsFiles([]) }}
+                              style={{ width: 22, height: 22, borderRadius: '50%', border: '0.5px solid rgba(200,194,187,0.2)', background: 'transparent', color: 'rgba(200,194,187,0.5)', fontSize: 13, lineHeight: 1, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontFamily: 'inherit' }}
+                            >+</button>
                             <span style={{ fontSize:9, letterSpacing:'0.08em', textTransform:'uppercase', padding:'3px 9px', borderRadius:2, background:'rgba(100,150,220,0.12)', color:'rgba(100,150,220,0.9)', border:'0.5px solid rgba(100,150,220,0.2)' }}>{stageLabel(p.stage)}</span>
                           </div>
                         )
@@ -3933,13 +4028,12 @@ export default function ClientPortal() {
                 </div>
               )}
 
-              {/* DETAILS PROVIDED */}
-              {selectedProject.general_notes && (
-                <div style={{ marginBottom: 20 }}>
-                  <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 10 }}>Details you provided</div>
-                  <div style={{ fontSize: 12, color: 'rgba(200,194,187,0.75)', lineHeight: 1.7, whiteSpace: 'pre-wrap', padding: '10px 12px', background: 'rgba(200,194,187,0.04)', borderRadius: 4, border: '0.5px solid rgba(200,194,187,0.08)' }}>{selectedProject.general_notes}</div>
-                </div>
-              )}
+              {/* DETAILS PROVIDED — every Step 5 field from booking time, filled in
+                  or not, so it's clear at a glance what's still missing. */}
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 10 }}>Details submitted with this booking</div>
+                <FullBookingDetails record={selectedProject} isCommercial={selectedProject.category !== 'Property'} />
+              </div>
 
               {/* ATTACHMENTS */}
               {selectedProject.attachment_urls && selectedProject.attachment_urls.length > 0 && (
