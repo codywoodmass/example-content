@@ -6,6 +6,7 @@ import { sendTeamInvite, removeTeamMember, revokeTeamInvite } from '@/lib/client
 import { resizeImageToDataUrl } from '@/lib/imageResize'
 import { formatTime12, localDateKey, addBusinessDays } from '@/lib/time'
 import { stageLabel } from '@/lib/stages'
+import { buildShootIcs, downloadIcsFile } from '@/lib/ics'
 import { useRouter } from 'next/navigation'
 import LoadingScreen from '@/components/public/LoadingScreen'
 
@@ -3730,6 +3731,26 @@ export default function ClientPortal() {
                   </div>
                 ))}
               </div>
+
+              {selectedProject.shoot_date && (
+                <button
+                  onClick={() => downloadIcsFile(
+                    (selectedProject.title || 'shoot') + '.ics',
+                    buildShootIcs({
+                      uid: selectedProject.id,
+                      title: 'Example Content — ' + selectedProject.title,
+                      description: 'Shoot with Example Content' + (selectedProject.shoot_package ? ' — ' + selectedProject.shoot_package : ''),
+                      location: selectedProject.address || '',
+                      date: selectedProject.shoot_date,
+                      startTime: selectedProject.shoot_window_start,
+                      endTime: selectedProject.shoot_window_end,
+                    })
+                  )}
+                  style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.6)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit', marginBottom: 20, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                >
+                  <IconCalendar size={13} /> Add to calendar
+                </button>
+              )}
 
               {/* DELIVERABLES */}
               {(selectedProject.deliverables || selectedProject.shoot_package) && (

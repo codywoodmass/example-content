@@ -1141,6 +1141,8 @@ export default function StudioPortal() {
             createdByEmail: booking.created_by_email,
             clientName: booking.client_name,
             title: booking.address || booking.shoot_package || null,
+            location: booking.address || '',
+            projectId: data.id,
             date: finalShootDate,
             startTime: finalShootDate ? startTime : null,
             endTime: finalShootDate ? endTime : null,
