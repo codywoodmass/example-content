@@ -1194,9 +1194,13 @@ export default function ClientPortal() {
       // items and lifetime stats need projects that markSent already archived.
       const { data: allProjects } = await supabase.from('projects1').select('*').ilike('email', email || '').order('created_at', { ascending: false })
       if (allProjects) setAllClientProjects(allProjects)
-      // Load bookings linked to this client
+      // Load bookings linked to this client — the main account holder sees
+      // every booking on the account, but a teammate only sees the ones
+      // they personally made (plus anything older than this distinction
+      // existed, which has no created_by_email tracked at all).
       const { data: bookings } = await supabase.from('bookings1').select('*').eq('client_email', email).order('created_at', { ascending: false })
-      if (bookings) setClientBookings(bookings)
+      const visibleBookings = isSubUser ? (bookings || []).filter((b: any) => !b.created_by_email || b.created_by_email === loginEmail) : bookings
+      if (visibleBookings) setClientBookings(visibleBookings)
       const { data: briefs } = await supabase.from('briefs').select('*').eq('client_email', email).order('created_at', { ascending: false })
       if (briefs) setClientBriefs(briefs)
       const { data: invoices } = await supabase.from('invoices1').select('*').ilike('client_email', email || '').neq('status', 'draft').order('created_at', { ascending: false })

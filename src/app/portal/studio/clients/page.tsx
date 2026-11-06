@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import StudioSidebar from '../StudioSidebar'
@@ -35,6 +35,9 @@ export default function ClientsPage() {
   const [inviteName, setInviteName] = useState('')
   const [sendingInvite, setSendingInvite] = useState(false)
   const [selectedClient, setSelectedClient] = useState<Client | null>(null)
+  // Guards against a slower earlier request resolving after a faster later
+  // one and overwriting the right client's data with a stale client's.
+  const loadRequestId = useRef(0)
   const [clientBookings, setClientBookings] = useState<any[]>([])
   const [clientProjects, setClientProjects] = useState<any[]>([])
   const [clientBriefs, setClientBriefs] = useState<any[]>([])
@@ -71,16 +74,33 @@ export default function ClientsPage() {
   }
 
   async function loadClientDetails(client: Client) {
+    const requestId = ++loadRequestId.current
     setSelectedClient(client)
-    const { data: bookings } = await supabase.from('bookings1').select('*').eq('client_email', client.email).order('created_at', { ascending: false })
-    const { data: projects } = await supabase.from('projects1').select('*').eq('email', client.email).order('created_at', { ascending: false })
-    const { data: briefs } = await supabase.from('briefs').select('*').eq('client_email', client.email).order('created_at', { ascending: false })
+    // Cleared up front, not just overwritten once the fetches below resolve —
+    // otherwise the previous client's team invites/members/bookings stay on
+    // screen (under the new client's name) for the moment it takes the new
+    // client's own data to load, which looked like someone else's pending
+    // invite flashing on screen.
+    setClientBookings([])
+    setClientProjects([])
+    setClientBriefs([])
+    setClientTeamMembers([])
+    setClientTeamInvites([])
+    const [{ data: bookings }, { data: projects }, { data: briefs }, { data: members }, { data: invites }] = await Promise.all([
+      supabase.from('bookings1').select('*').eq('client_email', client.email).order('created_at', { ascending: false }),
+      supabase.from('projects1').select('*').eq('email', client.email).order('created_at', { ascending: false }),
+      supabase.from('briefs').select('*').eq('client_email', client.email).order('created_at', { ascending: false }),
+      supabase.from('client_members').select('*').eq('account_email', client.email).eq('status', 'active').order('created_at', { ascending: true }),
+      supabase.from('client_invites').select('*').eq('account_email', client.email).eq('status', 'pending').order('created_at', { ascending: true }),
+    ])
+    // A faster, more recent click already landed — this response is for a
+    // client that's no longer the one being viewed, so don't let it clobber
+    // the right data on screen.
+    if (requestId !== loadRequestId.current) return
     if (briefs) setClientBriefs(briefs)
     if (bookings) setClientBookings(bookings)
     if (projects) setClientProjects(projects)
-    const { data: members } = await supabase.from('client_members').select('*').eq('account_email', client.email).eq('status', 'active').order('created_at', { ascending: true })
     setClientTeamMembers(members || [])
-    const { data: invites } = await supabase.from('client_invites').select('*').eq('account_email', client.email).eq('status', 'pending').order('created_at', { ascending: true })
     setClientTeamInvites(invites || [])
     setTeamInviteName('')
     setTeamInviteEmail('')
