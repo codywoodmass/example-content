@@ -177,7 +177,7 @@ export default function StudioSidebar({ active, onViewChange }: { active?: strin
           {notifOpen && (
             <>
               <div onClick={() => setNotifOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 300 }} />
-              <div style={{ position: 'absolute', top: '100%', right: 10, marginTop: 6, width: 300, maxHeight: 360, overflowY: 'auto', background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 8, boxShadow: '0 16px 40px rgba(0,0,0,0.5)', zIndex: 301 }}>
+              <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 6, width: 300, maxHeight: 360, overflowY: 'auto', background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 8, boxShadow: '0 16px 40px rgba(0,0,0,0.5)', zIndex: 301 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderBottom: '0.5px solid rgba(200,194,187,0.09)' }}>
                   <span style={{ fontSize: 11, fontWeight: 600, color: '#fff' }}>Notifications</span>
                   {notifs.length > 0 && <button onClick={markAllNotifsRead} style={{ fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.4)', background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>Mark all read</button>}
