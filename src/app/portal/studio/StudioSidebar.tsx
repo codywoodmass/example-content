@@ -176,7 +176,7 @@ export default function StudioSidebar({ active, onViewChange }: { active?: strin
           </button>
           {notifOpen && (
             <>
-              <div onClick={() => setNotifOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 300 }} />
+              <div onClick={() => setNotifOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(0,0,0,0.5)' }} />
               <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 6, width: 300, maxHeight: 360, overflowY: 'auto', background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 8, boxShadow: '0 16px 40px rgba(0,0,0,0.5)', zIndex: 301 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderBottom: '0.5px solid rgba(200,194,187,0.09)' }}>
                   <span style={{ fontSize: 11, fontWeight: 600, color: '#fff' }}>Notifications</span>
