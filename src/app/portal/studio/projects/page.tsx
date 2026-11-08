@@ -221,6 +221,8 @@ function ProjectsPageInner() {
   const [uploadingAttachment, setUploadingAttachment] = useState(false)
   const [previewAttachment, setPreviewAttachment] = useState<{ name: string; url: string; size: number } | null>(null)
   const [calendarSyncTimer, setCalendarSyncTimer] = useState<any>(null)
+  const [notifyTimeModalProject, setNotifyTimeModalProject] = useState<Project | null>(null)
+  const [sendingTimeNotif, setSendingTimeNotif] = useState(false)
   const [showMeetingModal, setShowMeetingModal] = useState(false)
   const [meetingProjectId, setMeetingProjectId] = useState('')
   const [meetingDate, setMeetingDate] = useState('')
@@ -959,6 +961,93 @@ function ProjectsPageInner() {
       }
     } catch (e) {
       console.error(e)
+    }
+  }
+
+  // An explicit, confirmed action — distinct from triggerCalendarSync's
+  // silent debounce, which keeps Google Calendar in step on every edit but
+  // never tells the client anything beyond Google's own generic attendee
+  // email (easy to miss). This flushes any pending edits first, then patches
+  // the existing calendar event in place by reusing calendar_event_id —
+  // same event, new time, so it updates on both the studio's calendar and
+  // the client's own copy of it (they're an attendee) rather than leaving
+  // the old time behind as a stray duplicate — and sends a clearly branded
+  // email plus an in-app notification on top.
+  async function sendTimeChangeNotification(project: Project) {
+    if (!project.shoot_date || !project.shoot_window_start || !project.shoot_window_end) {
+      notify('Set a shoot date and time before notifying the client.', 'error')
+      return
+    }
+    if (!project.email) {
+      notify('This project has no client email on file.', 'error')
+      return
+    }
+    setSendingTimeNotif(true)
+    try {
+      if (autoSaveTimer) clearTimeout(autoSaveTimer)
+      if (calendarSyncTimer) clearTimeout(calendarSyncTimer)
+      await supabase.from('projects1').update({
+        shoot_date: project.shoot_date,
+        shoot_window_start: project.shoot_window_start,
+        shoot_window_end: project.shoot_window_end,
+      }).eq('id', project.id)
+
+      try {
+        const res = await fetch('/api/calendar', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: `Example Content — ${project.title || project.address || 'Shoot'}`,
+            date: project.shoot_date,
+            startTime: project.shoot_window_start,
+            endTime: project.shoot_window_end,
+            clientEmail: project.email,
+            location: project.address || '',
+            description: `Confirmed shoot for ${project.client || project.email}`,
+            eventId: project.calendar_event_id || undefined,
+          }),
+        })
+        const data = await res.json()
+        if (data.success && data.eventId && data.eventId !== project.calendar_event_id) {
+          await supabase.from('projects1').update({ calendar_event_id: data.eventId }).eq('id', project.id)
+          setProjects(p => p.map(pr => pr.id === project.id ? { ...pr, calendar_event_id: data.eventId } : pr))
+          setModalProject(p => p && p.id === project.id ? { ...p, calendar_event_id: data.eventId } : p)
+        } else if (!data.success && data.error !== 'Not authenticated') {
+          notify('Calendar update failed: ' + data.error, 'error')
+        }
+      } catch (e) { console.error('Calendar sync error:', e) }
+
+      try {
+        await supabase.from('notifications').insert([{
+          user_email: project.email,
+          type: 'shoot_time_changed',
+          title: 'Shoot time updated',
+          message: `Your shoot "${project.title || project.address || ''}" has been rescheduled to ${new Date(project.shoot_date + 'T12:00:00').toLocaleDateString('en-NZ', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} at ${formatTime12(project.shoot_window_start)}.`,
+          project_id: project.id,
+          read: false,
+        }])
+      } catch (e) { console.error('Notification insert error:', e) }
+
+      const emailRes = await fetch('/api/notify-time-changed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clientEmail: project.email,
+          clientName: project.client,
+          createdByEmail: project.created_by_email,
+          title: project.title || project.address || null,
+          location: project.address || '',
+          projectId: project.id,
+          date: project.shoot_date,
+          startTime: project.shoot_window_start,
+          endTime: project.shoot_window_end,
+        }),
+      })
+      const emailData = await emailRes.json()
+      notify(emailData.emailSent ? 'Client notified of the new time' : 'Calendar updated, but the email failed to send — check Resend is configured', emailData.emailSent ? 'success' : 'error')
+      setNotifyTimeModalProject(null)
+    } finally {
+      setSendingTimeNotif(false)
     }
   }
 
@@ -1736,6 +1825,31 @@ function ProjectsPageInner() {
                   </div>
                 ))}
               </div>
+              {modalProject.shoot_date && modalProject.shoot_window_start && modalProject.shoot_window_end && modalProject.email && (
+                <div style={{ marginBottom: 20 }}>
+                  <button onClick={() => setNotifyTimeModalProject(modalProject)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 3, border: '0.5px solid rgba(100,150,220,0.35)', color: 'rgba(100,150,220,0.9)', background: 'rgba(100,150,220,0.08)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>Notify client of new time</button>
+                  <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.35)', marginTop: 6 }}>Updates their calendar invite and sends them an email — use this any time the shoot date or time changes.</div>
+                </div>
+              )}
+              {notifyTimeModalProject && (
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }} onClick={() => !sendingTimeNotif && setNotifyTimeModalProject(null)}>
+                  <div onClick={e => e.stopPropagation()} style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 10, width: '100%', maxWidth: 420, padding: 26 }}>
+                    <div style={{ fontSize: 14, fontWeight: 500, color: '#fff', marginBottom: 10 }}>Notify client of new time?</div>
+                    <div style={{ fontSize: 12, color: 'rgba(200,194,187,0.6)', lineHeight: 1.6, marginBottom: 16 }}>
+                      This updates their Google Calendar invite in place (same event, new time — nothing stray is left behind on either side) and emails them directly.
+                    </div>
+                    <div style={{ background: 'rgba(100,150,220,0.06)', border: '0.5px solid rgba(100,150,220,0.2)', borderRadius: 6, padding: '12px 14px', marginBottom: 20, fontSize: 13, color: '#C8C2BB' }}>
+                      {new Date(notifyTimeModalProject.shoot_date + 'T12:00:00').toLocaleDateString('en-NZ', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+                      <br />
+                      {formatTime12(notifyTimeModalProject.shoot_window_start)} – {formatTime12(notifyTimeModalProject.shoot_window_end)}
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+                      <button disabled={sendingTimeNotif} onClick={() => setNotifyTimeModalProject(null)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '9px 16px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: sendingTimeNotif ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+                      <button disabled={sendingTimeNotif} onClick={() => sendTimeChangeNotification(notifyTimeModalProject)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '9px 18px', borderRadius: 3, background: sendingTimeNotif ? 'rgba(200,194,187,0.1)' : '#C8C2BB', color: sendingTimeNotif ? 'rgba(200,194,187,0.3)' : '#111', border: 'none', cursor: sendingTimeNotif ? 'not-allowed' : 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>{sendingTimeNotif ? 'Sending...' : 'Send update'}</button>
+                    </div>
+                  </div>
+                </div>
+              )}
               {(modalEditing || (modalProject.shoot_dates || []).length > 0) && (
               <div style={{ marginBottom: 20 }}>
                 {modalEditing && (
