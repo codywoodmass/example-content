@@ -1263,6 +1263,23 @@ export default function ClientPortal() {
           await supabase.from('client_invites').update({ status: 'accepted', accepted_at: new Date().toISOString() }).eq('id', pendingInvite.id)
           resolvedAccountEmail = pendingInvite.account_email
           isSubUser = true
+          try {
+            await supabase.from('notifications').insert([{
+              user_email: 'cody@examplecontent.co.nz',
+              type: 'new_team_member',
+              title: 'New team member joined',
+              message: `${pendingInvite.invited_name || loginEmail} just joined ${pendingInvite.account_email}'s team.`,
+              project_id: null,
+              read: false,
+            }])
+          } catch (e) { console.error('New-team-member notification error:', e) }
+          try {
+            await fetch('/api/notify-new-signup', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ name: pendingInvite.invited_name, email: loginEmail, kind: 'team_member', accountEmail: pendingInvite.account_email }),
+            })
+          } catch (e) { console.error('New-team-member email error:', e) }
         }
       }
       const email = resolvedAccountEmail || loginEmail

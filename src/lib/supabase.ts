@@ -19,6 +19,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 export async function ensureClientProfile(user: { id: string; email?: string | null; user_metadata?: Record<string, any> }) {
   const { data: existingProfile } = await supabase.from('profiles').select('id').eq('id', user.id).maybeSingle()
   const meta = user.user_metadata || {}
+  const isNewSignup = !existingProfile
   if (!existingProfile) {
     const { error: profileError } = await supabase.from('profiles').insert([{
       id: user.id,
@@ -64,5 +65,25 @@ export async function ensureClientProfile(user: { id: string; email?: string | n
       status: 'active',
     }], { onConflict: 'email', ignoreDuplicates: false })
     if (clientError) console.error('ensureClientProfile: clients1 upsert failed', clientError)
+
+    if (isNewSignup) {
+      try {
+        await supabase.from('notifications').insert([{
+          user_email: 'cody@examplecontent.co.nz',
+          type: 'new_client_signup',
+          title: 'New client signed up',
+          message: `${meta.full_name || user.email} just completed signup${meta.company ? ' (' + meta.company + ')' : ''}.`,
+          project_id: null,
+          read: false,
+        }])
+      } catch (e) { console.error('New-signup notification error:', e) }
+      try {
+        await fetch('/api/notify-new-signup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: meta.full_name, email: user.email, company: meta.company, category: meta.category }),
+        })
+      } catch (e) { console.error('New-signup email error:', e) }
+    }
   }
 }
