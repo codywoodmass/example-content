@@ -60,15 +60,23 @@ function SignupForm() {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: {
-        full_name: fullName,
-        company,
-        phone,
-        category,
-        agency_id: category === 'Property' && agencyId && agencyId !== 'other' ? agencyId : null,
-        agency_name: category === 'Property' && agencyId === 'other' ? agencyOther : null,
-        avatar_url: avatarUrl || null,
-      } },
+      options: {
+        data: {
+          full_name: fullName,
+          company,
+          phone,
+          category,
+          agency_id: category === 'Property' && agencyId && agencyId !== 'other' ? agencyId : null,
+          agency_name: category === 'Property' && agencyId === 'other' ? agencyOther : null,
+          avatar_url: avatarUrl || null,
+        },
+        // Without this, Supabase falls back to the project's default Site
+        // URL — the marketing homepage, not the app — so clicking the
+        // confirmation email dropped people on examplecontent.co.nz with no
+        // session ever established, meaning the dashboard-load code that
+        // creates their profiles/clients1 rows never ran at all.
+        emailRedirectTo: `${window.location.origin}/portal/client`,
+      },
     })
 
     if (error) {
@@ -171,7 +179,6 @@ function SignupForm() {
               {agencyId === 'other' && (
                 <input type="text" value={agencyOther} onChange={e => setAgencyOther(e.target.value)} placeholder="Agency name" style={{ ...inputStyle, marginTop: 6 }} />
               )}
-              <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.35)', lineHeight: 1.5 }}>If other agents at your agency also book with us, this groups your shoots onto one shared invoice.</div>
             </div>
           )}
 

@@ -55,7 +55,12 @@ export default function AcceptInvitePage() {
     const { data, error } = await supabase.auth.signUp({
       email: invite.invited_email,
       password,
-      options: { data: { full_name: fullName, avatar_url: avatarUrl || null } },
+      options: {
+        data: { full_name: fullName, avatar_url: avatarUrl || null },
+        // Without this the confirmation link drops them on the marketing
+        // homepage instead of the portal — same fix as the main signup page.
+        emailRedirectTo: `${window.location.origin}/portal/client`,
+      },
     })
 
     if (error) {
