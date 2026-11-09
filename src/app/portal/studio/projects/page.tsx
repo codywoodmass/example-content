@@ -194,9 +194,11 @@ function ProjectsPageInner() {
   // Gates the suggested-charge calculator on the Time Tracking tab — Cody's
   // own rate card, not something an editor (e.g. Fin) should see.
   const [userRole, setUserRole] = useState<string | null>(null)
+  const [studioEmail, setStudioEmail] = useState<string | null>(null)
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!session) return
+      setStudioEmail(session.user.email || null)
       const { data: profile } = await supabase.from('profiles').select('role').eq('id', session.user.id).maybeSingle()
       setUserRole(profile?.role || null)
     })
@@ -224,11 +226,24 @@ function ProjectsPageInner() {
   const [notifyTimeModalProject, setNotifyTimeModalProject] = useState<Project | null>(null)
   const [sendingTimeNotif, setSendingTimeNotif] = useState(false)
   const [showMeetingModal, setShowMeetingModal] = useState(false)
+  // A meeting no longer has to be about a specific project — "who's it
+  // with" is its own choice (an existing client, or someone typed in fresh
+  // by name/email), and linking a project is optional on top of that.
+  const [meetingSource, setMeetingSource] = useState<'client' | 'new'>('client')
+  const [meetingClientEmail, setMeetingClientEmail] = useState('')
+  const [meetingContactName, setMeetingContactName] = useState('')
+  const [meetingContactEmail, setMeetingContactEmail] = useState('')
+  const [meetingClients, setMeetingClients] = useState<{ email: string; name: string }[]>([])
   const [meetingProjectId, setMeetingProjectId] = useState('')
   const [meetingDate, setMeetingDate] = useState('')
   const [meetingStartTime, setMeetingStartTime] = useState('')
   const [meetingEndTime, setMeetingEndTime] = useState('')
   const [bookingMeeting, setBookingMeeting] = useState(false)
+  useEffect(() => {
+    supabase.from('clients1').select('email, name').order('name', { ascending: true }).then(({ data }) => {
+      if (data) setMeetingClients(data)
+    })
+  }, [])
 
   // Keeps the Google Calendar event in step whenever the shoot date or time is
   // edited — only once a project actually has a synced event, or is past Enquiry
@@ -1052,30 +1067,56 @@ function ProjectsPageInner() {
   }
 
   // Separate from createCalendarEventForProject — this books a planning/scoping
-  // call about an already-confirmed project rather than putting the shoot itself
-  // on the calendar, so it doesn't touch calendar_event_id or shoot_date at all.
+  // call rather than putting a shoot itself on the calendar, so it never touches
+  // a project's calendar_event_id or shoot_date. No longer requires a project at
+  // all: "who's it with" is resolved from either an existing client or a
+  // freshly-typed name/email, and a project link is optional on top of that.
+  // Also writes to meetings1 so these show up in their own section on the
+  // Schedule page — Google Calendar has no concept of "meeting vs shoot" for us
+  // to query back out, so that distinction only exists in our own table.
   async function bookPlanningMeeting() {
-    const project = projects.find(p => p.id === meetingProjectId)
-    if (!project || !meetingDate || !meetingStartTime || !meetingEndTime) return
+    const resolvedName = meetingSource === 'client'
+      ? meetingClients.find(c => c.email === meetingClientEmail)?.name || meetingClientEmail
+      : meetingContactName.trim()
+    const resolvedEmail = meetingSource === 'client' ? meetingClientEmail : meetingContactEmail.trim()
+    const linkedProject = projects.find(p => p.id === meetingProjectId) || null
+    if (!resolvedEmail || !meetingDate || !meetingStartTime || !meetingEndTime) return
     setBookingMeeting(true)
     try {
+      const title = linkedProject ? `Planning call: ${linkedProject.client || linkedProject.title}` : `Planning call: ${resolvedName}`
       const res = await fetch('/api/calendar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          title: `Example Content — Planning call: ${project.client || project.title}`,
+          title: `Example Content — ${title}`,
           date: meetingDate,
           startTime: meetingStartTime,
           endTime: meetingEndTime,
-          clientEmail: project.email,
-          location: project.address || '',
-          description: `Planning call for ${project.client || project.email}'s shoot — ${project.title}`,
+          clientEmail: resolvedEmail,
+          location: linkedProject?.address || '',
+          description: linkedProject ? `Planning call for ${resolvedName}'s shoot — ${linkedProject.title}` : `Planning call with ${resolvedName}`,
         }),
       })
       const data = await res.json()
       if (data.success) {
-        notify('Planning meeting booked and added to Google Calendar', 'success')
+        const { error: insertError } = await supabase.from('meetings1').insert([{
+          title,
+          client_name: resolvedName || null,
+          client_email: resolvedEmail || null,
+          date: meetingDate,
+          start_time: meetingStartTime,
+          end_time: meetingEndTime,
+          calendar_event_id: data.eventId || null,
+          project_id: linkedProject?.id || null,
+          created_by: studioEmail,
+        }])
+        if (insertError) console.error('meetings1 insert failed', insertError)
+        notify('Meeting booked and added to Google Calendar', 'success')
         setShowMeetingModal(false)
+        setMeetingSource('client')
+        setMeetingClientEmail('')
+        setMeetingContactName('')
+        setMeetingContactEmail('')
         setMeetingProjectId('')
         setMeetingDate('')
         setMeetingStartTime('')
@@ -1552,31 +1593,52 @@ function ProjectsPageInner() {
 
       {/* NEW PROJECT MODAL */}
       {showMeetingModal && (() => {
-        const bookableProjects = projects.filter(p => !p.archived && p.stage !== 'Enquiry' && p.stage !== 'Completed')
-        const selected = bookableProjects.find(p => p.id === meetingProjectId)
+        const resolvedEmail = meetingSource === 'client' ? meetingClientEmail : meetingContactEmail.trim()
+        const canSubmit = !!resolvedEmail && !!meetingDate && !!meetingStartTime && !!meetingEndTime && (meetingSource === 'client' || !!meetingContactName.trim())
         return (
           <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-            <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 10, padding: 28, width: '100%', maxWidth: 440 }}>
+            <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 10, padding: 28, width: '100%', maxWidth: 460 }}>
               <div style={{ fontSize: 14, fontWeight: 500, color: '#fff', marginBottom: 4 }}>Book a meeting</div>
-              <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', marginBottom: 20 }}>Schedule a planning call with a client to talk through their upcoming shoot.</div>
+              <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', marginBottom: 20 }}>Schedule a planning call — with an existing client, or anyone else by email. Doesn't need to be about a specific project.</div>
+
+              <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+                {(['client', 'new'] as const).map(s => (
+                  <button key={s} onClick={() => setMeetingSource(s)} style={{ flex: 1, fontSize: 11, padding: '8px 10px', borderRadius: 3, border: `0.5px solid ${meetingSource === s ? '#C8C2BB' : 'rgba(200,194,187,0.15)'}`, background: meetingSource === s ? 'rgba(200,194,187,0.08)' : 'transparent', color: meetingSource === s ? '#C8C2BB' : 'rgba(200,194,187,0.35)', cursor: 'pointer', fontFamily: 'inherit' }}>{s === 'client' ? 'Existing client' : 'New contact / email'}</button>
+                ))}
+              </div>
+
+              {meetingSource === 'client' ? (
+                <div style={{ marginBottom: 14 }}>
+                  <label style={lbl}>Client</label>
+                  <select style={inp} value={meetingClientEmail} onChange={e => setMeetingClientEmail(e.target.value)}>
+                    <option value="">Select a client...</option>
+                    {meetingClients.map(c => <option key={c.email} value={c.email}>{c.name || c.email} — {c.email}</option>)}
+                  </select>
+                </div>
+              ) : (
+                <div className="ec-form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
+                  <div><label style={lbl}>Name</label><input style={inp} value={meetingContactName} onChange={e => setMeetingContactName(e.target.value)} placeholder="Jane Smith" /></div>
+                  <div><label style={lbl}>Email</label><input style={inp} type="email" value={meetingContactEmail} onChange={e => setMeetingContactEmail(e.target.value)} placeholder="jane@example.com" /></div>
+                </div>
+              )}
+
               <div style={{ marginBottom: 14 }}>
-                <label style={lbl}>Project</label>
+                <label style={lbl}>Link to a project (optional)</label>
                 <select style={inp} value={meetingProjectId} onChange={e => setMeetingProjectId(e.target.value)}>
-                  <option value="">Select a project...</option>
-                  {bookableProjects.map(p => <option key={p.id} value={p.id}>{p.title} — {p.client}</option>)}
+                  <option value="">No project</option>
+                  {projects.filter(p => !p.archived).map(p => <option key={p.id} value={p.id}>{p.title} — {p.client}</option>)}
                 </select>
               </div>
+
               <div className="ec-form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 20 }}>
                 <div><label style={lbl}>Date</label><input type="date" style={inp} value={meetingDate} onChange={e => setMeetingDate(e.target.value)} /></div>
                 <div><label style={lbl}>Start</label><input type="time" style={inp} value={meetingStartTime} onChange={e => setMeetingStartTime(e.target.value)} /></div>
                 <div><label style={lbl}>End</label><input type="time" style={inp} value={meetingEndTime} onChange={e => setMeetingEndTime(e.target.value)} /></div>
               </div>
-              {selected && !selected.email && (
-                <div style={{ fontSize: 11, color: 'rgba(210,175,80,0.85)', marginBottom: 14 }}>This project has no client email on file — the event will be created without inviting the client.</div>
-              )}
+
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
                 <button onClick={() => setShowMeetingModal(false)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, background: 'transparent', color: 'rgba(200,194,187,0.4)', border: '0.5px solid rgba(200,194,187,0.15)', cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
-                <button onClick={bookPlanningMeeting} disabled={bookingMeeting || !meetingProjectId || !meetingDate || !meetingStartTime || !meetingEndTime} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, background: bookingMeeting || !meetingProjectId || !meetingDate || !meetingStartTime || !meetingEndTime ? 'rgba(200,194,187,0.1)' : '#C8C2BB', color: bookingMeeting || !meetingProjectId || !meetingDate || !meetingStartTime || !meetingEndTime ? 'rgba(200,194,187,0.3)' : '#111', border: 'none', cursor: bookingMeeting || !meetingProjectId || !meetingDate || !meetingStartTime || !meetingEndTime ? 'not-allowed' : 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>{bookingMeeting ? 'Booking...' : 'Book meeting'}</button>
+                <button onClick={bookPlanningMeeting} disabled={bookingMeeting || !canSubmit} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 16px', borderRadius: 3, background: bookingMeeting || !canSubmit ? 'rgba(200,194,187,0.1)' : '#C8C2BB', color: bookingMeeting || !canSubmit ? 'rgba(200,194,187,0.3)' : '#111', border: 'none', cursor: bookingMeeting || !canSubmit ? 'not-allowed' : 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>{bookingMeeting ? 'Booking...' : 'Book meeting'}</button>
               </div>
             </div>
           </div>

@@ -9,7 +9,7 @@ const NAV = [
   ]},
   { label: 'Work', items: [
     { id: 'projects', label: 'Projects', href: '/portal/studio/projects', view: '' },
-    { id: 'schedule', label: 'Shoot Schedule', href: '', view: 'schedule' },
+    { id: 'schedule', label: 'Schedule', href: '', view: 'schedule' },
     { id: 'bookings', label: 'Booking Requests', href: '', view: 'bookings' },
     { id: 'brief', label: 'Property Brief', href: '/portal/studio/brief', view: '' },
     { id: 'todos', label: 'To Do List', href: '/portal/studio/todos', view: '' },

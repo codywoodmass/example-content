@@ -409,6 +409,7 @@ export default function StudioPortal() {
   const [upcomingShoots, setUpcomingShoots] = useState<any[]>([])
   const [recentDeliveries, setRecentDeliveries] = useState<any[]>([])
   const [scheduleProjects, setScheduleProjects] = useState<any[]>([])
+  const [meetings, setMeetings] = useState<any[]>([])
 
   const [scheduleModal, setScheduleModal] = useState(false)
   const [selectedBooking, setSelectedBooking] = useState<any>(null)
@@ -747,12 +748,14 @@ export default function StudioPortal() {
   }
 
   async function loadBookings(digestUserEmail?: string, digestRole?: string) {
-    const [{ data, error }, { data: projects }, { data: crs }, { data: vf }] = await Promise.all([
+    const [{ data, error }, { data: projects }, { data: crs }, { data: vf }, { data: mtgs }] = await Promise.all([
       supabase.from('bookings1').select('*').in('status', ['pending', 'date_proposed', 'alt_requested', 'meeting_booked', 'meeting_alt_requested', 'confirmed']).order('created_at', { ascending: false }),
       supabase.from('projects1').select('*').order('created_at', { ascending: false }),
       supabase.from('change_requests').select('*').eq('status', 'pending').order('created_at', { ascending: false }),
       supabase.from('video_feedback').select('*').eq('status', 'pending').order('created_at', { ascending: false }),
+      supabase.from('meetings1').select('*').order('date', { ascending: true }),
     ])
+    if (mtgs) setMeetings(mtgs)
     if (!error && data) {
       // A 'confirmed' booking that already has a project is done — only surface
       // ones still waiting on some studio action.
@@ -1382,7 +1385,7 @@ export default function StudioPortal() {
     { label: 'Overview', items: [{ id: 'dashboard', label: 'Dashboard' }] },
     { label: 'Work', items: [
       { id: 'projects', label: 'Projects' },
-      { id: 'schedule', label: 'Shoot Schedule' },
+      { id: 'schedule', label: 'Schedule' },
       { id: 'bookings', label: 'Booking Requests', badge: (bookingCount + changeRequestCount) > 0 ? String(bookingCount + changeRequestCount) : undefined },
       { id: 'brief', label: 'Property Brief' },
     ]},
@@ -1849,12 +1852,48 @@ export default function StudioPortal() {
             <div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 28px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', background: '#14181F', position: 'sticky', top: 0, zIndex: 10 }}>
                 <div>
-                  <div style={{ fontSize: 22, fontWeight: 800, color: '#fff', letterSpacing: '-0.02em', textTransform: 'uppercase', fontStyle: 'italic' }}>Shoot Schedule</div>
-                  <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', marginTop: 2 }}>{upcomingShoots.length} upcoming shoot{upcomingShoots.length !== 1 ? 's' : ''}{userRole === 'studio' ? ` · ${preProd.length} enquir${preProd.length !== 1 ? 'ies' : 'y'} / awaiting brief` : ''}</div>
+                  <div style={{ fontSize: 22, fontWeight: 800, color: '#fff', letterSpacing: '-0.02em', textTransform: 'uppercase', fontStyle: 'italic' }}>Schedule</div>
+                  <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', marginTop: 2 }}>{upcomingShoots.length} upcoming shoot{upcomingShoots.length !== 1 ? 's' : ''}{userRole === 'studio' ? ` · ${preProd.length} enquir${preProd.length !== 1 ? 'ies' : 'y'} / awaiting brief` : ''}{' · '}{meetings.filter((m: any) => new Date(m.date) >= now).length} meeting{meetings.filter((m: any) => new Date(m.date) >= now).length !== 1 ? 's' : ''} booked</div>
                 </div>
                 <button onClick={() => setActiveView('dashboard')} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>← Dashboard</button>
               </div>
               <div style={{ padding: '28px 28px 0 28px' }}>
+              {/* MEETINGS BOOKED IN — separate from shoots, since Google Calendar has
+                  no concept of "meeting vs shoot" for us to tell apart on our own;
+                  meetings1 is the only place that distinction exists. */}
+              {(() => {
+                const upcomingMeetings = meetings
+                  .filter((m: any) => new Date(m.date) >= now)
+                  .sort((a: any, b: any) => (a.date + a.start_time).localeCompare(b.date + b.start_time))
+                if (upcomingMeetings.length === 0) return null
+                return (
+                  <div style={{ background: '#1A1F28', border: '0.5px solid rgba(100,150,220,0.2)', borderRadius: 7, overflow: 'hidden', marginBottom: 24 }}>
+                    <div style={{ padding: '13px 18px', borderBottom: '0.5px solid rgba(200,194,187,0.09)', fontSize: 12, fontWeight: 500, color: '#C8C2BB', display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'rgba(100,150,220,0.9)', flexShrink: 0 }} />
+                      Meetings booked in
+                    </div>
+                    {upcomingMeetings.map((m: any, i: number) => {
+                      const linkedProject = scheduleProjects.find((p: any) => p.id === m.project_id)
+                      return (
+                        <div key={m.id} onClick={() => linkedProject && setModalProject(linkedProject)} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '13px 18px', borderBottom: i < upcomingMeetings.length - 1 ? '0.5px solid rgba(200,194,187,0.06)' : 'none', cursor: linkedProject ? 'pointer' : 'default' }}>
+                          <div style={{ width: 42, flexShrink: 0, textAlign: 'center', background: 'rgba(25,45,80,0.4)', border: '0.5px solid rgba(100,150,220,0.2)', borderRadius: 5, padding: '6px 4px' }}>
+                            <div style={{ fontSize: 16, fontWeight: 600, color: '#fff', lineHeight: 1 }}>{new Date(m.date + 'T12:00:00').getDate()}</div>
+                            <div style={{ fontSize: 9, color: 'rgba(200,194,187,0.4)', textTransform: 'uppercase' }}>{new Date(m.date + 'T12:00:00').toLocaleDateString('en-NZ', { month: 'short' })}</div>
+                          </div>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: 13, fontWeight: 500, color: '#C8C2BB', marginBottom: 3 }}>{m.title || m.client_name}</div>
+                            <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)' }}>
+                              {m.client_name}{m.client_email ? ' · ' + m.client_email : ''} · {formatTime12(m.start_time)}–{formatTime12(m.end_time)}
+                              {linkedProject ? ' · ' + linkedProject.title : ''}
+                            </div>
+                          </div>
+                          <span style={{ fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '3px 8px', borderRadius: 2, background: 'rgba(100,150,220,0.15)', color: 'rgba(100,150,220,0.9)', whiteSpace: 'nowrap' }}>Meeting</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )
+              })()}
               {/* WEEKLY SCHEDULE — hour-grid week view with Auckland/Waikato weather */}
               {(() => {
                 const WEATHER_ICONS: Record<number, string> = { 0: '☀️', 1: '🌤️', 2: '⛅', 3: '☁️', 45: '🌫️', 48: '🌫️', 51: '🌦️', 53: '🌦️', 55: '🌦️', 61: '🌧️', 63: '🌧️', 65: '🌧️', 71: '🌨️', 73: '🌨️', 75: '🌨️', 80: '🌧️', 81: '🌧️', 82: '🌧️', 95: '⛈️', 96: '⛈️', 99: '⛈️' }
