@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import StudioSidebar from '../StudioSidebar'
-import { notify, ToastHost, confirmDialog } from '@/lib/notify'
+import { notify, ToastHost, ConfirmHost, confirmDialog } from '@/lib/notify'
 import { stageLabel } from '@/lib/stages'
 import { sendTeamInvite, removeTeamMember, revokeTeamInvite } from '@/lib/clientTeam'
 
@@ -285,6 +285,7 @@ export default function ClientsPage() {
   return (
     <main style={{ background: '#0E1014', minHeight: '100vh', fontFamily: 'Geist, sans-serif', color: '#C8C2BB', fontSize: 13, display: 'flex' }}>
       <ToastHost />
+      <ConfirmHost />
       <StudioSidebar active="clients" />
       <div className="ec-studio-main ec-split-pane" style={{ flex: 1, display: 'flex', overflow: 'hidden', height: '100vh', minWidth: 0 }}>
 

@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import StudioSidebar from '../StudioSidebar'
-import { notify, ToastHost, confirmDialog } from '@/lib/notify'
+import { notify, ToastHost, ConfirmHost, confirmDialog } from '@/lib/notify'
 
 type Agency = {
   id: string
@@ -95,6 +95,7 @@ export default function AgenciesPage() {
   return (
     <main style={{ background: '#0E1014', minHeight: '100vh', fontFamily: 'Geist, sans-serif', color: '#C8C2BB', fontSize: 13, display: 'flex' }}>
       <ToastHost />
+      <ConfirmHost />
       <StudioSidebar active="agencies" />
       <div className="ec-studio-main ec-split-pane" style={{ flex: 1, display: 'flex', overflow: 'hidden', height: '100vh', minWidth: 0 }}>
 
