@@ -1964,7 +1964,7 @@ export default function ClientPortal() {
           <div style={{ position: 'absolute', top: 90, right: 28, pointerEvents: 'auto', maxWidth: 300, background: 'linear-gradient(135deg, rgba(100,150,220,0.14), rgba(100,150,220,0.05))', border: '0.5px solid rgba(100,150,220,0.3)', borderRadius: 8, padding: '14px 16px', boxShadow: '0 16px 40px rgba(0,0,0,0.5)' }}>
             <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(100,150,220,0.7)', marginBottom: 6 }}>Quick tour · 3 of 4</div>
             <div style={{ fontSize: 12, color: 'rgba(230,235,250,0.95)', lineHeight: 1.6, marginBottom: 12 }}>This is your Invoices page — they'll show up here once a project's confirmed and billed.</div>
-            <button onClick={() => setTourStep('team')} style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, background: 'rgba(100,150,220,0.9)', color: '#0E1014', border: 'none', cursor: 'pointer', fontWeight: 600, fontFamily: 'inherit' }}>Got it →</button>
+            <button onClick={() => { setActiveView('team'); setTourStep('team') }} style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, background: 'rgba(100,150,220,0.9)', color: '#0E1014', border: 'none', cursor: 'pointer', fontWeight: 600, fontFamily: 'inherit' }}>Got it →</button>
           </div>
         </div>
       )}
