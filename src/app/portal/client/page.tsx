@@ -1941,7 +1941,7 @@ export default function ClientPortal() {
       {tourStep === 'dashboard' && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 450, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
           <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 12, width: '100%', maxWidth: 400, padding: 28 }}>
-            <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 10 }}>Quick tour · 1 of 3</div>
+            <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 10 }}>Quick tour · 1 of 4</div>
             <div style={{ fontSize: 16, fontWeight: 600, color: '#fff', marginBottom: 10 }}>This is your dashboard</div>
             <div style={{ fontSize: 13, color: 'rgba(200,194,187,0.55)', lineHeight: 1.7, marginBottom: 24 }}>Everything lives here — your upcoming shoots, active projects, and recent deliveries, all at a glance.</div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1954,7 +1954,7 @@ export default function ClientPortal() {
       {tourStep === 'book' && bookTooltipPos && (
         <div style={{ position: 'fixed', top: bookTooltipPos.top, left: bookTooltipPos.left, transform: 'translateY(-50%)', zIndex: 450, width: 230, background: '#2a2210', border: '0.5px solid rgba(210,175,80,0.4)', borderRadius: 8, padding: '12px 14px', boxShadow: '0 16px 40px rgba(0,0,0,0.5)' }}>
           <div style={{ position: 'absolute', top: '50%', left: -5, width: 10, height: 10, background: '#2a2210', borderLeft: '0.5px solid rgba(210,175,80,0.4)', borderBottom: '0.5px solid rgba(210,175,80,0.4)', transform: 'translateY(-50%) rotate(45deg)' }} />
-          <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(230,205,140,0.7)', marginBottom: 6 }}>Quick tour · 2 of 3</div>
+          <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(230,205,140,0.7)', marginBottom: 6 }}>Quick tour · 2 of 4</div>
           <div style={{ fontSize: 12, color: 'rgba(240,225,190,0.95)', lineHeight: 1.6, marginBottom: 10 }}>This is where you book your next project.</div>
           <button onClick={() => { setActiveView('invoices'); setTourStep('invoices') }} style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, background: 'rgba(210,175,80,0.9)', color: '#1a1508', border: 'none', cursor: 'pointer', fontWeight: 600, fontFamily: 'inherit' }}>Got it →</button>
         </div>
@@ -1962,7 +1962,7 @@ export default function ClientPortal() {
       {tourStep === 'invoices' && activeView === 'invoices' && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 450, pointerEvents: 'none' }}>
           <div style={{ position: 'absolute', top: 90, right: 28, pointerEvents: 'auto', maxWidth: 300, background: 'linear-gradient(135deg, rgba(100,150,220,0.14), rgba(100,150,220,0.05))', border: '0.5px solid rgba(100,150,220,0.3)', borderRadius: 8, padding: '14px 16px', boxShadow: '0 16px 40px rgba(0,0,0,0.5)' }}>
-            <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(100,150,220,0.7)', marginBottom: 6 }}>Quick tour · 2 of 3</div>
+            <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(100,150,220,0.7)', marginBottom: 6 }}>Quick tour · 3 of 4</div>
             <div style={{ fontSize: 12, color: 'rgba(230,235,250,0.95)', lineHeight: 1.6, marginBottom: 12 }}>This is your Invoices page — they'll show up here once a project's confirmed and billed.</div>
             <button onClick={() => setTourStep('team')} style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, background: 'rgba(100,150,220,0.9)', color: '#0E1014', border: 'none', cursor: 'pointer', fontWeight: 600, fontFamily: 'inherit' }}>Got it →</button>
           </div>
@@ -1971,7 +1971,7 @@ export default function ClientPortal() {
       {tourStep === 'team' && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 450, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
           <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 12, width: '100%', maxWidth: 400, padding: 28 }}>
-            <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 10 }}>Quick tour · 3 of 3</div>
+            <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 10 }}>Quick tour · 4 of 4</div>
             <div style={{ fontSize: 16, fontWeight: 600, color: '#fff', marginBottom: 10 }}>Working with a team?</div>
             <div style={{ fontSize: 13, color: 'rgba(200,194,187,0.55)', lineHeight: 1.7, marginBottom: 24 }}>You can invite teammates to see the same bookings, deliverables and invoices under their own login, any time from the Team page.</div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
