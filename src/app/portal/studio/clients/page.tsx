@@ -34,6 +34,7 @@ export default function ClientsPage() {
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteName, setInviteName] = useState('')
   const [sendingInvite, setSendingInvite] = useState(false)
+  const [deletingClient, setDeletingClient] = useState(false)
   const [selectedClient, setSelectedClient] = useState<Client | null>(null)
   // Guards against a slower earlier request resolving after a faster later
   // one and overwriting the right client's data with a stale client's.
@@ -240,6 +241,32 @@ export default function ClientsPage() {
     setSelectedClient(null)
   }
 
+  // Removes the account and its activity (login, profile, bookings, team
+  // members/invites, notifications, change requests) but deliberately
+  // leaves projects1 and invoices1 untouched — those are the business's own
+  // delivery/accounting records, not the client's personal data, and stay
+  // viewable under the same email with or without a live portal account
+  // behind it. Drive content is never touched either.
+  async function deleteClientAccount(client: Client) {
+    if (!(await confirmDialog(`Permanently delete ${client.name || client.email}'s account? This removes their login, profile, bookings, team members and notification history. Their past projects and invoices are kept for your records. This can't be undone.`))) return
+    setDeletingClient(true)
+    try {
+      const res = await fetch('/api/delete-client', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: client.email }),
+      })
+      const data = await res.json()
+      if (!res.ok) { notify('Error: ' + (data.error || 'Delete failed'), 'error'); setDeletingClient(false); return }
+      setClients(p => p.filter(c => c.id !== client.id))
+      setSelectedClient(null)
+      notify(`${client.name || client.email}'s account has been deleted.`, 'success')
+    } catch (e: any) {
+      notify('Error: ' + e.message, 'error')
+    }
+    setDeletingClient(false)
+  }
+
   const filtered = clients.filter(c => {
     const matchesCat = filterCat === 'All' || c.category === filterCat
     const matchesSearch = !search || c.name?.toLowerCase().includes(search.toLowerCase()) || c.email?.toLowerCase().includes(search.toLowerCase()) || c.company?.toLowerCase().includes(search.toLowerCase())
@@ -320,9 +347,12 @@ export default function ClientsPage() {
                   <button onClick={() => cancelClientInvite(selectedClient)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 16px', borderRadius: 3, border: '0.5px solid rgba(210,90,90,0.3)', color: 'rgba(210,90,90,0.8)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>Cancel invite</button>
                 </div>
               ) : (
-                <button onClick={saveClient} disabled={saving} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 16px', borderRadius: 3, background: saved ? 'rgba(100,200,130,0.2)' : '#C8C2BB', color: saved ? 'rgba(100,200,130,0.9)' : '#111', border: saved ? '0.5px solid rgba(100,200,130,0.4)' : 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>
-                  {saving ? 'Saving...' : saved ? '✓ Saved' : 'Save changes'}
-                </button>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={() => deleteClientAccount(selectedClient)} disabled={deletingClient} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 16px', borderRadius: 3, border: '0.5px solid rgba(210,90,90,0.3)', color: 'rgba(210,90,90,0.8)', background: 'transparent', cursor: deletingClient ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>{deletingClient ? 'Deleting...' : 'Delete account'}</button>
+                  <button onClick={saveClient} disabled={saving} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 16px', borderRadius: 3, background: saved ? 'rgba(100,200,130,0.2)' : '#C8C2BB', color: saved ? 'rgba(100,200,130,0.9)' : '#111', border: saved ? '0.5px solid rgba(100,200,130,0.4)' : 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>
+                    {saving ? 'Saving...' : saved ? '✓ Saved' : 'Save changes'}
+                  </button>
+                </div>
               )}
             </div>
             {selectedClient.status === 'invited' && (
