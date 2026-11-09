@@ -1288,8 +1288,10 @@ export default function ClientPortal() {
         // invite addressed to it.
         const { data: pendingInvite } = await supabase.from('client_invites').select('*').eq('invited_email', loginEmail || '').eq('status', 'pending').maybeSingle()
         if (pendingInvite) {
-          await supabase.from('client_members').insert([{ account_email: pendingInvite.account_email, member_email: loginEmail, member_name: pendingInvite.invited_name || '', invited_by: pendingInvite.invited_by, avatar_url: session.user.user_metadata?.avatar_url || null }])
-          await supabase.from('client_invites').update({ status: 'accepted', accepted_at: new Date().toISOString() }).eq('id', pendingInvite.id)
+          const { error: memberInsertError } = await supabase.from('client_members').insert([{ account_email: pendingInvite.account_email, member_email: loginEmail, member_name: pendingInvite.invited_name || '', invited_by: pendingInvite.invited_by, avatar_url: session.user.user_metadata?.avatar_url || null }])
+          if (memberInsertError) console.error('Team invite accept: client_members insert failed', memberInsertError)
+          const { error: inviteUpdateError } = await supabase.from('client_invites').update({ status: 'accepted', accepted_at: new Date().toISOString() }).eq('id', pendingInvite.id)
+          if (inviteUpdateError) console.error('Team invite accept: client_invites update failed', inviteUpdateError)
           resolvedAccountEmail = pendingInvite.account_email
           isSubUser = true
           try {
