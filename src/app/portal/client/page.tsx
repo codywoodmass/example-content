@@ -1,6 +1,6 @@
 'use client'
 import React from 'react'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { supabase, ensureClientProfile } from '@/lib/supabase'
 import { sendTeamInvite, removeTeamMember, revokeTeamInvite } from '@/lib/clientTeam'
 import { resizeImageToDataUrl } from '@/lib/imageResize'
@@ -1209,6 +1209,35 @@ export default function ClientPortal() {
   const [cancelOther, setCancelOther] = useState('')
   const [cancellationSent, setCancellationSent] = useState(false)
   const [showWelcome, setShowWelcome] = useState(false)
+  // A short, skippable guided tour chained directly off the Welcome
+  // screen's dismissal — same session, no localStorage needed since it
+  // only ever runs once right after Welcome. Kept deliberately light: a
+  // sentence on the dashboard, a pointer at the one nav item worth
+  // pointing at (booking itself is self-explanatory), a look at invoices,
+  // then one question about inviting a team — not a full click-through of
+  // every feature.
+  const [tourStep, setTourStep] = useState<'dashboard' | 'book' | 'invoices' | 'team' | null>(null)
+  // The "book" step's tooltip is rendered fixed-position (not absolutely
+  // inside the nav button) and placed via the button's real on-screen rect
+  // — nesting it inside the nav item put it in the sidebar's own stacking
+  // context, where it rendered behind/blended into the dashboard panels
+  // instead of floating cleanly above everything.
+  const bookNavRef = useRef<HTMLButtonElement | null>(null)
+  const [bookTooltipPos, setBookTooltipPos] = useState<{ top: number; left: number } | null>(null)
+  useEffect(() => {
+    if (tourStep === 'book' && bookNavRef.current) {
+      const r = bookNavRef.current.getBoundingClientRect()
+      setBookTooltipPos({ top: r.top + r.height / 2, left: r.right + 14 })
+    }
+  }, [tourStep])
+  // Skipping early (e.g. from the dashboard step) leaves ec_team_nudge_pending
+  // alone, so the standalone Team-page nudge still fires later if they visit
+  // it on their own — only reaching the tour's own team question consumes it,
+  // since that's the point this same message actually got delivered.
+  function finishTourTeamStep() {
+    setTourStep(null)
+    try { localStorage.removeItem('ec_team_nudge_pending') } catch {}
+  }
   const [showTeamInviteNudge, setShowTeamInviteNudge] = useState(false)
   // One-time callout pushing a brand-new account toward inviting teammates,
   // set at signup time (see ec_team_nudge_pending) and consumed the first
@@ -1906,7 +1935,50 @@ export default function ClientPortal() {
 
   return (
     <main style={{ background: '#0E1014', minHeight: '100vh', fontFamily: 'Geist, sans-serif', color: '#C8C2BB', display: 'flex' }}>
-      {showWelcome && <WelcomeScreen name={clientProfile?.name || clientProfile?.company || ''} onDismiss={() => setShowWelcome(false)} />}
+      {showWelcome && <WelcomeScreen name={clientProfile?.name || clientProfile?.company || ''} onDismiss={() => { setShowWelcome(false); setTourStep('dashboard') }} />}
+      {tourStep === 'dashboard' && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 450, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 12, width: '100%', maxWidth: 400, padding: 28 }}>
+            <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 10 }}>Quick tour · 1 of 3</div>
+            <div style={{ fontSize: 16, fontWeight: 600, color: '#fff', marginBottom: 10 }}>This is your dashboard</div>
+            <div style={{ fontSize: 13, color: 'rgba(200,194,187,0.55)', lineHeight: 1.7, marginBottom: 24 }}>Everything lives here — your upcoming shoots, active projects, and recent deliveries, all at a glance.</div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <button onClick={() => setTourStep(null)} style={{ fontSize: 11, color: 'rgba(200,194,187,0.35)', background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>Skip tour</button>
+              <button onClick={() => setTourStep('book')} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '10px 20px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 600, fontFamily: 'inherit' }}>Next →</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {tourStep === 'book' && bookTooltipPos && (
+        <div style={{ position: 'fixed', top: bookTooltipPos.top, left: bookTooltipPos.left, transform: 'translateY(-50%)', zIndex: 450, width: 230, background: '#2a2210', border: '0.5px solid rgba(210,175,80,0.4)', borderRadius: 8, padding: '12px 14px', boxShadow: '0 16px 40px rgba(0,0,0,0.5)' }}>
+          <div style={{ position: 'absolute', top: '50%', left: -5, width: 10, height: 10, background: '#2a2210', borderLeft: '0.5px solid rgba(210,175,80,0.4)', borderBottom: '0.5px solid rgba(210,175,80,0.4)', transform: 'translateY(-50%) rotate(45deg)' }} />
+          <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(230,205,140,0.7)', marginBottom: 6 }}>Quick tour · 2 of 3</div>
+          <div style={{ fontSize: 12, color: 'rgba(240,225,190,0.95)', lineHeight: 1.6, marginBottom: 10 }}>This is where you book your next project.</div>
+          <button onClick={() => { setActiveView('invoices'); setTourStep('invoices') }} style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, background: 'rgba(210,175,80,0.9)', color: '#1a1508', border: 'none', cursor: 'pointer', fontWeight: 600, fontFamily: 'inherit' }}>Got it →</button>
+        </div>
+      )}
+      {tourStep === 'invoices' && activeView === 'invoices' && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 450, pointerEvents: 'none' }}>
+          <div style={{ position: 'absolute', top: 90, right: 28, pointerEvents: 'auto', maxWidth: 300, background: 'linear-gradient(135deg, rgba(100,150,220,0.14), rgba(100,150,220,0.05))', border: '0.5px solid rgba(100,150,220,0.3)', borderRadius: 8, padding: '14px 16px', boxShadow: '0 16px 40px rgba(0,0,0,0.5)' }}>
+            <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(100,150,220,0.7)', marginBottom: 6 }}>Quick tour · 2 of 3</div>
+            <div style={{ fontSize: 12, color: 'rgba(230,235,250,0.95)', lineHeight: 1.6, marginBottom: 12 }}>This is your Invoices page — they'll show up here once a project's confirmed and billed.</div>
+            <button onClick={() => setTourStep('team')} style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '7px 14px', borderRadius: 3, background: 'rgba(100,150,220,0.9)', color: '#0E1014', border: 'none', cursor: 'pointer', fontWeight: 600, fontFamily: 'inherit' }}>Got it →</button>
+          </div>
+        </div>
+      )}
+      {tourStep === 'team' && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 450, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 12, width: '100%', maxWidth: 400, padding: 28 }}>
+            <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 10 }}>Quick tour · 3 of 3</div>
+            <div style={{ fontSize: 16, fontWeight: 600, color: '#fff', marginBottom: 10 }}>Working with a team?</div>
+            <div style={{ fontSize: 13, color: 'rgba(200,194,187,0.55)', lineHeight: 1.7, marginBottom: 24 }}>You can invite teammates to see the same bookings, deliverables and invoices under their own login, any time from the Team page.</div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+              <button onClick={finishTourTeamStep} style={{ fontSize: 11, color: 'rgba(200,194,187,0.35)', background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>Maybe later</button>
+              <button onClick={() => { setActiveView('team'); finishTourTeamStep() }} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '10px 20px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 600, fontFamily: 'inherit' }}>Invite my team →</button>
+            </div>
+          </div>
+        </div>
+      )}
       <style>{`
         .ec-client-topbar { display: none; }
         .ec-client-backdrop { display: none; }
@@ -1971,7 +2043,7 @@ export default function ClientPortal() {
           ].map(item => {
             const active = activeView === item.id
             return (
-              <button key={item.id} onClick={() => { setMobileMenuOpen(false); setActiveView(item.id); setBookingStep(1); setSelectedCat(''); setSelectedShoot(null); setSelectedDel(null); setSelectedAddons([]); setTcAccepted(false); setPreferredDate(''); setDraftDue(''); setDeliveryDue(''); setBookingNotes(''); setAccessNotes(''); setPropertyAddress(''); setProjectType(''); setProjectTitle(''); setProjectDescription(''); setTargetAudience(''); setKeyMessage(''); setTalentDetails(''); setBriefDeliverables([{ id: '1', name: '', quantity: 1, duration: '', formats: [], notes: '' }]); setDateFlexible(false); setShootDuration(''); setReferenceLinks([]); setBudgetRange(''); setBookingAttachments([]); setTwilightDate(''); setTwilightTime(''); setPropertyFeatures(''); setHomeType(''); setShowBriefField(false); setShowTalentField(false); setShowShotListField(false); setShowPropertyFeaturesField(false); setPropertyCoords(null); setTravelFee(0); setPackageMode('video') }} style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 11, width: '100%', padding: '11px 14px 11px 17px', borderRadius: 6, fontSize: 13, letterSpacing: '0.01em', fontWeight: active ? 600 : 500, color: active ? '#fff' : 'rgba(255,255,255,0.65)', background: active ? 'rgba(61,71,86,0.4)' : 'transparent', border: active ? '0.5px solid rgba(200,194,187,0.15)' : '0.5px solid transparent', cursor: 'pointer', marginBottom: 4, textAlign: 'left', fontFamily: 'inherit' }}>
+              <button key={item.id} ref={item.id === 'book' ? bookNavRef : undefined} onClick={() => { setMobileMenuOpen(false); setActiveView(item.id); setBookingStep(1); setSelectedCat(''); setSelectedShoot(null); setSelectedDel(null); setSelectedAddons([]); setTcAccepted(false); setPreferredDate(''); setDraftDue(''); setDeliveryDue(''); setBookingNotes(''); setAccessNotes(''); setPropertyAddress(''); setProjectType(''); setProjectTitle(''); setProjectDescription(''); setTargetAudience(''); setKeyMessage(''); setTalentDetails(''); setBriefDeliverables([{ id: '1', name: '', quantity: 1, duration: '', formats: [], notes: '' }]); setDateFlexible(false); setShootDuration(''); setReferenceLinks([]); setBudgetRange(''); setBookingAttachments([]); setTwilightDate(''); setTwilightTime(''); setPropertyFeatures(''); setHomeType(''); setShowBriefField(false); setShowTalentField(false); setShowShotListField(false); setShowPropertyFeaturesField(false); setPropertyCoords(null); setTravelFee(0); setPackageMode('video') }} style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 11, width: '100%', padding: '11px 14px 11px 17px', borderRadius: 6, fontSize: 13, letterSpacing: '0.01em', fontWeight: active ? 600 : 500, color: active ? '#fff' : 'rgba(255,255,255,0.65)', background: active ? 'rgba(61,71,86,0.4)' : 'transparent', border: active ? '0.5px solid rgba(200,194,187,0.15)' : '0.5px solid transparent', cursor: 'pointer', marginBottom: 4, textAlign: 'left', fontFamily: 'inherit' }}>
                 {active && <span style={{ position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)', width: 2.5, height: 15, borderRadius: 2, background: '#C8C2BB' }} />}
                 <item.Icon size={17} style={{ flexShrink: 0, opacity: active ? 1 : 0.75 }} />
                 {item.label}

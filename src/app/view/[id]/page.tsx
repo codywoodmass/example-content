@@ -58,11 +58,14 @@ function PublicDriveViewer({ project }: { project: Project }) {
   const [stack, setStack] = useState<{ id: string; name: string }[]>([])
   const [selectedFileIds, setSelectedFileIds] = useState<Set<string>>(new Set())
   const [rootFolderId, setRootFolderId] = useState<string | null>(null)
-  // Nudges an anonymous visitor toward creating a real account — shown once
-  // the first time they open a piece of content, not on page load, so it
-  // doesn't get in the way before they've actually seen anything.
+  // Nudges an anonymous visitor toward creating a real account — fires 5s
+  // after landing on the page, regardless of whether they've clicked
+  // anything yet, so it reaches browsers who never open a file at all.
   const [showSignupNudge, setShowSignupNudge] = useState(false)
-  const [nudgeShown, setNudgeShown] = useState(false)
+  useEffect(() => {
+    const t = setTimeout(() => setShowSignupNudge(true), 5000)
+    return () => clearTimeout(t)
+  }, [])
   const [showFeedbackModal, setShowFeedbackModal] = useState(false)
   const [feedbackName, setFeedbackName] = useState('')
   const [feedbackEmail, setFeedbackEmail] = useState('')
@@ -85,7 +88,6 @@ function PublicDriveViewer({ project }: { project: Project }) {
 
   function openPreview(file: any) {
     setPreviewFile(file)
-    if (!nudgeShown) { setShowSignupNudge(true); setNudgeShown(true) }
   }
 
   async function submitFeedback() {
