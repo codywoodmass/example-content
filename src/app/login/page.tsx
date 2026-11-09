@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase, ensureClientProfile } from '@/lib/supabase'
 import { notify, ToastHost } from '@/lib/notify'
 import { useRouter } from 'next/navigation'
@@ -14,6 +14,19 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [mode, setMode] = useState<'client' | 'studio'>('client')
+  const [linkExpired, setLinkExpired] = useState(false)
+
+  // A confirmation/reset link lands here (via Supabase's Site URL fallback)
+  // with an error in the hash when the token's already dead — most often
+  // because an email security scanner silently visited the link first and
+  // burned the one-time token before the real person ever clicked it. Show
+  // something useful instead of a blank login form with no explanation.
+  useEffect(() => {
+    if (window.location.hash.includes('error_code=otp_expired') || window.location.hash.includes('error=access_denied')) {
+      setLinkExpired(true)
+      window.history.replaceState(null, '', window.location.pathname)
+    }
+  }, [])
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
@@ -51,6 +64,12 @@ export default function LoginPage() {
         <div style={{ textAlign: 'center', marginBottom: 40 }}>
           <img src='/images/Pale_logo_EX.png' alt='Example Content' style={{ height: 48, objectFit: 'contain', display: 'block', margin: '0 auto' }} />
         </div>
+
+        {linkExpired && (
+          <div style={{ background: 'rgba(210,175,80,0.08)', border: '0.5px solid rgba(210,175,80,0.25)', borderRadius: 6, padding: '12px 16px', marginBottom: 24, fontSize: 12, color: 'rgba(210,175,80,0.9)', lineHeight: 1.6 }}>
+            That link has expired or has already been used. If you're trying to confirm a new account, sign in below once you've set a password — or use "Forgot your password?" to get a fresh link.
+          </div>
+        )}
 
         {/* MODE TOGGLE */}
         <div style={{ display: 'flex', background: 'rgba(200,194,187,0.06)', borderRadius: 6, padding: 4, marginBottom: 32, border: '0.5px solid rgba(200,194,187,0.1)' }}>
