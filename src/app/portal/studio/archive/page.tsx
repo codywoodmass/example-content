@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import StudioSidebar from '../StudioSidebar'
 import { notify, confirmDialog, ToastHost, ConfirmHost } from '@/lib/notify'
+import { fuzzySearch } from '@/lib/fuzzySearch'
 
 type Drive = {
   id: string
@@ -114,7 +115,12 @@ export default function ArchivePage() {
 
   const selectedDrive = drives.find(d => d.id === selectedDriveId) || null
   const driveEntries = entries.filter(e => e.drive_id === selectedDriveId)
-    .filter(e => !search.trim() || (e.project_name + ' ' + e.folder_path + ' ' + e.client).toLowerCase().includes(search.toLowerCase()))
+  // Searches every drive at once, not just whichever one happens to be
+  // selected — and tolerates misspellings via fuzzySearch's Levenshtein
+  // matching, same helper the Projects page search already uses.
+  const searchResults = search.trim()
+    ? fuzzySearch(search, entries, e => [e.project_name, e.client, e.folder_path, e.notes, drives.find(d => d.id === e.drive_id)?.name, drives.find(d => d.id === e.drive_id)?.volume_label], entries.length)
+    : []
 
   return (
     <main style={{ background: '#0E1014', minHeight: '100vh', fontFamily: 'Geist, sans-serif', color: '#C8C2BB', fontSize: 13, display: 'flex' }}>
@@ -127,8 +133,9 @@ export default function ArchivePage() {
             <div style={{ fontSize: 14, fontWeight: 500, color: '#fff' }}>Archive</div>
             <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.4)', marginTop: 1 }}>{drives.length} drive{drives.length !== 1 ? 's' : ''} · {entries.length} projects archived</div>
           </div>
-          <div style={{ display: 'flex', gap: 10 }}>
-            <button onClick={() => setShowNewDrive(true)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 16px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>+ New drive</button>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+            <input style={{ ...inp, width: 280 }} placeholder="Search every drive — project, client, folder, notes..." value={search} onChange={e => setSearch(e.target.value)} />
+            <button onClick={() => setShowNewDrive(true)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '7px 16px', borderRadius: 3, background: '#C8C2BB', color: '#111', border: 'none', cursor: 'pointer', fontWeight: 500, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>+ New drive</button>
           </div>
         </div>
 
@@ -146,7 +153,32 @@ export default function ArchivePage() {
 
           {/* DETAIL */}
           <div style={{ flex: 1, padding: 24, minWidth: 0 }}>
-            {!selectedDrive ? (
+            {search.trim() ? (
+              <>
+                <div style={{ fontSize: 12, color: 'rgba(200,194,187,0.4)', marginBottom: 14 }}>
+                  {searchResults.length} match{searchResults.length !== 1 ? 'es' : ''} across {drives.length} drive{drives.length !== 1 ? 's' : ''}
+                </div>
+                <div style={{ border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 7, overflow: 'hidden' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.3fr 1fr 1.6fr 1fr', gap: 0, padding: '8px 12px', background: 'rgba(200,194,187,0.04)', fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)' }}>
+                    <div>Drive</div><div>Project</div><div>Client</div><div>Folder path</div><div>Notes</div>
+                  </div>
+                  {searchResults.length === 0 ? (
+                    <div style={{ padding: '18px 12px', fontSize: 12, color: 'rgba(200,194,187,0.25)' }}>No matches on any drive.</div>
+                  ) : searchResults.map((e, i) => {
+                    const drive = drives.find(d => d.id === e.drive_id)
+                    return (
+                      <div key={e.id} onClick={() => { setSelectedDriveId(e.drive_id); setSearch('') }} title="Open this drive" style={{ display: 'grid', gridTemplateColumns: '1fr 1.3fr 1fr 1.6fr 1fr', gap: 0, padding: '10px 12px', borderTop: i === 0 ? 'none' : '0.5px solid rgba(200,194,187,0.06)', cursor: 'pointer' }}>
+                        <div style={{ fontSize: 12, fontWeight: 500, color: '#C8C2BB' }}>{drive?.name || '—'}</div>
+                        <div style={{ fontSize: 12, color: '#C8C2BB' }}>{e.project_name || '—'}</div>
+                        <div style={{ fontSize: 12, color: 'rgba(200,194,187,0.6)' }}>{e.client || '—'}</div>
+                        <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.5)' }}>{e.folder_path || '—'}</div>
+                        <div style={{ fontSize: 12, color: 'rgba(200,194,187,0.5)' }}>{e.notes || '—'}</div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </>
+            ) : !selectedDrive ? (
               <div style={{ fontSize: 12, color: 'rgba(200,194,187,0.3)' }}>Select a drive, or add a new one.</div>
             ) : (
               <>
@@ -161,8 +193,7 @@ export default function ArchivePage() {
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                  <input style={{ ...inp, width: 260 }} placeholder="Search this drive's projects..." value={search} onChange={e => setSearch(e.target.value)} />
+                <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: 10 }}>
                   <button onClick={() => addEntry(selectedDrive.id)} style={{ fontSize: 11, padding: '7px 14px', borderRadius: 4, background: 'rgba(200,194,187,0.08)', border: '0.5px solid rgba(200,194,187,0.15)', color: '#C8C2BB', cursor: 'pointer', fontFamily: 'inherit' }}>+ Add project row</button>
                 </div>
 
