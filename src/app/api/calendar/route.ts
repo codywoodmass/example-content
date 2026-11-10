@@ -128,3 +128,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: e.message }, { status: 500 })
   }
 }
+
+export async function DELETE(req: NextRequest) {
+  const clients = await getGoogleClients()
+  if (!clients) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+  const { calendar } = clients
+
+  const { eventId } = await req.json()
+  if (!eventId) return NextResponse.json({ error: 'Missing eventId' }, { status: 400 })
+
+  try {
+    await calendar.events.delete({ calendarId: 'primary', eventId, sendUpdates: 'all' })
+    return NextResponse.json({ success: true })
+  } catch (e: any) {
+    // Already gone from the calendar — treat as success, same as the patch
+    // fallback above.
+    if (e.code === 404 || e.code === 410) return NextResponse.json({ success: true })
+    return NextResponse.json({ error: e.message }, { status: 500 })
+  }
+}

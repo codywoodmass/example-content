@@ -26,7 +26,7 @@ function formatDate(dateStr: string | null | undefined): string {
   return `${day} ${date}${suffix} ${month} ${year}`
 }
 
-type ShootDate = { id: string; date: string; start_time: string; end_time: string; notes: string }
+type ShootDate = { id: string; date: string; start_time: string; end_time: string; notes: string; calendar_event_id?: string }
 type ReferenceItem = { id: string; url: string; note: string }
 
 // Recognises a pasted link from the four platforms the studio actually uses
@@ -223,6 +223,10 @@ function ProjectsPageInner() {
   const [uploadingAttachment, setUploadingAttachment] = useState(false)
   const [previewAttachment, setPreviewAttachment] = useState<{ name: string; url: string; size: number } | null>(null)
   const [calendarSyncTimer, setCalendarSyncTimer] = useState<any>(null)
+  // One debounce timer per additional shoot date (keyed by its own id), same
+  // 10s reasoning as triggerCalendarSync below — date/start/end are usually
+  // edited as separate fields a few seconds apart.
+  const shootDateSyncTimers = useRef<Record<string, any>>({})
   const [notifyTimeModalProject, setNotifyTimeModalProject] = useState<Project | null>(null)
   const [sendingTimeNotif, setSendingTimeNotif] = useState(false)
   const [showMeetingModal, setShowMeetingModal] = useState(false)
@@ -374,17 +378,83 @@ function ProjectsPageInner() {
       const dates = (p.shoot_dates || []).map(d => d.id === id ? { ...d, [field]: value } : d)
       const u = { ...p, shoot_dates: dates }
       persistShootDates(p.id, dates)
+      if (field === 'date' || field === 'start_time' || field === 'end_time') triggerShootDateCalendarSync(p.id, id)
       return u
     })
   }
   function removeShootDate(id: string) {
     setModalProject(p => {
       if (!p) return p
+      const removed = (p.shoot_dates || []).find(d => d.id === id)
       const dates = (p.shoot_dates || []).filter(d => d.id !== id)
       const u = { ...p, shoot_dates: dates }
       persistShootDates(p.id, dates)
+      if (shootDateSyncTimers.current[id]) { clearTimeout(shootDateSyncTimers.current[id]); delete shootDateSyncTimers.current[id] }
+      if (removed?.calendar_event_id) deleteCalendarEventForShootDate(removed.calendar_event_id)
       return u
     })
+  }
+  // Mirrors triggerCalendarSync/createCalendarEventForProject below, but per
+  // additional-date entry — each one gets its own Google Calendar event,
+  // patched in place (via its own calendar_event_id) rather than duplicated
+  // on every edit.
+  function triggerShootDateCalendarSync(projectId: string, dateId: string) {
+    const timers = shootDateSyncTimers.current
+    if (timers[dateId]) clearTimeout(timers[dateId])
+    timers[dateId] = setTimeout(() => {
+      const latestProject = modalProjectRef.current?.id === projectId ? modalProjectRef.current : projects.find(p => p.id === projectId)
+      const latestEntry = latestProject?.shoot_dates?.find(d => d.id === dateId)
+      if (!latestProject || !latestEntry || !latestEntry.date || !latestEntry.start_time || !latestEntry.end_time) return
+      createCalendarEventForShootDate(latestProject, latestEntry)
+    }, 10000)
+  }
+  async function createCalendarEventForShootDate(project: Project, dateEntry: ShootDate) {
+    try {
+      const res = await fetch('/api/calendar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: `Example Content — ${project.title || project.address || 'Shoot'} (additional date)`,
+          date: dateEntry.date,
+          startTime: dateEntry.start_time,
+          endTime: dateEntry.end_time,
+          clientEmail: project.email,
+          location: project.address || '',
+          description: `Additional shoot date for ${project.client || project.email}${dateEntry.notes ? '\n' + dateEntry.notes : ''}`,
+          eventId: dateEntry.calendar_event_id || undefined,
+        }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        notify(dateEntry.calendar_event_id ? 'Additional shoot date updated on Google Calendar' : 'Additional shoot date added to Google Calendar', 'success')
+        if (data.eventId && data.eventId !== dateEntry.calendar_event_id) {
+          const nextDates = (project.shoot_dates || []).map(d => d.id === dateEntry.id ? { ...d, calendar_event_id: data.eventId } : d)
+          await supabase.from('projects1').update({ shoot_dates: nextDates }).eq('id', project.id)
+          setProjects(p => p.map(proj => proj.id === project.id ? { ...proj, shoot_dates: nextDates } : proj))
+          setModalProject(p => p && p.id === project.id ? { ...p, shoot_dates: nextDates } : p)
+        }
+      } else if (data.error === 'Not authenticated') {
+        const authRes = await fetch('/api/calendar?action=auth_url')
+        const { url } = await authRes.json()
+        window.open(url, '_blank', 'width=500,height=600')
+        function onFocus() {
+          window.removeEventListener('focus', onFocus)
+          createCalendarEventForShootDate(project, dateEntry)
+        }
+        window.addEventListener('focus', onFocus)
+      } else {
+        notify('Calendar error: ' + data.error, 'error')
+      }
+    } catch (e) {
+      console.error(e)
+    }
+  }
+  async function deleteCalendarEventForShootDate(eventId: string) {
+    try {
+      await fetch('/api/calendar', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ eventId }) })
+    } catch (e) {
+      console.error(e)
+    }
   }
 
   // Reference videos (YouTube/Vimeo/Facebook/Instagram) for the shooter or
