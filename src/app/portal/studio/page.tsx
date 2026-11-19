@@ -924,7 +924,7 @@ export default function StudioPortal() {
       const data = await res.json()
       if (data.success) {
         setEventLink(data.eventLink)
-        const proj = await confirmBooking(booking)
+        const proj = await confirmBooking(booking, { eventId: data.eventId, eventLink: data.eventLink })
         setTimeout(() => {
           setScheduleModal(false)
           setEventLink('')
@@ -1033,6 +1033,14 @@ export default function StudioPortal() {
     // of what the client actually called their project.
     const commercialTitle = isCommercial ? parseLabeledNotes(booking.notes).find(s => s.label?.toLowerCase() === 'project title')?.body : null
     const title = commercialTitle || booking.address || booking.shoot_package || 'New project'
+    // A twilight shoot request (property bookings only) travels in the
+    // booking's notes as a single machine-parseable line — see the client
+    // booking form, which auto-computes the actual sunset-relative time —
+    // since bookings1 has no dedicated column for it. Lands here as an
+    // additional shoot date on the new project so it gets its own Google
+    // Calendar event below, the same as any other extra shoot date.
+    const twilightMatch = /Twilight shoot requested: (\d{4}-\d{2}-\d{2}) (\d{2}:\d{2})-(\d{2}:\d{2})/.exec(booking.notes || '')
+    const twilightShootDate = twilightMatch ? { id: 'twilight-' + Date.now(), date: twilightMatch[1], start_time: twilightMatch[2], end_time: twilightMatch[3], notes: 'Twilight shoot' } : null
     const { data, error: projectError } = await supabase.from('projects1').insert([{
       title,
       client: booking.client_name || booking.client_email || '',
@@ -1066,6 +1074,7 @@ export default function StudioPortal() {
         booking.deliverables ? 'DELIVERABLES: ' + booking.deliverables : '',
         booking.addons ? 'ADD-ONS: ' + booking.addons : '',
       ].filter(Boolean).join('\n'),
+      shoot_dates: twilightShootDate ? [twilightShootDate] : [],
     }]).select().single()
     if (projectError) {
       notify('Project error: ' + projectError.message, 'error')
@@ -1093,17 +1102,50 @@ export default function StudioPortal() {
           notify('Project created, but the Drive folder failed: ' + driveData.error, 'error')
         }
       } catch (e) { console.error('Drive folder creation error:', e) }
+      if (twilightShootDate) {
+        try {
+          const twRes = await fetch('/api/calendar', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              title: `Example Content — ${data.title} (Twilight)`,
+              date: twilightShootDate.date,
+              startTime: twilightShootDate.start_time,
+              endTime: twilightShootDate.end_time,
+              clientEmail: booking.client_email,
+              location: booking.address || '',
+              description: `Twilight shoot for ${booking.client_name || booking.client_email}`,
+            }),
+          })
+          const twData = await twRes.json()
+          if (twData.success && twData.eventId) {
+            const nextDates = [{ ...twilightShootDate, calendar_event_id: twData.eventId }]
+            await supabase.from('projects1').update({ shoot_dates: nextDates }).eq('id', data.id)
+            data.shoot_dates = nextDates
+          } else if (!twData.success && twData.error !== 'Not authenticated') {
+            notify('Project created, but the twilight calendar event failed: ' + twData.error, 'error')
+          }
+        } catch (e) { console.error('Twilight calendar event error:', e) }
+      }
     }
     return data
   }
 
-  async function confirmBooking(booking: any) {
+  // precreatedEvent lets createCalendarEvent (the "Confirm & add to calendar"
+  // button) hand over the event it already made instead of this function
+  // posting its own — the two used to both insert an event for the same
+  // confirm click, leaving every confirmed shoot with two separate, near-
+  // identical Google Calendar bookings (the stray one never linked to the
+  // project, so later edits only ever patched the other).
+  async function confirmBooking(booking: any, precreatedEvent?: { eventId: string; eventLink?: string }) {
     const data = await createProjectFromBooking(booking, shootDate || booking.preferred_date || null, '', startTime, endTime, needsBrief)
     // Fast path (no negotiation) — set project_id in the same write so this
     // booking never also shows up in the "ready to create project" queue.
     await supabase.from('bookings1').update({ status: 'confirmed', project_id: data?.id || null }).eq('id', booking.id)
     const finalShootDate = shootDate || booking.preferred_date || null
-    if (data?.id && finalShootDate && startTime && endTime) {
+    if (data?.id && precreatedEvent?.eventId) {
+      await supabase.from('projects1').update({ calendar_event_id: precreatedEvent.eventId }).eq('id', data.id)
+    } else if (data?.id && finalShootDate && startTime && endTime) {
       try {
         const res = await fetch('/api/calendar', {
           method: 'POST',

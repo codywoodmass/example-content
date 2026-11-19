@@ -1957,31 +1957,6 @@ function ProjectsPageInner() {
                   </div>
                 ))}
               </div>
-              {modalProject.shoot_date && modalProject.shoot_window_start && modalProject.shoot_window_end && modalProject.email && (
-                <div style={{ marginBottom: 20 }}>
-                  <button onClick={() => setNotifyTimeModalProject(modalProject)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 3, border: '0.5px solid rgba(100,150,220,0.35)', color: 'rgba(100,150,220,0.9)', background: 'rgba(100,150,220,0.08)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>Notify client of new time</button>
-                  <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.35)', marginTop: 6 }}>Updates their calendar invite and sends them an email — use this any time the shoot date or time changes.</div>
-                </div>
-              )}
-              {notifyTimeModalProject && (
-                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }} onClick={() => !sendingTimeNotif && setNotifyTimeModalProject(null)}>
-                  <div onClick={e => e.stopPropagation()} style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 10, width: '100%', maxWidth: 420, padding: 26 }}>
-                    <div style={{ fontSize: 14, fontWeight: 500, color: '#fff', marginBottom: 10 }}>Notify client of new time?</div>
-                    <div style={{ fontSize: 12, color: 'rgba(200,194,187,0.6)', lineHeight: 1.6, marginBottom: 16 }}>
-                      This updates their Google Calendar invite in place (same event, new time — nothing stray is left behind on either side) and emails them directly.
-                    </div>
-                    <div style={{ background: 'rgba(100,150,220,0.06)', border: '0.5px solid rgba(100,150,220,0.2)', borderRadius: 6, padding: '12px 14px', marginBottom: 20, fontSize: 13, color: '#C8C2BB' }}>
-                      {new Date(notifyTimeModalProject.shoot_date + 'T12:00:00').toLocaleDateString('en-NZ', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-                      <br />
-                      {formatTime12(notifyTimeModalProject.shoot_window_start)} – {formatTime12(notifyTimeModalProject.shoot_window_end)}
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-                      <button disabled={sendingTimeNotif} onClick={() => setNotifyTimeModalProject(null)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '9px 16px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: sendingTimeNotif ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>Cancel</button>
-                      <button disabled={sendingTimeNotif} onClick={() => sendTimeChangeNotification(notifyTimeModalProject)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '9px 18px', borderRadius: 3, background: sendingTimeNotif ? 'rgba(200,194,187,0.1)' : '#C8C2BB', color: sendingTimeNotif ? 'rgba(200,194,187,0.3)' : '#111', border: 'none', cursor: sendingTimeNotif ? 'not-allowed' : 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>{sendingTimeNotif ? 'Sending...' : 'Send update'}</button>
-                    </div>
-                  </div>
-                </div>
-              )}
               {(modalEditing || (modalProject.shoot_dates || []).length > 0) && (
               <div style={{ marginBottom: 20 }}>
                 {modalEditing && (
@@ -2015,6 +1990,31 @@ function ProjectsPageInner() {
                   </div>
                 )}
               </div>
+              )}
+              {modalProject.shoot_date && modalProject.shoot_window_start && modalProject.shoot_window_end && modalProject.email && (
+                <div style={{ marginBottom: 20 }}>
+                  <button onClick={() => setNotifyTimeModalProject(modalProject)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 3, border: '0.5px solid rgba(100,150,220,0.35)', color: 'rgba(100,150,220,0.9)', background: 'rgba(100,150,220,0.08)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>Notify client of new time</button>
+                  <div style={{ fontSize: 11, color: 'rgba(200,194,187,0.35)', marginTop: 6 }}>Updates their calendar invite and sends them an email — use this any time the shoot date or time changes.</div>
+                </div>
+              )}
+              {notifyTimeModalProject && (
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }} onClick={() => !sendingTimeNotif && setNotifyTimeModalProject(null)}>
+                  <div onClick={e => e.stopPropagation()} style={{ background: '#1A1F28', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 10, width: '100%', maxWidth: 420, padding: 26 }}>
+                    <div style={{ fontSize: 14, fontWeight: 500, color: '#fff', marginBottom: 10 }}>Notify client of new time?</div>
+                    <div style={{ fontSize: 12, color: 'rgba(200,194,187,0.6)', lineHeight: 1.6, marginBottom: 16 }}>
+                      This updates their Google Calendar invite in place (same event, new time — nothing stray is left behind on either side) and emails them directly.
+                    </div>
+                    <div style={{ background: 'rgba(100,150,220,0.06)', border: '0.5px solid rgba(100,150,220,0.2)', borderRadius: 6, padding: '12px 14px', marginBottom: 20, fontSize: 13, color: '#C8C2BB' }}>
+                      {new Date(notifyTimeModalProject.shoot_date + 'T12:00:00').toLocaleDateString('en-NZ', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+                      <br />
+                      {formatTime12(notifyTimeModalProject.shoot_window_start)} – {formatTime12(notifyTimeModalProject.shoot_window_end)}
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+                      <button disabled={sendingTimeNotif} onClick={() => setNotifyTimeModalProject(null)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '9px 16px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: sendingTimeNotif ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+                      <button disabled={sendingTimeNotif} onClick={() => sendTimeChangeNotification(notifyTimeModalProject)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '9px 18px', borderRadius: 3, background: sendingTimeNotif ? 'rgba(200,194,187,0.1)' : '#C8C2BB', color: sendingTimeNotif ? 'rgba(200,194,187,0.3)' : '#111', border: 'none', cursor: sendingTimeNotif ? 'not-allowed' : 'pointer', fontWeight: 500, fontFamily: 'inherit' }}>{sendingTimeNotif ? 'Sending...' : 'Send update'}</button>
+                    </div>
+                  </div>
+                </div>
               )}
               {modalProject.deliverables && (
                 <div style={{ marginBottom: 20 }}>

@@ -5,6 +5,7 @@ import { supabase, ensureClientProfile } from '@/lib/supabase'
 import { sendTeamInvite, removeTeamMember, revokeTeamInvite } from '@/lib/clientTeam'
 import { resizeImageToDataUrl } from '@/lib/imageResize'
 import { formatTime12, localDateKey, addBusinessDays } from '@/lib/time'
+import { sunsetNzLocal, shiftTime } from '@/lib/sunset'
 import { stageLabel } from '@/lib/stages'
 import { parseLabeledNotes } from '@/lib/parseNotes'
 import { buildShootIcs, downloadIcsFile } from '@/lib/ics'
@@ -1123,6 +1124,7 @@ export default function ClientPortal() {
   const [showPropertyFeaturesField, setShowPropertyFeaturesField] = useState(false)
   const [twilightDate, setTwilightDate] = useState("")
   const [twilightTime, setTwilightTime] = useState("")
+  const [twilightEndTime, setTwilightEndTime] = useState("")
   // Property Ad is filmed in one orientation, not both like the other
   // packages — defaults to Horizontal unless the client explicitly switches
   // it, since that's the more common pick for this package's use (listing
@@ -1779,6 +1781,18 @@ export default function ClientPortal() {
       .finally(() => { if (!cancelled) setCalculatingTravelFee(false) })
     return () => { cancelled = true }
   }, [propertyCoords])
+
+  // Sunset shifts with both the date and how far north/south the property
+  // sits, so a fixed evening time slot would be wrong for most of the year —
+  // computed from the geocoded property address the moment a twilight date
+  // is picked, then the shoot is auto-booked to start half an hour before
+  // it (a 1-hour window either side of sunset covers golden hour into dusk).
+  const twilightSunset = propertyCoords && twilightDate ? sunsetNzLocal(propertyCoords.lat, propertyCoords.lng, twilightDate) : null
+  useEffect(() => {
+    if (!twilightSunset) { setTwilightTime(''); setTwilightEndTime(''); return }
+    setTwilightTime(shiftTime(twilightSunset, -30))
+    setTwilightEndTime(shiftTime(twilightSunset, 30))
+  }, [twilightSunset])
 
   function toggleAddon(addon: any) {
     setSelectedAddons(prev =>
@@ -2931,14 +2945,16 @@ export default function ClientPortal() {
                     </div>
                     {(selectedShoot?.name === 'Media Release Package' || selectedAddons.some((a: any) => a.name === 'Twilight Shoot')) && (
                       <div style={{ marginTop:16 }}>
-                        <label style={{ fontSize:10, letterSpacing:'0.12em', textTransform:'uppercase', color:'#fff', display:'block', marginBottom:6 }}>Twilight shoot — date & time requested</label>
-                        <div style={{ display:'flex', gap:10 }}>
-                          <input type="date" value={twilightDate} onChange={e => setTwilightDate(e.target.value)} style={{ background:'rgba(200,194,187,0.04)', border:'0.5px solid rgba(200,194,187,0.09)', borderRadius:4, padding:'9px 12px', fontSize:12, color:'#C8C2BB', fontFamily:'inherit', outline:'none', flex:1 }} />
-                          <select value={twilightTime} onChange={e => setTwilightTime(e.target.value)} style={{ background:'rgba(200,194,187,0.04)', border:'0.5px solid rgba(200,194,187,0.09)', borderRadius:4, padding:'9px 12px', fontSize:12, color:'#C8C2BB', fontFamily:'inherit', outline:'none' }}>
-                            <option value=''>Preferred time</option>
-                            {['16:30','17:00','17:30','18:00','18:30','19:00','19:30','20:00'].map(t => <option key={t} value={t}>{formatTime12(t)}</option>)}
-                          </select>
-                        </div>
+                        <label style={{ fontSize:10, letterSpacing:'0.12em', textTransform:'uppercase', color:'#fff', display:'block', marginBottom:6 }}>Twilight shoot — date</label>
+                        <input type="date" value={twilightDate} onChange={e => setTwilightDate(e.target.value)} style={{ background:'rgba(200,194,187,0.04)', border:'0.5px solid rgba(200,194,187,0.09)', borderRadius:4, padding:'9px 12px', fontSize:12, color:'#C8C2BB', fontFamily:'inherit', outline:'none', width:'100%' }} />
+                        {twilightDate && !propertyCoords && (
+                          <div style={{ fontSize:11, color:'rgba(200,194,187,0.35)', marginTop:8 }}>Add your property address above to calculate sunset for this date.</div>
+                        )}
+                        {twilightSunset && (
+                          <div style={{ fontSize:11, color:'rgba(210,175,80,0.8)', marginTop:8, lineHeight:1.6 }}>
+                            Sunset that evening is <strong>{formatTime12(twilightSunset)}</strong> — we'll start the twilight shoot at <strong>{formatTime12(twilightTime)}</strong> (30 min before sunset) and run through to {formatTime12(twilightEndTime)}.
+                          </div>
+                        )}
                       </div>
                     )}
                     {selectedShoot?.name === 'Property Ad' && (
@@ -3091,7 +3107,12 @@ export default function ClientPortal() {
                             talentDetails ? 'Talent required: ' + talentDetails : '',
                             shotList.replace(/[•\s]/g, '') ? 'Suggested shot list:\n' + shotList : '',
                             referenceLinks.length ? 'References: ' + referenceLinks.join(', ') : '',
-                            (twilightDate || twilightTime) ? 'Twilight shoot requested: ' + (twilightDate ? new Date(twilightDate + 'T12:00:00').toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' }) : 'date TBC') + (twilightTime ? ' at ' + formatTime12(twilightTime) : '') : '',
+                            // Kept machine-parseable (ISO date, 24h start-end) in one
+                            // fixed spot in the string — createProjectFromBooking
+                            // regexes this back out to add the twilight shoot as a
+                            // real additional shoot date on the project, synced to
+                            // Google Calendar, not just a note someone has to read.
+                            (twilightDate && twilightTime && twilightEndTime) ? `Twilight shoot requested: ${twilightDate} ${twilightTime}-${twilightEndTime} NZT (begins 30 min before sunset${twilightSunset ? ' at ' + twilightSunset : ''})` : '',
                             selectedShoot?.name === 'Property Ad' ? 'Filming orientation: ' + filmingOrientation : '',
                             travelFee > 0 ? `Travel fee: $${travelFee} + GST (auto-calculated from property address)` : '',
                             clientPhone ? 'Phone: ' + clientPhone : '',
