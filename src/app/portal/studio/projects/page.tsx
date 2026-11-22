@@ -1868,9 +1868,13 @@ function ProjectsPageInner() {
                 )
               })()}
               <div style={{ display: 'flex', gap: 4, marginBottom: 20, borderBottom: '0.5px solid rgba(200,194,187,0.09)' }}>
-                {[{ id: 'overview', label: 'Job' }, { id: 'brief', label: 'Brief' }, { id: 'internal', label: 'Internal' }].map(tab => (
-                  <button key={tab.id} onClick={() => setModalTab(tab.id as any)} style={{ fontSize: 12, padding: '10px 14px', background: 'transparent', border: 'none', borderBottom: `2px solid ${modalTab === tab.id ? '#C8C2BB' : 'transparent'}`, color: modalTab === tab.id ? '#C8C2BB' : 'rgba(200,194,187,0.35)', cursor: 'pointer', fontFamily: 'inherit', marginBottom: -1 }}>{tab.label}</button>
-                ))}
+                {[{ id: 'overview', label: 'Job' }, { id: 'brief', label: 'Brief' }, { id: 'internal', label: 'Internal/Time tracking' }].map(tab => {
+                  const isTrackingThis = tab.id === 'internal' && tracker.timers.some(t => t.project_id === modalProject.id)
+                  const activeColor = isTrackingThis ? 'rgba(210,90,90,0.9)' : '#C8C2BB'
+                  return (
+                    <button key={tab.id} onClick={() => setModalTab(tab.id as any)} style={{ fontSize: 12, padding: '10px 14px', background: 'transparent', border: 'none', borderBottom: `2px solid ${modalTab === tab.id ? activeColor : 'transparent'}`, color: modalTab === tab.id ? activeColor : isTrackingThis ? 'rgba(210,90,90,0.55)' : 'rgba(200,194,187,0.35)', cursor: 'pointer', fontFamily: 'inherit', marginBottom: -1 }}>{tab.label}</button>
+                  )
+                })}
               </div>
               {modalTab === 'overview' && (
               <>
