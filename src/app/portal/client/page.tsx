@@ -1835,7 +1835,6 @@ export default function ClientPortal() {
       includes: ['60–90s property tour', 'Agent lifestyle shots', '8-10 Slide Instagram Carousel'],
       deliverables: [
         { name: 'Walkthrough Film (60–90s)', price: 0, includes: ['1x walkthrough film', 'Google Drive delivery'] },
-        { name: '2x Showcase Reels (20s)', price: 0, includes: ['2x 20s showcase reels', 'Vertical & landscape', 'Google Drive delivery'] },
         { name: '8-10 Slide Instagram Carousel', price: 0, includes: ['1x branded property carousel', 'Google Drive delivery'] },
       ]
     },
@@ -1846,7 +1845,6 @@ export default function ClientPortal() {
       includes: ['60–90s property tour', '1hr lifestyle shoot with talent', 'Agent lifestyle shots', '8-10 Slide Instagram Carousel'],
       deliverables: [
         { name: 'Showcase Film (60–90s)', price: 0, includes: ['1x cinematic film', 'Vertical & landscape formats', 'Google Drive delivery'] },
-        { name: '3x Reels', price: 0, includes: ['3x social reels', 'Vertical & landscape formats', 'Google Drive delivery'] },
         { name: '8-10 Slide Instagram Carousel', price: 0, includes: ['1x branded property carousel', 'Google Drive delivery'] },
       ]
     },
