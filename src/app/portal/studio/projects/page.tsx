@@ -215,7 +215,7 @@ function ProjectsPageInner() {
   const modalProjectRef = useRef<Project | null>(null)
   useEffect(() => { modalProjectRef.current = modalProject }, [modalProject])
   const [modalEditing, setModalEditing] = useState(false)
-  const [modalTab, setModalTab] = useState<'overview' | 'brief' | 'internal' | 'time'>('overview')
+  const [modalTab, setModalTab] = useState<'overview' | 'brief' | 'internal'>('overview')
   useEffect(() => { setModalTab('overview') }, [modalProject?.id])
   const [modalSaving, setModalSaving] = useState(false)
   const [modalSaved, setModalSaved] = useState(false)
@@ -1838,41 +1838,6 @@ function ProjectsPageInner() {
                   })
                 }} style={{ width: '100%', accentColor: '#C8C2BB', cursor: 'pointer' }} />
               </div>
-              {/* KEY FACTS — always visible regardless of which tab is open, so the handful
-                  of things actually checked/updated day-to-day (who's shooting and editing,
-                  what it's worth, when it's on, whether it's confirmed) never need a tab click. */}
-              <div className="ec-form-grid-5" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10, marginBottom: 20, background: 'rgba(200,194,187,0.03)', border: '0.5px solid rgba(200,194,187,0.09)', borderRadius: 6, padding: '12px 14px' }}>
-                <div>
-                  <div style={{ fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>Shoot date</div>
-                  <div style={{ fontSize: 12, color: '#C8C2BB' }}>
-                    {modalProject.shoot_date ? new Date(modalProject.shoot_date + 'T12:00:00').toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' }) : 'Not set'}
-                    {modalProject.shoot_window_start && <span style={{ color: 'rgba(200,194,187,0.4)' }}>{' · ' + formatTime12(modalProject.shoot_window_start)}</span>}
-                  </div>
-                </div>
-                <div>
-                  <div style={{ fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>Amount ($)</div>
-                  {modalEditing ? <input type="number" min="0" step="0.01" value={modalProject.amount ?? ''} onChange={e => setModalProject(p => { const u = p ? { ...p, amount: e.target.value === '' ? null : parseFloat(e.target.value) } : p; if (u) triggerAutoSave(u); return u })} placeholder="0.00" style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '7px 9px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }} /> : <div style={{ fontSize: 12, color: '#C8C2BB' }}>{modalProject.amount ? `$${modalProject.amount.toLocaleString()}` : '—'}</div>}
-                </div>
-                {[{ label: 'Shooter', key: 'shooter' as const }, { label: 'Editor', key: 'editor' as const }].map(({ label, key }) => (
-                  <div key={key}>
-                    <div style={{ fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>{label}</div>
-                    {modalEditing ? (
-                      <select value={modalProject[key] || ''} onChange={e => setModalProject(p => { const u = p ? { ...p, [key]: e.target.value || null } : p; if (u) triggerAutoSave(u); return u })} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '7px 9px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }}>
-                        <option value="">— Unassigned —</option>
-                        {teamOptions.map(t => <option key={t.name} value={t.name}>{t.name}</option>)}
-                      </select>
-                    ) : <div style={{ fontSize: 12, color: '#C8C2BB' }}>{modalProject[key] || '—'}</div>}
-                  </div>
-                ))}
-                <div>
-                  <div style={{ fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>Confirmed</div>
-                  {modalProject.client_confirmed ? (
-                    <div style={{ fontSize: 12, color: 'rgba(100,200,130,0.8)' }}>✓ {modalProject.confirmed_at ? new Date(modalProject.confirmed_at).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' }) : 'Yes'}</div>
-                  ) : modalProject.stage === 'Enquiry' ? (
-                    <button onClick={() => markConfirmed(modalProject)} style={{ fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '6px 8px', borderRadius: 3, border: '0.5px solid rgba(100,150,220,0.35)', color: 'rgba(100,150,220,0.9)', background: 'rgba(100,150,220,0.08)', cursor: 'pointer', fontFamily: 'inherit', width: '100%' }}>Mark confirmed</button>
-                  ) : <div style={{ fontSize: 12, color: 'rgba(200,194,187,0.25)' }}>—</div>}
-                </div>
-              </div>
               {previewAttachment && (() => {
                 const ext = previewAttachment.name.split('.').pop()?.toLowerCase() || ''
                 const isImg = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic'].includes(ext)
@@ -1903,7 +1868,7 @@ function ProjectsPageInner() {
                 )
               })()}
               <div style={{ display: 'flex', gap: 4, marginBottom: 20, borderBottom: '0.5px solid rgba(200,194,187,0.09)' }}>
-                {[{ id: 'overview', label: 'Job' }, { id: 'brief', label: 'Brief' }, { id: 'internal', label: 'Internal' }, { id: 'time', label: 'Time Tracking' }].map(tab => (
+                {[{ id: 'overview', label: 'Job' }, { id: 'brief', label: 'Brief' }, { id: 'internal', label: 'Internal' }].map(tab => (
                   <button key={tab.id} onClick={() => setModalTab(tab.id as any)} style={{ fontSize: 12, padding: '10px 14px', background: 'transparent', border: 'none', borderBottom: `2px solid ${modalTab === tab.id ? '#C8C2BB' : 'transparent'}`, color: modalTab === tab.id ? '#C8C2BB' : 'rgba(200,194,187,0.35)', cursor: 'pointer', fontFamily: 'inherit', marginBottom: -1 }}>{tab.label}</button>
                 ))}
               </div>
@@ -1921,6 +1886,20 @@ function ProjectsPageInner() {
                   </div>
                 ))}
               </div>
+              <div className="ec-form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
+                <div>
+                  <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>Amount ($)</div>
+                  {modalEditing ? <input type="number" min="0" step="0.01" value={modalProject.amount ?? ''} onChange={e => setModalProject(p => { const u = p ? { ...p, amount: e.target.value === '' ? null : parseFloat(e.target.value) } : p; if (u) triggerAutoSave(u); return u })} placeholder="0.00" style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '8px 10px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }} /> : <div style={{ fontSize: 13, color: '#C8C2BB' }}>{modalProject.amount ? `$${modalProject.amount.toLocaleString()}` : '—'}</div>}
+                </div>
+                <div>
+                  <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>Confirmed</div>
+                  {modalProject.client_confirmed ? (
+                    <div style={{ fontSize: 13, color: 'rgba(100,200,130,0.8)' }}>✓ {modalProject.confirmed_at ? new Date(modalProject.confirmed_at).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' }) : 'Yes'}</div>
+                  ) : modalProject.stage === 'Enquiry' ? (
+                    <button onClick={() => markConfirmed(modalProject)} style={{ fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '7px 10px', borderRadius: 3, border: '0.5px solid rgba(100,150,220,0.35)', color: 'rgba(100,150,220,0.9)', background: 'rgba(100,150,220,0.08)', cursor: 'pointer', fontFamily: 'inherit' }}>Mark confirmed</button>
+                  ) : <div style={{ fontSize: 13, color: 'rgba(200,194,187,0.25)' }}>—</div>}
+                </div>
+              </div>
               <div style={{ marginBottom: 20 }}>
                 <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>Google Drive</div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -1934,63 +1913,54 @@ function ProjectsPageInner() {
                   )}
                 </div>
               </div>
-              <div className="ec-form-grid-3" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, marginBottom: 20 }}>
-                {[{ label: 'Shoot date', key: 'shoot_date' as const }, { label: 'Draft due', key: 'draft_due' as const }, { label: 'Delivery date', key: 'delivery_due' as const }].map(({ label, key }) => (
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                  <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)' }}>Shoot dates</div>
+                  <button onClick={addShootDate} style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '4px 10px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>+ Add date</button>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div className="ec-shoot-date-row" style={{ display: 'grid', gridTemplateColumns: '1fr 100px 100px 1fr 24px', gap: 8, alignItems: 'center', background: 'rgba(100,150,220,0.05)', border: '0.5px solid rgba(100,150,220,0.2)', borderRadius: 5, padding: '8px 10px' }}>
+                    <input type="date" value={modalProject.shoot_date || ''} onChange={e => setModalProject(p => { const u = p ? { ...p, shoot_date: e.target.value } : p; if (u) { triggerAutoSave(u); triggerCalendarSync(u) } return u })} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '6px 8px', fontSize: 11, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }} />
+                    <select value={modalProject.shoot_window_start || ''} onChange={e => setModalProject(p => { const u = p ? { ...p, shoot_window_start: e.target.value } : p; if (u) { triggerAutoSave(u); triggerCalendarSync(u) } return u })} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '6px 8px', fontSize: 11, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }}>
+                      <option value=''>Start</option>
+                      {['06:00','06:30','07:00','07:30','08:00','08:30','09:00','09:30','10:00','10:30','11:00','11:30','12:00','12:30','13:00','13:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30','18:00'].map(t => <option key={t} value={t}>{formatTime12(t)}</option>)}
+                    </select>
+                    <select value={modalProject.shoot_window_end || ''} onChange={e => setModalProject(p => { const u = p ? { ...p, shoot_window_end: e.target.value } : p; if (u) { triggerAutoSave(u); triggerCalendarSync(u) } return u })} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '6px 8px', fontSize: 11, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }}>
+                      <option value=''>End</option>
+                      {['07:00','07:30','08:00','08:30','09:00','09:30','10:00','10:30','11:00','11:30','12:00','12:30','13:00','13:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30','18:00','18:30','19:00'].map(t => <option key={t} value={t}>{formatTime12(t)}</option>)}
+                    </select>
+                    <div style={{ fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'rgba(100,150,220,0.8)' }}>Main shoot</div>
+                    <div />
+                  </div>
+                  {(modalProject.shoot_dates || []).map(d => (
+                    <div key={d.id} className="ec-shoot-date-row" style={{ display: 'grid', gridTemplateColumns: '1fr 100px 100px 1fr 24px', gap: 8, alignItems: 'center', background: 'rgba(200,194,187,0.03)', border: '0.5px solid rgba(200,194,187,0.07)', borderRadius: 5, padding: '8px 10px' }}>
+                      <input type="date" value={d.date} onChange={e => updateShootDate(d.id, 'date', e.target.value)} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '6px 8px', fontSize: 11, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }} />
+                      <select value={d.start_time} onChange={e => updateShootDate(d.id, 'start_time', e.target.value)} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '6px 8px', fontSize: 11, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }}>
+                        <option value=''>Start</option>
+                        {['06:00','06:30','07:00','07:30','08:00','08:30','09:00','09:30','10:00','10:30','11:00','11:30','12:00','12:30','13:00','13:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30','18:00'].map(t => <option key={t} value={t}>{formatTime12(t)}</option>)}
+                      </select>
+                      <select value={d.end_time} onChange={e => updateShootDate(d.id, 'end_time', e.target.value)} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '6px 8px', fontSize: 11, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }}>
+                        <option value=''>End</option>
+                        {['07:00','07:30','08:00','08:30','09:00','09:30','10:00','10:30','11:00','11:30','12:00','12:30','13:00','13:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30','18:00','18:30','19:00'].map(t => <option key={t} value={t}>{formatTime12(t)}</option>)}
+                      </select>
+                      <input value={d.notes} onChange={e => updateShootDate(d.id, 'notes', e.target.value)} placeholder="Notes — e.g. exterior, level 2..." style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '6px 8px', fontSize: 11, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }} />
+                      <button onClick={() => removeShootDate(d.id)} style={{ fontSize: 13, color: 'rgba(210,90,90,0.6)', background: 'transparent', border: 'none', cursor: 'pointer' }}>✕</button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="ec-form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 20 }}>
+                {[{ label: 'Draft due', key: 'draft_due' as const }, { label: 'Delivery date', key: 'delivery_due' as const }].map(({ label, key }) => (
                   <div key={key}>
                     <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>{label}</div>
                     {modalEditing ? (
-                      <>
-                        <input type="date" value={modalProject[key] || ''} onChange={e => setModalProject(p => { const u = p ? { ...p, [key]: e.target.value } : p; if (u) { triggerAutoSave(u); if (key === 'shoot_date') triggerCalendarSync(u) } return u })} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '8px 10px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }} />
-                        {key === 'shoot_date' && (
-                          <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
-                            <input type="time" value={modalProject.shoot_window_start || ''} onChange={e => setModalProject(p => { const u = p ? { ...p, shoot_window_start: e.target.value } : p; if (u) { triggerAutoSave(u); triggerCalendarSync(u) } return u })} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '6px 8px', fontSize: 11, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }} />
-                            <input type="time" value={modalProject.shoot_window_end || ''} onChange={e => setModalProject(p => { const u = p ? { ...p, shoot_window_end: e.target.value } : p; if (u) { triggerAutoSave(u); triggerCalendarSync(u) } return u })} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '6px 8px', fontSize: 11, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }} />
-                          </div>
-                        )}
-                      </>
+                      <input type="date" value={modalProject[key] || ''} onChange={e => setModalProject(p => { const u = p ? { ...p, [key]: e.target.value } : p; if (u) triggerAutoSave(u); return u })} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '8px 10px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }} />
                     ) : (
-                      <div style={{ fontSize: 13, color: '#C8C2BB' }}>
-                        {modalProject[key] ? new Date(modalProject[key] + 'T12:00:00').toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
-                        {key === 'shoot_date' && modalProject.shoot_window_start && <span style={{ color: 'rgba(200,194,187,0.4)' }}>{' · ' + formatTime12(modalProject.shoot_window_start)}{modalProject.shoot_window_end ? '–' + formatTime12(modalProject.shoot_window_end) : ''}</span>}
-                      </div>
+                      <div style={{ fontSize: 13, color: '#C8C2BB' }}>{modalProject[key] ? new Date(modalProject[key] + 'T12:00:00').toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}</div>
                     )}
                   </div>
                 ))}
               </div>
-              {(modalEditing || (modalProject.shoot_dates || []).length > 0) && (
-              <div style={{ marginBottom: 20 }}>
-                {modalEditing && (
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: 10 }}>
-                    <button onClick={addShootDate} style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '4px 10px', borderRadius: 3, border: '0.5px solid rgba(200,194,187,0.2)', color: 'rgba(200,194,187,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>+ Add date</button>
-                  </div>
-                )}
-                {(modalProject.shoot_dates || []).length > 0 && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {(modalProject.shoot_dates || []).map(d => modalEditing ? (
-                      <div key={d.id} className="ec-shoot-date-row" style={{ display: 'grid', gridTemplateColumns: '1fr 100px 100px 1fr 24px', gap: 8, alignItems: 'center', background: 'rgba(200,194,187,0.03)', border: '0.5px solid rgba(200,194,187,0.07)', borderRadius: 5, padding: '8px 10px' }}>
-                        <input type="date" value={d.date} onChange={e => updateShootDate(d.id, 'date', e.target.value)} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '6px 8px', fontSize: 11, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }} />
-                        <select value={d.start_time} onChange={e => updateShootDate(d.id, 'start_time', e.target.value)} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '6px 8px', fontSize: 11, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }}>
-                          <option value=''>Start</option>
-                          {['06:00','06:30','07:00','07:30','08:00','08:30','09:00','09:30','10:00','10:30','11:00','11:30','12:00','12:30','13:00','13:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30','18:00'].map(t => <option key={t} value={t}>{formatTime12(t)}</option>)}
-                        </select>
-                        <select value={d.end_time} onChange={e => updateShootDate(d.id, 'end_time', e.target.value)} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '6px 8px', fontSize: 11, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }}>
-                          <option value=''>End</option>
-                          {['07:00','07:30','08:00','08:30','09:00','09:30','10:00','10:30','11:00','11:30','12:00','12:30','13:00','13:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30','18:00','18:30','19:00'].map(t => <option key={t} value={t}>{formatTime12(t)}</option>)}
-                        </select>
-                        <input value={d.notes} onChange={e => updateShootDate(d.id, 'notes', e.target.value)} placeholder="Notes — e.g. exterior, level 2..." style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '6px 8px', fontSize: 11, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none' }} />
-                        <button onClick={() => removeShootDate(d.id)} style={{ fontSize: 13, color: 'rgba(210,90,90,0.6)', background: 'transparent', border: 'none', cursor: 'pointer' }}>✕</button>
-                      </div>
-                    ) : (
-                      <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', background: 'rgba(200,194,187,0.03)', border: '0.5px solid rgba(200,194,187,0.07)', borderRadius: 5, fontSize: 12, color: '#C8C2BB' }}>
-                        <span>{d.date ? new Date(d.date + 'T12:00:00').toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' }) : '—'}</span>
-                        {(d.start_time || d.end_time) && <span style={{ color: 'rgba(200,194,187,0.4)' }}>{d.start_time ? formatTime12(d.start_time) : ''}{d.end_time ? '–' + formatTime12(d.end_time) : ''}</span>}
-                        {d.notes && <span style={{ color: 'rgba(200,194,187,0.4)' }}>— {d.notes}</span>}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-              )}
               {modalProject.shoot_date && modalProject.shoot_window_start && modalProject.shoot_window_end && modalProject.email && (
                 <div style={{ marginBottom: 20 }}>
                   <button onClick={() => setNotifyTimeModalProject(modalProject)} style={{ fontSize: 11, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '8px 14px', borderRadius: 3, border: '0.5px solid rgba(100,150,220,0.35)', color: 'rgba(100,150,220,0.9)', background: 'rgba(100,150,220,0.08)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>Notify client of new time</button>
@@ -2331,7 +2301,7 @@ function ProjectsPageInner() {
                   </div>
                 </div>
               )}
-              {modalTab === 'time' && (() => {
+              {modalTab === 'internal' && (() => {
                 const round2 = (n: number) => Math.round(n * 100) / 100
                 // t.hours comes back from PostgREST as a string for a numeric
                 // column — Number() keeps this a real sum instead of silently
@@ -2347,6 +2317,19 @@ function ProjectsPageInner() {
                 const otherTrackingThis = tracker.others.filter(t => t.project_id === modalProject.id)
                 return (
                   <div style={{ marginBottom: 20 }}>
+                    <div style={{ height: 1, background: 'rgba(200,194,187,0.07)', margin: '4px 0 20px' }} />
+                    <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 10 }}>Time tracking</div>
+                    <div className="ec-form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 16 }}>
+                      {[{ label: 'Shooter', key: 'shooter' as const }, { label: 'Editor', key: 'editor' as const }].map(({ label, key }) => (
+                        <div key={key}>
+                          <div style={{ fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(200,194,187,0.35)', marginBottom: 6 }}>{label}</div>
+                          <select value={modalProject[key] || ''} onChange={e => setModalProject(p => { const u = p ? { ...p, [key]: e.target.value || null } : p; if (u) triggerAutoSave(u); return u })} style={{ background: 'rgba(200,194,187,0.04)', border: '0.5px solid rgba(200,194,187,0.15)', borderRadius: 4, padding: '7px 9px', fontSize: 12, color: '#C8C2BB', fontFamily: 'inherit', outline: 'none', width: '100%' }}>
+                            <option value="">— Unassigned —</option>
+                            {teamOptions.map(t => <option key={t.name} value={t.name}>{t.name}</option>)}
+                          </select>
+                        </div>
+                      ))}
+                    </div>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 16, padding: '12px 14px', borderRadius: 6, background: trackingThis ? 'rgba(210,90,90,0.08)' : 'rgba(200,194,187,0.03)', border: `0.5px solid ${trackingThis ? 'rgba(210,90,90,0.25)' : 'rgba(200,194,187,0.09)'}` }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         {trackingThis ? (
@@ -2502,6 +2485,8 @@ function ProjectsPageInner() {
                   </div>
                 )
               })()}
+              {modalTab === 'overview' && (
+              <>
               {modalProject.stage === 'Completed' && (
                 <div style={{ marginBottom: 16, padding: '14px 16px', background: 'rgba(100,200,130,0.04)', border: '0.5px solid rgba(100,200,130,0.15)', borderRadius: 6, display: 'flex', gap: 24, flexWrap: 'wrap' as const }}>
                   {modalProject.delivered_at && (
@@ -2548,6 +2533,8 @@ function ProjectsPageInner() {
                 )}
               </div>
               </div>
+              </>
+              )}
             </div>
           </div>
         </div>
